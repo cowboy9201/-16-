@@ -14900,8 +14900,6 @@ html body .app.perspective3d .discardSeat .tile::before {
     btn.dataset.voiceBtnBound = '1';
 
     let activePointerId = null;
-    let recordTimer = 0;
-    const HOLD_MS = 0; /* 按下立刻開始錄音，放手即送出 */
 
     const setBtn = mode => {
       if (mode === 'recording') {
@@ -14958,7 +14956,6 @@ html body .app.perspective3d .discardSeat .tile::before {
     };
 
     const startRec = () => {
-      recordTimer = 0;
       dbg('startRec sup=' + voiceBroadcastSupported() + ' rec=' + voiceBroadcastRecording + ' starting=' + voiceBroadcastStarting + ' sr=' + srActive);
       if (voiceBroadcastRecording || voiceBroadcastStarting || srActive) return;
       if (!voiceBroadcastSupported()) {
@@ -14966,24 +14963,24 @@ html body .app.perspective3d .discardSeat .tile::before {
         trySpeechRecognition();
         return;
       }
-      setBtn('recording');
       try {
         const r = startVoiceBroadcastRecording(btn);
         if (r && typeof r.then === 'function') {
           r.then(ok => {
             dbg('startVoiceBroadcastRecording結果:' + ok);
-            if (ok === false) {
+            if (ok === true) {
+              setBtn('recording');
+            } else {
               /* MediaRecorder 失敗 → 嘗試 SR，若也失敗則顯示授權指引 */
+              setBtn('idle');
               trySpeechRecognition();
             }
-          }).catch(() => { trySpeechRecognition(); });
+          }).catch(() => { setBtn('idle'); trySpeechRecognition(); });
         }
-      } catch (e) { trySpeechRecognition(); }
+      } catch (e) { setBtn('idle'); trySpeechRecognition(); }
     };
 
     const stopRec = () => {
-      clearTimeout(recordTimer);
-      recordTimer = 0;
       activePointerId = null;
       /* SpeechRecognition 路徑 */
       if (btn._srStop) { btn._srStop(); return; }
@@ -14997,26 +14994,23 @@ html body .app.perspective3d .discardSeat .tile::before {
       dbg('pointerdown type=' + ev.pointerType + ' id=' + ev.pointerId);
       if (ev.button !== undefined && ev.button !== 0) return;
       try { ev.preventDefault(); } catch (e) {}
-      try { btn.setPointerCapture(ev.pointerId); } catch (e) { dbg('setPointerCapture失敗:' + e); }
-      activePointerId = ev.pointerId;
-      setBtn('pressing');
-      clearTimeout(recordTimer);
-      recordTimer = setTimeout(startRec, HOLD_MS);
     }, { passive: false });
 
     btn.addEventListener('pointerup', ev => {
       dbg('pointerup id=' + ev.pointerId);
-      if (activePointerId != null && ev.pointerId !== activePointerId) return;
-      try { btn.releasePointerCapture(ev.pointerId); } catch (e) {}
-      stopRec();
+      if (ev.button !== undefined && ev.button !== 0) return;
+      /* toggle：未錄音則開始，錄音中則停止送出 */
+      if (voiceBroadcastRecording || voiceBroadcastStarting || srActive) {
+        stopRec();
+      } else {
+        startRec();
+      }
     }, { passive: true });
 
     btn.addEventListener('pointercancel', ev => {
       dbg('pointercancel id=' + ev.pointerId);
       if (activePointerId != null && ev.pointerId !== activePointerId) return;
       try { btn.releasePointerCapture(ev.pointerId); } catch (e) {}
-      clearTimeout(recordTimer);
-      recordTimer = 0;
       activePointerId = null;
       if (!voiceBroadcastStarting && !voiceBroadcastRecording) setBtn('idle');
     }, { passive: true });
