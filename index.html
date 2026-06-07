@@ -12122,6 +12122,17 @@ html body .app.perspective3d .discardSeat .tile::before {
       return;
     }
 
+    /* 托管時若可以聽牌，優先選最佳聽牌選項宣告 */
+    if (canAutoDiscard && !state.declaredTing[seat]) {
+      const tingOpts = getTingOptions(seat);
+      if (tingOpts.length) {
+        /* 選等牌張數最多的選項 */
+        const best = tingOpts.reduce((a, b) => (b.waits.length > a.waits.length ? b : a), tingOpts[0]);
+        declareTing(seat, 'auto:' + reason, best.discardId);
+        return;
+      }
+    }
+
     const tileId = chooseDiscardTile(seat);
     if (tileId && canDiscard(seat)) {
       submitDiscard(seat, tileId, 'auto:' + reason);
@@ -15939,7 +15950,13 @@ html body .app.perspective3d .discardSeat .tile::before {
       if (shouldDiscard && canBottomSwipeDiscardTile(seat, tileId)) {
         bottomSwipeDiscardSuppressClick.tileId = tileId;
         bottomSwipeDiscardSuppressClick.until = Date.now() + 650;
-        submitDiscard(seat, tileId, 'human-swipe');
+        /* 滑動出牌前也檢查是否可以聽牌 */
+        const tingOpt = getTingOptions(seat).find(opt => opt.discardId === tileId);
+        if (tingOpt) {
+          declareTing(seat, 'human', tileId);
+        } else {
+          submitDiscard(seat, tileId, 'human-swipe');
+        }
       }
     }
     node.addEventListener('pointerup', ev => finish(ev, false), { passive: true });
@@ -16590,7 +16607,13 @@ html body .app.perspective3d .discardSeat .tile::before {
               ev.stopPropagation();
               return;
             }
-            submitDiscard(seat, tileObj.id, 'human');
+            /* 打出前檢查是否可以聽牌，若可以則優先宣告聽牌 */
+            const tingOpt = getTingOptions(seat).find(opt => opt.discardId === tileObj.id);
+            if (tingOpt) {
+              declareTing(seat, 'human', tileObj.id);
+            } else {
+              submitDiscard(seat, tileObj.id, 'human');
+            }
           });
           handRow.appendChild(node);
         });
