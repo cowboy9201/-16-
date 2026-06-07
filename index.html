@@ -3649,7 +3649,7 @@ html body .app.perspective3d .discardSeat .tile::before {
   const LOBBY_ABLY_KEY_REMOTE_AUTO_MAX_CODE = 30;
   const LOBBY_ABLY_KEY_REMOTE_AUTO_EMPTY_STOP = 5;
   const LOBBY_ABLY_KEY_TEST_TIMEOUT_MS = 6500;
-  const DEFAULT_LOBBY_ROOM_CODE = '絕代黃金牧場';
+  const DEFAULT_LOBBY_ROOM_CODE = '';
   const LOBBY_ABLY_KEY_REMOTE_TIMEOUT_MS = 9000;
   const LOBBY_ABLY_KEY_REMOTE_POST_INTERVAL_MS = 650;
   const LOBBY_ABLY_KEY_REMOTE_BATCH_TIMEOUT_MS = 4500;
@@ -6364,8 +6364,8 @@ html body .app.perspective3d .discardSeat .tile::before {
       + '<div class="tw16-lobby-title">台灣麻將 Ably 連線 / 單機</div>'
       + '<div class="tw16-lobby-sub">連線時：<br>房主一位，先按(建立房間)等待下方Api key為綠色(可用)，房間建立好後會自動進入牌桌開局。<br>其餘為來賓等房主建立房間後直接按(加入房間)；若無法入桌約 3 秒會自動換不同 Api key，從頭到尾只試一輪，仍進不了就停止並提示檢查房名。<br>單人：按(直接離線開始)。</div>'
       + '<div class="tw16-lobby-grid">'
-      + '<div class="tw16-lobby-row tw16-lobby-inline-row"><label for="tw16LobbyName">玩家名稱</label><input class="tw16-lobby-input" id="tw16LobbyName" value="' + escapeHtml(net.name || '玩家') + '"></div>'
-      + '<div class="tw16-lobby-row tw16-lobby-inline-row"><label for="tw16LobbyRoom">房名</label><input class="tw16-lobby-input" id="tw16LobbyRoom" value="' + escapeHtml(net.room || DEFAULT_LOBBY_ROOM_CODE) + '"></div>'
+      + '<div class="tw16-lobby-row tw16-lobby-inline-row"><label for="tw16LobbyName">玩家名稱</label><input class="tw16-lobby-input" id="tw16LobbyName" value="(請輸入)" onfocus="if(this.value===\'(請輸入)\')this.value=\'\'" onblur="if(!this.value.trim())this.value=\'(請輸入)\'"></div>'
+      + '<div class="tw16-lobby-row tw16-lobby-inline-row"><label for="tw16LobbyRoom">房名</label><input class="tw16-lobby-input" id="tw16LobbyRoom" value="(請輸入)" onfocus="if(this.value===\'(請輸入)\')this.value=\'\'" onblur="if(!this.value.trim())this.value=\'(請輸入)\'"></div>'
       + '</div>'
       + '<div class="tw16-lobby-actions">'
       + '<button class="tw16-lobby-btn blue tw16-lobby-btn-role-break" id="tw16LobbyHost" type="button"><span class="tw16-lobby-btn-main">建立房間</span><span class="tw16-lobby-btn-role">(房主)</span></button>'
@@ -6382,8 +6382,8 @@ html body .app.perspective3d .discardSeat .tile::before {
       + '</div>';
     app.insertBefore(lobby, app.firstChild);
     const status = () => byId('tw16LobbyStatus');
-    const nameValue = () => (byId('tw16LobbyName') && byId('tw16LobbyName').value || '玩家').trim() || '玩家';
-    const roomValue = () => (byId('tw16LobbyRoom') && byId('tw16LobbyRoom').value || DEFAULT_LOBBY_ROOM_CODE).trim() || DEFAULT_LOBBY_ROOM_CODE;
+    const nameValue = () => { const v = (byId('tw16LobbyName') && byId('tw16LobbyName').value || '').trim(); return (v === '(請輸入)' || !v) ? '' : v; };
+    const roomValue = () => { const v = (byId('tw16LobbyRoom') && byId('tw16LobbyRoom').value || '').trim(); return (v === '(請輸入)' || !v) ? '' : v; };
     const ablyKeyInput = byId('tw16LobbyAblyKey');
     const editAblyKeyBtn = byId('tw16LobbyEditAblyKey');
     const localAblyKeyBtn = byId('tw16LobbyLocalAblyKey');
@@ -7415,7 +7415,7 @@ html body .app.perspective3d .discardSeat .tile::before {
     net.guestKeyRetryDueAt = 0;
     net.guestKeyRetryReason = '';
     net.guestKeyRetryRoom = String(room || '').trim();
-    net.guestKeyRetryName = String(name || '玩家').trim() || '玩家';
+    net.guestKeyRetryName = String(name || '').trim() || '(請輸入)';
     net.guestKeyTriedKeys = {};
     net.guestKeyRetryStopped = false;
     const currentKey = normalizeAblyApiKey(key);
@@ -7452,7 +7452,7 @@ html body .app.perspective3d .discardSeat .tile::before {
     net.guestKeyRetryDueAt = 0;
     net.guestKeyRetryReason = '';
     const room = String(net.guestKeyRetryRoom || net.room || '').trim();
-    const name = String(net.guestKeyRetryName || net.name || '玩家').trim() || '玩家';
+    const name = String(net.guestKeyRetryName || net.name || '').trim() || '(請輸入)';
     if (!room) return false;
     const currentKey = normalizeAblyApiKey((byId('tw16LobbyAblyKey') && byId('tw16LobbyAblyKey').value) || getStoredAblyApiKey());
     if (!net.guestKeyTriedKeys || typeof net.guestKeyTriedKeys !== 'object') net.guestKeyTriedKeys = {};
@@ -7825,7 +7825,7 @@ html body .app.perspective3d .discardSeat .tile::before {
     if (!SEATS.includes(seat)) return '';
     let humanName = '';
     if (!isNetworked()) {
-      if (seat === state.viewSeat) humanName = net.name || '玩家';
+      if (seat === state.viewSeat) humanName = net.name || '';
     } else if (isSeatAssignedHuman(seat)) {
       const player = net.players && net.players[seat];
       humanName = (player && player.name) || ((seat === state.viewSeat || seat === net.assignedSeat) ? net.name : '') || (seat === 'east' && isOnlineHost() ? net.name : '') || '玩家';
@@ -9666,7 +9666,7 @@ html body .app.perspective3d .discardSeat .tile::before {
     net.connectGeneration = connectGeneration;
     net.role = role;
     net.room = String(room).trim();
-    net.name = String(name || '玩家').trim() || '玩家';
+    net.name = String(name || '').trim() || '(請輸入)';
     net.playerKey = getStoredPlayerKey();
     net.instanceId = createNetworkInstanceId();
     net.connected = false;
@@ -9705,7 +9705,7 @@ html body .app.perspective3d .discardSeat .tile::before {
     if (role === 'guest') {
       clearGuestApiKeyRetry('guest-connect-new-key');
       net.guestKeyRetryRoom = String(room || '').trim();
-      net.guestKeyRetryName = String(name || '玩家').trim() || '玩家';
+      net.guestKeyRetryName = String(name || '').trim() || '(請輸入)';
       if (!net.guestKeyTriedKeys || typeof net.guestKeyTriedKeys !== 'object') net.guestKeyTriedKeys = {};
       const activeGuestKey = normalizeAblyApiKey(ablyApiKey);
       if (activeGuestKey) net.guestKeyTriedKeys[activeGuestKey] = Date.now();
@@ -12812,7 +12812,7 @@ html body .app.perspective3d .discardSeat .tile::before {
     }
     dom.resultTitle.textContent = '設定';
     dom.resultText.innerHTML = '<div class="settingsGrid">'
-      + '<label class="settingsRow"><span>玩家名稱</span><input id="setPlayerName" type="text" value="' + escapeHtml(net.name || '玩家') + '"><b></b></label>'
+      + '<label class="settingsRow"><span>玩家名稱</span><input id="setPlayerName" type="text" value="' + escapeHtml(net.name || '') + '"><b></b></label>'
       + '<label class="settingsRow"><span>動畫速度</span><input id="setAnimSpeed" type="range" min="0" max="180" value="' + state.uiSettings.animSpeedPct + '"><b id="setAnimSpeedValue">' + (state.uiSettings.animSpeedPct ? state.uiSettings.animSpeedPct + '%' : '關') + '</b></label>'
       + '<label class="settingsRow"><span>牌圓角</span><input id="setTileRadius" type="range" min="0" max="38" value="' + state.uiSettings.tileRadiusPct + '"><b id="setTileRadiusValue">' + state.uiSettings.tileRadiusPct + '%</b></label>'
       + '<label class="settingsRow"><span>每底籌碼</span><input id="setScoreBaseChip" type="number" min="0" max="999999" step="10" value="' + state.uiSettings.scoreBaseChip + '" ' + (isOnlineGuest() ? 'disabled' : '') + '><b></b></label>'
