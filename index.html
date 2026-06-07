@@ -11644,6 +11644,31 @@ html body .app.perspective3d .discardSeat .tile::before {
 
   function positionTingChoicePanelAtTableCenter() {
     if (!dom.actionPanel || !dom.actionPanel.classList.contains('ting-choice-active')) return false;
+    /* 定位在和吃碰槓按鈕相同的位置（手牌框右上角） */
+    const seat = localHumanSeat();
+    const handEl = seat ? dom[DISPLAY_ELEMENT['bottom'].hand] : null;
+    const meldEl = byId('meldBottom');
+    const tableEl = byId('table');
+    if (handEl && tableEl) {
+      const tR = tableEl.getBoundingClientRect();
+      const hR = handEl.getBoundingClientRect();
+      const mR = meldEl ? meldEl.getBoundingClientRect() : null;
+      const mValid = mR && mR.width > 2 && mR.height > 2;
+      const boxTop   = Math.min(hR.top,   mValid ? mR.top   : hR.top);
+      const boxRight = Math.max(hR.right,  mValid ? mR.right : hR.right);
+      const rightFromTableRight   = Math.max(0, tR.right  - boxRight);
+      const bottomFromTableBottom = Math.max(0, tR.bottom - boxTop) + 8;
+      dom.actionPanel.style.setProperty('left',          'auto',                         'important');
+      dom.actionPanel.style.setProperty('top',           'auto',                         'important');
+      dom.actionPanel.style.setProperty('right',         rightFromTableRight  + 'px',    'important');
+      dom.actionPanel.style.setProperty('bottom',        bottomFromTableBottom + 'px',   'important');
+      dom.actionPanel.style.setProperty('transform',     'none',                         'important');
+      dom.actionPanel.style.setProperty('background',    'rgba(30,30,30,.82)',           'important');
+      dom.actionPanel.style.setProperty('border-radius', '10px',                        'important');
+      dom.actionPanel.style.setProperty('padding',       '6px 8px',                     'important');
+      return true;
+    }
+    /* fallback：桌面中央 */
     setAbsolutePlacement(dom.actionPanel, {
       position: 'absolute',
       left: '50%',
@@ -15950,10 +15975,11 @@ html body .app.perspective3d .discardSeat .tile::before {
       if (shouldDiscard && canBottomSwipeDiscardTile(seat, tileId)) {
         bottomSwipeDiscardSuppressClick.tileId = tileId;
         bottomSwipeDiscardSuppressClick.until = Date.now() + 650;
-        /* 滑動出牌前也檢查是否可以聽牌 */
-        const tingOpt = getTingOptions(seat).find(opt => opt.discardId === tileId);
-        if (tingOpt) {
-          declareTing(seat, 'human', tileId);
+        /* 滑動出牌前也檢查是否可以聽牌，若可以則彈出詢問鈕 */
+        const tingOpts = getTingOptions(seat);
+        const tingOpt = tingOpts.find(opt => opt.discardId === tileId);
+        if (tingOpt && !state.declaredTing[seat]) {
+          openTingChoicePanel(seat);
         } else {
           submitDiscard(seat, tileId, 'human-swipe');
         }
@@ -16316,6 +16342,26 @@ html body .app.perspective3d .discardSeat .tile::before {
 
   function positionTingAssistNearHand(seat) {
     if (!dom.actionPanel || !dom.actionPanel.classList.contains('ting-assist-active') || !dom.actionPanel.classList.contains('action-panel-visible')) return false;
+    /* 定位在和吃碰槓按鈕相同的位置（手牌框右上角） */
+    const handEl = dom[DISPLAY_ELEMENT['bottom'].hand];
+    const meldEl = byId('meldBottom');
+    const tableEl = byId('table');
+    if (handEl && tableEl) {
+      const tR = tableEl.getBoundingClientRect();
+      const hR = handEl.getBoundingClientRect();
+      const mR = meldEl ? meldEl.getBoundingClientRect() : null;
+      const mValid = mR && mR.width > 2 && mR.height > 2;
+      const boxTop   = Math.min(hR.top,   mValid ? mR.top   : hR.top);
+      const boxRight = Math.max(hR.right,  mValid ? mR.right : hR.right);
+      const rightFromTableRight   = Math.max(0, tR.right  - boxRight);
+      const bottomFromTableBottom = Math.max(0, tR.bottom - boxTop) + 8;
+      dom.actionPanel.style.setProperty('left',          'auto',                         'important');
+      dom.actionPanel.style.setProperty('top',           'auto',                         'important');
+      dom.actionPanel.style.setProperty('right',         rightFromTableRight  + 'px',    'important');
+      dom.actionPanel.style.setProperty('bottom',        bottomFromTableBottom + 'px',   'important');
+      dom.actionPanel.style.setProperty('transform',     'none',                         'important');
+      return true;
+    }
     const anchorRect = actionPanelAnchorRectForSeat(seat || localHumanSeat());
     if (!anchorRect) return false;
     const box = viewportBox();
@@ -16607,10 +16653,11 @@ html body .app.perspective3d .discardSeat .tile::before {
               ev.stopPropagation();
               return;
             }
-            /* 打出前檢查是否可以聽牌，若可以則優先宣告聽牌 */
-            const tingOpt = getTingOptions(seat).find(opt => opt.discardId === tileObj.id);
-            if (tingOpt) {
-              declareTing(seat, 'human', tileObj.id);
+            /* 打出前檢查是否可以聽牌，若可以則彈出聽牌詢問鈕 */
+            const tingOpts = getTingOptions(seat);
+            const tingOpt = tingOpts.find(opt => opt.discardId === tileObj.id);
+            if (tingOpt && !state.declaredTing[seat]) {
+              openTingChoicePanel(seat);
             } else {
               submitDiscard(seat, tileObj.id, 'human');
             }
