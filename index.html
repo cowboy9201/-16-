@@ -14821,10 +14821,15 @@ html body .app.perspective3d .discardSeat .tile::before {
       protocol: 'tw16-clean-ably-v1', kind: 'voiceBroadcast', room: net.room,
       id: net.clientId + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
       clientId: net.clientId, senderInstanceId: net.instanceId, senderRole: net.role, playerKey: net.playerKey, seat: getLocalBroadcastSeat() || '', name: net.name,
-      mimeType: String(mimeType || '').trim(), durationMs: Math.max(0, Math.round(Number(durationMs || 0))), audioDataUrl: dataUrl, createdAt: Date.now(),
-      segId: (segOpts && segOpts.segId) || '', segIndex: (segOpts && segOpts.segIndex) || 0, segTotal: (segOpts && segOpts.segTotal) || 1,
-      compressed: !!(segOpts && segOpts.compressed)
+      mimeType: String(mimeType || '').trim(), durationMs: Math.max(0, Math.round(Number(durationMs || 0))), audioDataUrl: dataUrl, createdAt: Date.now()
     };
+    /* 僅在有分段資訊時才加入額外欄位，避免增大正常訊息體積 */
+    if (segOpts && segOpts.segId) {
+      payload.segId    = segOpts.segId;
+      payload.segIndex = segOpts.segIndex || 0;
+      payload.segTotal = segOpts.segTotal || 1;
+      payload.compressed = !!(segOpts.compressed);
+    }
     try { return publishNetworkRoomMessage('voiceBroadcast', payload, 'voice-broadcast'); } catch (e) { return false; }
   }
 
