@@ -1325,6 +1325,8 @@
 @media(max-width:700px){.tw16-lobby-key-summary-state{min-width:68px;padding:0 7px;font-size:12px}.tw16-lobby-key-summary-input{font-size:14px}}.tw16-lobby-key-sheet-tools{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.tw16-lobby-key-sheet-tools .tw16-lobby-btn{width:100%;font-size:11px}.tw16-lobby-key-input{min-width:240px}}
 .tw16-mini-dashboard{position:fixed;left:0;top:0;transform:none;z-index:119;width:auto;display:none;pointer-events:none;user-select:none;overflow:visible;}
 .tw16-mini-dashboard.show{display:block;}
+.tw16-mini-dashboard-chip-plus{color:#ef4444;font-weight:1000;margin-right:1px;}
+.tw16-mini-dashboard-chip-sum{position:fixed;left:50%;transform:translateX(-50%);background:rgba(2,6,23,.90);border:1px solid rgba(255,60,60,.80);border-radius:8px;padding:2px 10px;color:#ef4444;font-size:clamp(11px,3vw,15px);font-weight:1000;white-space:nowrap;pointer-events:none;z-index:9999;line-height:1.4;}
 .tw16-mini-dashboard-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:2px;align-items:start;width:100%;}
 .tw16-mini-dashboard-card{position:relative;min-width:0;min-height:0;border-radius:8px!important;padding:1px 3px 2px!important;background:transparent!important;border:1px solid rgba(255,255,255,.52)!important;box-shadow:none!important;color:#f8fafc;text-align:center;overflow:hidden;}
 .tw16-mini-dashboard-card.active{border:1px solid rgba(255,32,32,.96)!important;border-radius:8px!important;box-shadow:0 0 6px rgba(255,32,32,.50)!important;background:transparent!important;}
@@ -3627,7 +3629,7 @@ html body .app.perspective3d .discardSeat .tile::before {
   let textBroadcastInputOpen = false;
   let textBroadcastToastTimer = 0;
   let textBroadcastToastTicker = 0;
-  const VOICE_BROADCAST_MAX_MS = 15000;
+  const VOICE_BROADCAST_MAX_MS = 60000;
   const VOICE_BROADCAST_MIN_BYTES = 256;
   const VOICE_BROADCAST_HOLD_TO_RECORD_MS = 650;
 
@@ -6364,7 +6366,7 @@ html body .app.perspective3d .discardSeat .tile::before {
     lobby.id = 'tw16Lobby';
     lobby.className = 'tw16-lobby';
     lobby.innerHTML = '<div class="tw16-lobby-card">'
-      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;"><div class="tw16-lobby-chip" style="flex-shrink:0;margin-bottom:0;">Ably 連線 / 單機</div><span style="font-size:clamp(9px,2.5vw,12px);color:#cbd5e1;font-weight:700;white-space:nowrap;">（115.6.7 23：46 改版）</span></div>'
+      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;"><div class="tw16-lobby-chip" style="flex-shrink:0;margin-bottom:0;">Ably 連線 / 單機</div><span style="font-size:clamp(9px,2.5vw,12px);color:#cbd5e1;font-weight:700;white-space:nowrap;">（115.6.8 01：18 改版）</span></div>'
       + '<div class="tw16-lobby-title">台灣麻將 Ably 連線 / 單機</div>'
       + '<div class="tw16-lobby-sub">連線時：<br>房主一位，先按(建立房間)等待下方Api key為綠色(可用)，房間建立好後會自動進入牌桌開局。<br>其餘為來賓等房主建立房間後直接按(加入房間)；若無法入桌約 3 秒會自動換不同 Api key，從頭到尾只試一輪，仍進不了就停止並提示檢查房名。<br>單人：按(直接離線開始)。</div>'
       + '<div class="tw16-lobby-grid">'
@@ -6561,6 +6563,34 @@ html body .app.perspective3d .discardSeat .tile::before {
       app.appendChild(dash);
       dom.tw16MiniDashboard = dash;
       dom.tw16MiniDashboardGrid = byId('tw16MiniDashboardGrid');
+      document.addEventListener('touchstart', function(ev) {
+        if (!dash.classList.contains('show')) return;
+        const t = ev.changedTouches && ev.changedTouches[0];
+        if (!t) return;
+        let hit = null;
+        dash.querySelectorAll('.tw16-mini-dashboard-card').forEach(c => {
+          const r = c.getBoundingClientRect();
+          if (t.clientX>=r.left&&t.clientX<=r.right&&t.clientY>=r.top&&t.clientY<=r.bottom) hit=c;
+        });
+        if (!hit) return;
+        const plus = hit.querySelector('.tw16-mini-dashboard-chip-plus');
+        if (!plus) return;
+        const isOn = plus.style.display !== 'none';
+        plus.style.display = isOn ? 'none' : '';
+        /* 更新加總 */
+        const grid2 = byId('tw16MiniDashboardGrid');
+        const old2 = dash.querySelector('.tw16-mini-dashboard-chip-sum');
+        if (old2) old2.remove();
+        const sel = Array.from(grid2 ? grid2.querySelectorAll('.tw16-mini-dashboard-card') : [])
+          .filter(c => c.querySelector('.tw16-mini-dashboard-chip-plus') && c.querySelector('.tw16-mini-dashboard-chip-plus').style.display !== 'none');
+        if (!sel.length) return;
+        const total = sel.reduce((s,c) => s + (Number(state.chips && state.chips[c.dataset.seat]) || 0), 0);
+        const sumEl = document.createElement('div');
+        sumEl.className = 'tw16-mini-dashboard-chip-sum';
+        sumEl.textContent = '合計 ' + total;
+        sumEl.style.top = (dash.getBoundingClientRect().bottom + 4) + 'px';
+        dash.appendChild(sumEl);
+      }, { capture: true, passive: true });
     }
     const table = byId('table');
     if (table && !byId('tw16TurnHandFrame')) {
@@ -15160,30 +15190,22 @@ html body .app.perspective3d .discardSeat .tile::before {
       sr.lang = 'zh-TW';
       sr.interimResults = false;
       sr.maxAlternatives = 1;
-      sr.continuous = false;
+      sr.continuous = true;
       srActive = true;
       setBtn('recording');
+      let srAccumulated = '';
       sr.onresult = ev => {
-        const text = ev.results && ev.results[0] && ev.results[0][0] ? ev.results[0][0].transcript : '';
-        if (text) {
-          if (isVoiceBroadcastOnline()) {
-            publishTextBroadcast(text);
-          } else {
-            hintVoiceBroadcast('🎙 ' + text);
-          }
-        }
-        srActive = false;
-        setBtn('idle');
+        let text=''; for(let i=0;i<ev.results.length;i++){if(ev.results[i].isFinal)text+=ev.results[i][0].transcript;} srAccumulated=text;
       };
       sr.onerror = ev => {
-        const code = ev && ev.error ? ev.error : String(ev);
-        srActive = false;
-        setBtn('idle');
-        if (code === 'not-allowed' || code === 'NotAllowedError') {
-          hintVoiceBroadcast('麥克風被封鎖，請到 Edge 設定 → 網站權限 → 麥克風 允許本頁，或改用 HTTPS 連結開啟遊戲');
-        }
+        const code=ev&&ev.error?ev.error:String(ev); if(code==='no-speech')return;
+        srActive=false; setBtn('idle');
+        if(code==='not-allowed'||code==='NotAllowedError') hintVoiceBroadcast('麥克風被封鎖，請到 Edge 設定 → 網站權限 → 麥克風 允許本頁，或改用 HTTPS 連結開啟遊戲');
       };
-      sr.onend = () => { srActive = false; setBtn('idle'); };
+      sr.onend = () => {
+        srActive=false; setBtn('idle');
+        if(srAccumulated){if(isVoiceBroadcastOnline())publishTextBroadcast(srAccumulated);else hintVoiceBroadcast('🎙 '+srAccumulated);}
+      };
       try { sr.start(); dbg('SR已啟動，請說話...'); } catch (e) { dbg('SR啟動失敗:' + e.name); srActive = false; setBtn('idle'); }
       /* 儲存 stop 方法供 pointerup 呼叫 */
       btn._srStop = () => { try { sr.stop(); } catch (e) {} btn._srStop = null; };
@@ -15475,6 +15497,13 @@ html body .app.perspective3d .discardSeat .tile::before {
       state.declaredTing[seat] ? 'ting' : ''
     ].join('~')).join('|');
     if (miniDashboardRenderKey !== renderKey || grid.dataset.renderKey !== renderKey) {
+      /* 保留已選取（+號）的座位 */
+      const prevPlus = new Set(
+        Array.from(grid.querySelectorAll('.tw16-mini-dashboard-card')).filter(c => {
+          const p = c.querySelector('.tw16-mini-dashboard-chip-plus');
+          return p && p.style.display !== 'none';
+        }).map(c => c.dataset.seat)
+      );
       grid.replaceChildren();
       SEATS.forEach(seat => {
         const card = document.createElement('div');
@@ -15485,7 +15514,7 @@ html body .app.perspective3d .discardSeat .tile::before {
         name.innerHTML = (dealerPrefix ? '<span class="tw16-mini-dashboard-dealer">' + escapeHtml(dealerPrefix) + '</span>' : '') + '<span class="tw16-mini-dashboard-name-text">' + escapeHtml(seatLabelText(seat)) + '</span>';
         const chip = document.createElement('div');
         chip.className = 'tw16-mini-dashboard-chip';
-        chip.textContent = String(state.chips[seat] ?? 0);
+        chip.innerHTML = '<span class="tw16-mini-dashboard-chip-plus" style="display:none">+</span>' + escapeHtml(String(state.chips[seat] ?? 0));
         const countdown = document.createElement('div');
         countdown.className = 'tw16-mini-dashboard-countdown';
         countdown.dataset.dashboardCountdownSeat = seat;
@@ -15495,12 +15524,35 @@ html body .app.perspective3d .discardSeat .tile::before {
           tingBadge.textContent = '聽';
           card.appendChild(tingBadge);
         }
+        card.dataset.seat = seat;
+        if (prevPlus.has(seat)) {
+          const p = chip.querySelector('.tw16-mini-dashboard-chip-plus');
+          if (p) p.style.display = '';
+        }
         card.append(name, chip, countdown);
         grid.appendChild(card);
       });
       miniDashboardRenderKey = renderKey;
       grid.dataset.renderKey = renderKey;
       positionMiniDashboardAdaptive();
+      /* 重建後更新加總 */
+      (function(){
+        const dash2 = dom.tw16MiniDashboard || byId('tw16MiniDashboard');
+        if (!dash2) return;
+        const old2 = dash2.querySelector('.tw16-mini-dashboard-chip-sum');
+        if (old2) old2.remove();
+        const sel = Array.from(grid.querySelectorAll('.tw16-mini-dashboard-card')).filter(c => {
+          const p = c.querySelector('.tw16-mini-dashboard-chip-plus');
+          return p && p.style.display !== 'none';
+        });
+        if (!sel.length) return;
+        const total = sel.reduce((s,c) => s + (Number(state.chips && state.chips[c.dataset.seat]) || 0), 0);
+        const sumEl = document.createElement('div');
+        sumEl.className = 'tw16-mini-dashboard-chip-sum';
+        sumEl.textContent = '合計 ' + total;
+        sumEl.style.top = (dash2.getBoundingClientRect().bottom + 4) + 'px';
+        dash2.appendChild(sumEl);
+      })();
     }
     if (!dash.classList.contains('show')) dash.classList.add('show');
     if (dash.getAttribute('aria-hidden') !== 'false') dash.setAttribute('aria-hidden', 'false');
