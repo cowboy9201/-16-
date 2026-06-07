@@ -14340,6 +14340,58 @@ html body .app.perspective3d .discardSeat .tile::before {
     });
   }
 
+  /* 壓縮 Uint8Array → base64 字串（用瀏覽器原生 CompressionStream） */
+  async function compressToBase64(uint8arr) {
+    if (typeof CompressionStream === 'undefined') return null;
+    try {
+      const cs = new CompressionStream('deflate-raw');
+      const writer = cs.writable.getWriter();
+      writer.write(uint8arr);
+      writer.close();
+      const chunks = [];
+      const reader = cs.readable.getReader();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+      }
+      const totalLen = chunks.reduce((s, c) => s + c.length, 0);
+      const merged = new Uint8Array(totalLen);
+      let off = 0;
+      chunks.forEach(c => { merged.set(c, off); off += c.length; });
+      /* 轉 base64 */
+      let bin = '';
+      merged.forEach(b => { bin += String.fromCharCode(b); });
+      return btoa(bin);
+    } catch (e) { return null; }
+  }
+
+  /* 解壓縮 base64 → Uint8Array */
+  async function decompressFromBase64(b64) {
+    if (typeof DecompressionStream === 'undefined') return null;
+    try {
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const ds = new DecompressionStream('deflate-raw');
+      const writer = ds.writable.getWriter();
+      writer.write(bytes);
+      writer.close();
+      const chunks = [];
+      const reader = ds.readable.getReader();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+      }
+      const totalLen = chunks.reduce((s, c) => s + c.length, 0);
+      const merged = new Uint8Array(totalLen);
+      let off = 0;
+      chunks.forEach(c => { merged.set(c, off); off += c.length; });
+      return merged;
+    } catch (e) { return null; }
+  }
+
   function ensureTextBroadcastOverlay() {
     let wrap = byId('tw17TextBroadcastOverlayV45');
     if (!(wrap instanceof HTMLElement)) {
@@ -14770,7 +14822,8 @@ html body .app.perspective3d .discardSeat .tile::before {
       id: net.clientId + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
       clientId: net.clientId, senderInstanceId: net.instanceId, senderRole: net.role, playerKey: net.playerKey, seat: getLocalBroadcastSeat() || '', name: net.name,
       mimeType: String(mimeType || '').trim(), durationMs: Math.max(0, Math.round(Number(durationMs || 0))), audioDataUrl: dataUrl, createdAt: Date.now(),
-      segId: (segOpts && segOpts.segId) || '', segIndex: (segOpts && segOpts.segIndex) || 0, segTotal: (segOpts && segOpts.segTotal) || 1
+      segId: (segOpts && segOpts.segId) || '', segIndex: (segOpts && segOpts.segIndex) || 0, segTotal: (segOpts && segOpts.segTotal) || 1,
+      compressed: !!(segOpts && segOpts.compressed)
     };
     try { return publishNetworkRoomMessage('voiceBroadcast', payload, 'voice-broadcast'); } catch (e) { return false; }
   }
@@ -14785,24 +14838,61 @@ html body .app.perspective3d .discardSeat .tile::before {
     const segTotal = Number(payload.segTotal) || 1;
     const segIndex = Number(payload.segIndex) || 0;
     /* 單段：直接播放 */
-    if (!segId || segTotal <= 1) return playIncomingVoice(payload);
+    /* 單段：若有壓縮標記需解壓，否則補回 data: 前綴直接播放 */
+    if (!segId || segTotal <= 1) {
+      if (payload.compressed) {
+        (async () => {
+          try {
+            const b64 = String(payload.audioDataUrl || '');
+            const bytes = await decompressFromBase64(b64);
+            if (!bytes) throw new Error('decompress failed');
+            const blob = new Blob([bytes], { type: String(payload.mimeType || 'audio/webm') });
+            const reader = new FileReader();
+            reader.onload = () => playIncomingVoice({ audioDataUrl: String(reader.result || ''), durationMs: payload.durationMs });
+            reader.readAsDataURL(blob);
+          } catch (e) { playIncomingVoice(payload); }
+        })();
+        return true;
+      }
+      /* 未壓縮單段：補回 data: 前綴 */
+      const mime = String(payload.mimeType || 'audio/webm');
+      const b64 = String(payload.audioDataUrl || '');
+      const fixedUrl = b64.startsWith('data:') ? b64 : ('data:' + mime + ';base64,' + b64);
+      return playIncomingVoice(Object.assign({}, payload, { audioDataUrl: fixedUrl }));
+    }
     /* 多段：收集 */
     if (!voiceSegBuf[segId]) voiceSegBuf[segId] = { segs: {}, total: segTotal, mimeType: payload.mimeType || 'audio/webm', durationMs: 0, at: Date.now() };
     voiceSegBuf[segId].segs[segIndex] = String(payload.audioDataUrl || '');
+    voiceSegBuf[segId].compressed = !!(payload.compressed);
     voiceSegBuf[segId].durationMs += Number(payload.durationMs) || 0;
-    /* 收齊後合併播放 */
+    /* 收齊後解壓縮、合併、播放 */
     const buf = voiceSegBuf[segId];
     if (Object.keys(buf.segs).length >= buf.total) {
       delete voiceSegBuf[segId];
-      /* 依序拼接所有 dataUrl 的 base64 部分，合成完整 dataUrl */
-      const prefix = 'data:' + buf.mimeType + ';base64,';
-      let combined = prefix;
-      for (let i = 0; i < buf.total; i++) {
-        const url = buf.segs[i] || '';
-        const b64 = url.indexOf(',') >= 0 ? url.slice(url.indexOf(',') + 1) : url;
-        combined += b64;
-      }
-      playIncomingVoice({ audioDataUrl: combined, durationMs: buf.durationMs });
+      (async () => {
+        try {
+          /* 依序拼接所有 base64 片段 */
+          let fullB64 = '';
+          for (let i = 0; i < buf.total; i++) fullB64 += (buf.segs[i] || '');
+          let audioBytes;
+          if (buf.compressed) {
+            /* 解壓縮 */
+            audioBytes = await decompressFromBase64(fullB64);
+          } else {
+            /* 直接解碼 base64 */
+            const bin = atob(fullB64);
+            audioBytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) audioBytes[i] = bin.charCodeAt(i);
+          }
+          if (!audioBytes) throw new Error('decode failed');
+          const mergedBlob = new Blob([audioBytes], { type: buf.mimeType });
+          const reader = new FileReader();
+          reader.onload = () => playIncomingVoice({ audioDataUrl: String(reader.result || ''), durationMs: buf.durationMs });
+          reader.readAsDataURL(mergedBlob);
+        } catch (e) {
+          if (buf.segs[0]) playIncomingVoice({ audioDataUrl: 'data:' + buf.mimeType + ';base64,' + buf.segs[0], durationMs: buf.durationMs });
+        }
+      })();
     }
     /* 清理超過 60 秒未收齊的殘留 */
     const now = Date.now();
@@ -14842,28 +14932,43 @@ html body .app.perspective3d .discardSeat .tile::before {
       } catch (e) { hintVoiceBroadcast('播放廣播失敗'); }
       return true;
     }
-    /* 依 dataUrl 大小決定是否分段：超過 40KB 則分段背景送出 */
-    const SEGMENT_MAX = 40000;
-    if (dataUrl.length <= SEGMENT_MAX) {
-      const ok = publishVoiceBroadcast(dataUrl, blob.type, durationMs);
+    /* 把整個 blob 壓縮後分段送出 */
+    const SEG_MAX_B64 = 40000; /* 每段 base64 上限 40KB */
+    /* blob → Uint8Array → 壓縮 → base64 */
+    let audioBytes = null;
+    let compressed = false;
+    try {
+      const arrayBuf = await blob.arrayBuffer();
+      audioBytes = new Uint8Array(arrayBuf);
+    } catch (e) {}
+    let fullB64 = '';
+    if (audioBytes) {
+      const compB64 = await compressToBase64(audioBytes);
+      if (compB64 && compB64.length < dataUrl.length * 0.9) {
+        fullB64 = compB64;
+        compressed = true;
+        hintVoiceBroadcast('壓縮率: ' + Math.round(compB64.length / dataUrl.length * 100) + '%');
+      }
+    }
+    if (!fullB64) {
+      /* 壓縮無效或不支援，用原始 base64（去掉 data:xxx;base64, 前綴） */
+      fullB64 = dataUrl.indexOf(',') >= 0 ? dataUrl.slice(dataUrl.indexOf(',') + 1) : dataUrl;
+    }
+    /* 壓縮後若仍在限制內，單段送出；否則分段 */
+    const segId = net.clientId + '-' + Date.now().toString(36);
+    if (fullB64.length <= SEG_MAX_B64) {
+      const ok = publishVoiceBroadcast(fullB64, mimeType, durationMs, { segId, segIndex: 0, segTotal: 1, compressed });
       hintVoiceBroadcast(ok ? '已送出廣播' : '廣播送出失敗，請確認已連線');
       return ok;
     }
-    /* 分段：每 CHUNKS_PER_SEG 個 chunk（約3秒）合成一個獨立 blob 送出 */
-    const CHUNKS_PER_SEG = Math.max(1, Math.round(allChunks.length / Math.max(1, Math.round(durationMs / 3000))));
-    const segCount = Math.ceil(allChunks.length / CHUNKS_PER_SEG);
-    const segId = net.clientId + '-' + Date.now().toString(36);
+    const segCount = Math.max(1, Math.ceil(fullB64.length / SEG_MAX_B64));
+    const segLen = Math.ceil(fullB64.length / segCount);
     hintVoiceBroadcast('廣播送出中（共' + segCount + '段）...');
     let sent = 0;
     for (let i = 0; i < segCount; i++) {
-      const segChunks = allChunks.slice(i * CHUNKS_PER_SEG, (i+1) * CHUNKS_PER_SEG);
-      const segBlob = new Blob(segChunks, { type: mimeType });
-      if (segBlob.size < VOICE_BROADCAST_MIN_BYTES) continue;
-      let segUrl = '';
-      try { segUrl = await blobToDataUrl(segBlob); } catch (e) {}
-      if (!segUrl) continue;
+      const segB64 = fullB64.slice(i * segLen, (i+1) * segLen);
       const segMs = Math.round(durationMs / segCount);
-      const ok = publishVoiceBroadcast(segUrl, mimeType, segMs, { segId, segIndex: i, segTotal: segCount });
+      const ok = publishVoiceBroadcast(segB64, mimeType, segMs, { segId, segIndex: i, segTotal: segCount, compressed });
       if (ok) sent++;
       if (i < segCount - 1) await new Promise(r => setTimeout(r, 600));
     }
