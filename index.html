@@ -12562,13 +12562,19 @@ html body .app.perspective3d .discardSeat .tile::before {
       }
       settlementAutoContinueTimer = setTimeout(tick, 250);
     };
-    if (settlementAutoContinueActive && settlementAutoContinueKey === countdownKey && settlementAutoContinueDeadlineAt > Date.now()) {
+    if (settlementAutoContinueActive && settlementAutoContinueKey === countdownKey) {
+      /* 已在倒數中，只更新顯示，不重新啟動 */
       const remaining = Math.max(0, Math.ceil((settlementAutoContinueDeadlineAt - Date.now()) / 1000));
       setSettlementAutoContinueCountdownText(remaining, reason || '托管');
-      if (!settlementAutoContinueTimer) settlementAutoContinueTimer = setTimeout(tick, 250);
+      if (!settlementAutoContinueTimer && settlementAutoContinueDeadlineAt > Date.now()) {
+        settlementAutoContinueTimer = setTimeout(tick, 250);
+      }
       return true;
     }
-    clearAutoNextTimer(reason || 'settlement-auto-reset');
+    if (settlementAutoContinueActive) {
+      /* 不同的 countdownKey，先清除舊的再啟動新的 */
+      clearAutoNextTimer(reason || 'settlement-auto-reset');
+    }
     settlementAutoContinueActive = true;
     settlementAutoContinueKey = countdownKey;
     settlementAutoContinueDeadlineAt = Date.now() + settlementAutoContinueDurationMs();
