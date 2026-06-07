@@ -867,6 +867,12 @@
   0%,49%{opacity:1;filter:brightness(1.45);text-shadow:0 0 10px rgba(255,232,90,.95),0 1px 3px rgba(0,0,0,.75);}
   50%,100%{opacity:.20;filter:brightness(.78);text-shadow:0 1px 2px rgba(0,0,0,.45);}
 }
+.tw-wm{position:absolute;z-index:2;pointer-events:none;font-size:28px;font-weight:900;line-height:1;color:rgba(255,255,255,.22);transform-origin:50% 50%;display:flex;flex-direction:column;align-items:center;gap:2px;}
+.tw-wm-dealer{display:inline-flex;align-items:center;justify-content:center;width:1.6em;height:1.6em;border:1.5px solid #ef4444;border-radius:999px;color:#fff;background:#ef4444;font-size:0.45em;font-weight:1000;line-height:1;text-shadow:none;}
+.tw-wm-b{transform:translate(-50%,-50%);}
+.tw-wm-t{transform:translate(-50%,-50%) rotate(180deg);}
+.tw-wm-l{transform:translate(-50%,-50%) rotate(90deg);}
+.tw-wm-r{transform:translate(-50%,-50%) rotate(-90deg);}
 .dicePanel{
   position:absolute;
   left:50%;
@@ -3390,6 +3396,10 @@ html body .app.perspective3d .discardSeat .tile::before {
 <div class="hand hand-top" id="handTop"></div>
 <div class="hand hand-left" id="handLeft"></div>
 <div class="hand hand-right" id="handRight"></div>
+<div class="tw-wm tw-wm-b" id="wmBottom"></div>
+<div class="tw-wm tw-wm-t" id="wmTop"></div>
+<div class="tw-wm tw-wm-l" id="wmLeft"></div>
+<div class="tw-wm tw-wm-r" id="wmRight"></div>
 <div class="seatLabel seat-bottom" id="labelBottom"></div>
 <div class="seatLabel seat-top" id="labelTop"></div>
 <div class="seatLabel seat-left" id="labelLeft"></div>
@@ -6319,6 +6329,10 @@ html body .app.perspective3d .discardSeat .tile::before {
       dom[DISPLAY_ELEMENT[pos].label] = byId(DISPLAY_ELEMENT[pos].label);
       dom[DISPLAY_ELEMENT[pos].wall] = byId(DISPLAY_ELEMENT[pos].wall);
     });
+    dom.wmBottom = byId('wmBottom');
+    dom.wmTop    = byId('wmTop');
+    dom.wmLeft   = byId('wmLeft');
+    dom.wmRight  = byId('wmRight');
     dom.newGameBtn.addEventListener('click', () => { if (isOnlineGuest()) { requestNetworkSync('guest-newgame-button'); return; } newGame(); });
     dom.resultBackBtn.addEventListener('click', () => handleResultBackButton());
     dom.resultNewBtn.addEventListener('click', () => { clearAutoNextTimer('manual-new-game'); if (isOnlineGuest()) { requestNetworkSync('guest-result-newgame'); return; } dom.resultNewBtn.style.display = ''; newGame(); });
@@ -14747,7 +14761,7 @@ html body .app.perspective3d .discardSeat .tile::before {
     } catch (e) { return false; }
   }
 
-  function publishVoiceBroadcast(audioDataUrl, mimeType, durationMs) {
+  function publishVoiceBroadcast(audioDataUrl, mimeType, durationMs, segOpts) {
     if (!isNetworked() || !net.channel) return false;
     const dataUrl = String(audioDataUrl || '').trim();
     if (!dataUrl) return false;
@@ -14755,23 +14769,52 @@ html body .app.perspective3d .discardSeat .tile::before {
       protocol: 'tw16-clean-ably-v1', kind: 'voiceBroadcast', room: net.room,
       id: net.clientId + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8),
       clientId: net.clientId, senderInstanceId: net.instanceId, senderRole: net.role, playerKey: net.playerKey, seat: getLocalBroadcastSeat() || '', name: net.name,
-      mimeType: String(mimeType || '').trim(), durationMs: Math.max(0, Math.round(Number(durationMs || 0))), audioDataUrl: dataUrl, createdAt: Date.now()
+      mimeType: String(mimeType || '').trim(), durationMs: Math.max(0, Math.round(Number(durationMs || 0))), audioDataUrl: dataUrl, createdAt: Date.now(),
+      segId: (segOpts && segOpts.segId) || '', segIndex: (segOpts && segOpts.segIndex) || 0, segTotal: (segOpts && segOpts.segTotal) || 1
     };
     try { return publishNetworkRoomMessage('voiceBroadcast', payload, 'voice-broadcast'); } catch (e) { return false; }
   }
 
+  const voiceSegBuf = {}; /* 分段收集緩存 */
   function handleVoiceBroadcast(payload) {
     if (!payload || payload.kind !== 'voiceBroadcast') return false;
     const id = String(payload.id || '').trim();
     if (id && id === net.lastVoiceBroadcastId) return false;
     net.lastVoiceBroadcastId = id || String(payload.createdAt || '');
-    return playIncomingVoice(payload);
+    const segId    = String(payload.segId || '').trim();
+    const segTotal = Number(payload.segTotal) || 1;
+    const segIndex = Number(payload.segIndex) || 0;
+    /* 單段：直接播放 */
+    if (!segId || segTotal <= 1) return playIncomingVoice(payload);
+    /* 多段：收集 */
+    if (!voiceSegBuf[segId]) voiceSegBuf[segId] = { segs: {}, total: segTotal, mimeType: payload.mimeType || 'audio/webm', durationMs: 0, at: Date.now() };
+    voiceSegBuf[segId].segs[segIndex] = String(payload.audioDataUrl || '');
+    voiceSegBuf[segId].durationMs += Number(payload.durationMs) || 0;
+    /* 收齊後合併播放 */
+    const buf = voiceSegBuf[segId];
+    if (Object.keys(buf.segs).length >= buf.total) {
+      delete voiceSegBuf[segId];
+      /* 依序拼接所有 dataUrl 的 base64 部分，合成完整 dataUrl */
+      const prefix = 'data:' + buf.mimeType + ';base64,';
+      let combined = prefix;
+      for (let i = 0; i < buf.total; i++) {
+        const url = buf.segs[i] || '';
+        const b64 = url.indexOf(',') >= 0 ? url.slice(url.indexOf(',') + 1) : url;
+        combined += b64;
+      }
+      playIncomingVoice({ audioDataUrl: combined, durationMs: buf.durationMs });
+    }
+    /* 清理超過 60 秒未收齊的殘留 */
+    const now = Date.now();
+    Object.keys(voiceSegBuf).forEach(k => { if (now - voiceSegBuf[k].at > 60000) delete voiceSegBuf[k]; });
+    return true;
   }
 
   async function finishVoiceBroadcastRecording(mimeHint, durationMs) {
-    const blob = new Blob(voiceBroadcastChunks, { type: mimeHint || (voiceBroadcastRecorder && voiceBroadcastRecorder.mimeType) || 'audio/webm' });
-    voiceBroadcastChunks = [];
-    stopVoiceBroadcastStream();
+    const allChunks = voiceBroadcastChunks.splice(0); /* 取出所有 chunks，保留原始分塊 */
+    const mimeType = mimeHint || 'audio/webm';
+    const blob = new Blob(allChunks, { type: mimeType });
+    releaseVoiceBroadcastStream();
     const btn = voiceBroadcastActiveButton;
     voiceBroadcastRecorder = null;
     voiceBroadcastActiveButton = null;
@@ -14799,9 +14842,33 @@ html body .app.perspective3d .discardSeat .tile::before {
       } catch (e) { hintVoiceBroadcast('播放廣播失敗'); }
       return true;
     }
-    const ok = publishVoiceBroadcast(dataUrl, blob.type, durationMs);
-    hintVoiceBroadcast(ok ? '已送出廣播' : '廣播送出失敗，請確認已連線');
-    return ok;
+    /* 依 dataUrl 大小決定是否分段：超過 40KB 則分段背景送出 */
+    const SEGMENT_MAX = 40000;
+    if (dataUrl.length <= SEGMENT_MAX) {
+      const ok = publishVoiceBroadcast(dataUrl, blob.type, durationMs);
+      hintVoiceBroadcast(ok ? '已送出廣播' : '廣播送出失敗，請確認已連線');
+      return ok;
+    }
+    /* 分段：每 CHUNKS_PER_SEG 個 chunk（約3秒）合成一個獨立 blob 送出 */
+    const CHUNKS_PER_SEG = Math.max(1, Math.round(allChunks.length / Math.max(1, Math.round(durationMs / 3000))));
+    const segCount = Math.ceil(allChunks.length / CHUNKS_PER_SEG);
+    const segId = net.clientId + '-' + Date.now().toString(36);
+    hintVoiceBroadcast('廣播送出中（共' + segCount + '段）...');
+    let sent = 0;
+    for (let i = 0; i < segCount; i++) {
+      const segChunks = allChunks.slice(i * CHUNKS_PER_SEG, (i+1) * CHUNKS_PER_SEG);
+      const segBlob = new Blob(segChunks, { type: mimeType });
+      if (segBlob.size < VOICE_BROADCAST_MIN_BYTES) continue;
+      let segUrl = '';
+      try { segUrl = await blobToDataUrl(segBlob); } catch (e) {}
+      if (!segUrl) continue;
+      const segMs = Math.round(durationMs / segCount);
+      const ok = publishVoiceBroadcast(segUrl, mimeType, segMs, { segId, segIndex: i, segTotal: segCount });
+      if (ok) sent++;
+      if (i < segCount - 1) await new Promise(r => setTimeout(r, 600));
+    }
+    hintVoiceBroadcast(sent > 0 ? '廣播已送出（' + sent + '/' + segCount + '段）' : '廣播送出失敗');
+    return sent > 0;
   }
 
   async function startVoiceBroadcastRecording(btn) {
@@ -15584,31 +15651,29 @@ html body .app.perspective3d .discardSeat .tile::before {
     const hand = pos && dom[DISPLAY_ELEMENT[pos].hand];
     if (!hand) { frame.classList.remove('show'); return; }
     const table = byId('table');
-    const pad = 3;
-    /* 3D 模式下 getBoundingClientRect 回傳的是透視投影後的螢幕座標，
-       與 frame 所在的 table layout 座標系不符，改走 offsetLeft/offsetTop 鏈取 layout 座標。 */
+    const meldId = {bottom:'meldBottom',top:'meldTop',left:'meldLeft',right:'meldRight'}[pos];
+    const meldEl = byId(meldId);
+    const pad = 5;
     if (state.uiSettings.perspective3d && table) {
-      let offsetX = 0, offsetY = 0, el = hand;
-      while (el && el !== table) {
-        offsetX += el.offsetLeft || 0;
-        offsetY += el.offsetTop || 0;
-        el = el.offsetParent;
-      }
-      const w = hand.offsetWidth;
-      const h = hand.offsetHeight;
-      if (w < 2 || h < 2) { frame.classList.remove('show'); return; }
-      frame.style.left = px(offsetX - pad);
-      frame.style.top = px(offsetY - pad);
-      frame.style.width = px(w + pad * 2);
-      frame.style.height = px(h + pad * 2);
+      const getOff = el => { let x=0,y=0,e=el; while(e&&e!==table){x+=e.offsetLeft||0;y+=e.offsetTop||0;e=e.offsetParent;} return{x,y,w:el.offsetWidth,h:el.offsetHeight}; };
+      const h = getOff(hand);
+      if (h.w < 2 || h.h < 2) { frame.classList.remove('show'); return; }
+      let minX=h.x,minY=h.y,maxX=h.x+h.w,maxY=h.y+h.h;
+      if (meldEl&&meldEl.offsetWidth>2) { const m=getOff(meldEl); minX=Math.min(minX,m.x);minY=Math.min(minY,m.y);maxX=Math.max(maxX,m.x+m.w);maxY=Math.max(maxY,m.y+m.h); }
+      frame.style.left=px(minX-pad); frame.style.top=px(minY-pad);
+      frame.style.width=px(maxX-minX+pad*2); frame.style.height=px(maxY-minY+pad*2);
     } else {
-      const rect = hand.getBoundingClientRect();
-      if (!rect || rect.width < 2 || rect.height < 2) { frame.classList.remove('show'); return; }
-      const tableRect = table && table.getBoundingClientRect ? table.getBoundingClientRect() : { left: 0, top: 0 };
-      frame.style.left = px(rect.left - tableRect.left - pad);
-      frame.style.top = px(rect.top - tableRect.top - pad);
-      frame.style.width = px(rect.width + pad * 2);
-      frame.style.height = px(rect.height + pad * 2);
+      const tR = table&&table.getBoundingClientRect?table.getBoundingClientRect():{left:0,top:0};
+      const hR = hand.getBoundingClientRect();
+      if (!hR||hR.width<2||hR.height<2) { frame.classList.remove('show'); return; }
+      const mR = meldEl?meldEl.getBoundingClientRect():null;
+      const mV = mR&&mR.width>2&&mR.height>2;
+      const minL=Math.min(hR.left,mV?mR.left:hR.left)-tR.left;
+      const minT=Math.min(hR.top,mV?mR.top:hR.top)-tR.top;
+      const maxR=Math.max(hR.right,mV?mR.right:hR.right)-tR.left;
+      const maxB=Math.max(hR.bottom,mV?mR.bottom:hR.bottom)-tR.top;
+      frame.style.left=px(minL-pad); frame.style.top=px(minT-pad);
+      frame.style.width=px(maxR-minL+pad*2); frame.style.height=px(maxB-minT+pad*2);
     }
     frame.classList.add('show');
   }
@@ -15991,6 +16056,32 @@ html body .app.perspective3d .discardSeat .tile::before {
 
   function positionActionPanelNearHand(seat) {
     if (!dom.actionPanel || !dom.actionPanel.classList.contains('action-panel-visible') || dom.actionPanel.classList.contains('ting-choice-active')) return false;
+    const map = displayMap();
+    const pos = map[seat || localHumanSeat()] || 'bottom';
+    if (pos === 'bottom') {
+      const handEl = dom[DISPLAY_ELEMENT[pos].hand];
+      const meldEl = byId('meldBottom');
+      const tableEl = byId('table');
+      if (handEl && tableEl) {
+        const tR = tableEl.getBoundingClientRect();
+        const hR = handEl.getBoundingClientRect();
+        const mR = meldEl ? meldEl.getBoundingClientRect() : null;
+        const mValid = mR && mR.width > 2 && mR.height > 2;
+        const boxTop   = Math.min(hR.top,   mValid ? mR.top   : hR.top);
+        const boxRight = Math.max(hR.right,  mValid ? mR.right : hR.right);
+        const rightFromTableRight   = Math.max(0, tR.right  - boxRight);
+        const bottomFromTableBottom = Math.max(0, tR.bottom - boxTop) + 8;
+        dom.actionPanel.style.setProperty('left',          'auto',                          'important');
+        dom.actionPanel.style.setProperty('top',           'auto',                          'important');
+        dom.actionPanel.style.setProperty('right',         rightFromTableRight  + 'px',     'important');
+        dom.actionPanel.style.setProperty('bottom',        bottomFromTableBottom + 'px',    'important');
+        dom.actionPanel.style.setProperty('transform',     'none',                          'important');
+        dom.actionPanel.style.setProperty('background',    'rgba(30,30,30,.82)',            'important');
+        dom.actionPanel.style.setProperty('border-radius', '10px',                         'important');
+        dom.actionPanel.style.setProperty('padding',       '6px 8px',                      'important');
+        return true;
+      }
+    }
     const anchorRect = actionPanelAnchorRectForSeat(seat || localHumanSeat());
     if (!anchorRect) return false;
     const box = viewportBox();
@@ -17232,11 +17323,30 @@ function concealedKongOwnerOfMeld(meld) {
       const dealerBadge = seat === state.dealer ? '<span class="dealerBadge">莊</span>' : '';
       const dealerRepeatText = dealerRepeatSeatLabelText(seat);
       const dealerRepeatHtml = dealerRepeatText ? '<div class="dealerRepeatLine">' + escapeHtml(dealerRepeatText) + '</div>' : '';
-      labelEl.innerHTML = '<div class="seatLabelInner seatLabelInner-' + pos + '">' + dealerRepeatHtml + '<div class="name">' + dealerBadge + '<span class="seatNameText">' + escapeHtml(seatLabelText(seat)) + '</span></div><div class="score">籌碼 ' + state.chips[seat] + '</div><div class="meta"><span class="seatMetaText">' + escapeHtml(meta) + '</span><span class="' + countdownClass + '" data-seat-countdown-label="' + seat + '">' + escapeHtml(countdownText || '｜00秒') + '</span></div></div>';
+      labelEl.innerHTML = '';
       labelEl.classList.toggle('active', seat === state.turn);
       labelEl.classList.toggle('ting', !!state.declaredTing[seat]);
+      const wmEl = dom[{bottom:'wmBottom',top:'wmTop',left:'wmLeft',right:'wmRight'}[pos]];
+      if (wmEl) {
+        const windChar = ({east:'東',south:'南',west:'西',north:'北'})[seat]||'';
+        const isDealer = seat === state.dealer;
+        wmEl.innerHTML = (isDealer ? '<span class="tw-wm-dealer">莊</span>' : '') + windChar;
+        const playPhase = state.phase === 'discard' || state.phase === 'claim' || state.phase === 'draw' || state.phase === 'selfwin';
+        wmEl.style.visibility = playPhase ? 'visible' : 'hidden';
+      }
     });
     positionSeatLabels(map);
+    (function(){
+      const tEl=byId('table'),gEl=byId('discardGrid');
+      if(!tEl||!gEl)return;
+      const tR=tEl.getBoundingClientRect(),gR=gEl.getBoundingClientRect();
+      if(!tR.width||!gR.width)return;
+      const cx=(gR.left+gR.right)/2-tR.left, cy=(gR.top+gR.bottom)/2-tR.top, off=48;
+      if(dom.wmBottom){dom.wmBottom.style.left=cx+'px';dom.wmBottom.style.top=(cy+off)+'px';}
+      if(dom.wmTop)   {dom.wmTop.style.left   =cx+'px';dom.wmTop.style.top   =(cy-off)+'px';}
+      if(dom.wmLeft)  {dom.wmLeft.style.left  =(cx-off)+'px';dom.wmLeft.style.top=cy+'px';}
+      if(dom.wmRight) {dom.wmRight.style.left =(cx+off)+'px';dom.wmRight.style.top=cy+'px';}
+    })();
   }
 
 
