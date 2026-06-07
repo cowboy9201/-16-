@@ -869,6 +869,8 @@
 }
 .tw-wm{position:absolute;z-index:2;pointer-events:none;font-size:28px;font-weight:900;line-height:1;color:rgba(255,255,255,.22);transform-origin:50% 50%;display:flex;flex-direction:column;align-items:center;gap:2px;}
 .tw-wm-dealer{display:inline-flex;align-items:center;justify-content:center;width:1.6em;height:1.6em;border:1.5px solid #ef4444;border-radius:999px;color:#fff;background:#ef4444;font-size:0.45em;font-weight:1000;line-height:1;text-shadow:none;}
+.tw-wm-ting{display:inline-flex;align-items:center;justify-content:center;padding:0 2px;border:1.5px solid #ef4444;border-radius:3px;color:#ef4444;background:transparent;font-size:0.4em;font-weight:1000;line-height:1;text-shadow:none;margin-top:2px;}
+.tw16-mini-dashboard-ting{position:absolute;left:3px;bottom:2px;font-size:clamp(8px,calc(var(--tw-mini-dashboard-card-w,80px)*.14),11px);font-weight:1000;color:#ef4444;border:1px solid #ef4444;border-radius:3px;padding:0 2px;line-height:1.2;pointer-events:none;}
 .tw-wm-b{transform:translate(-50%,-50%);}
 .tw-wm-t{transform:translate(-50%,-50%) rotate(180deg);}
 .tw-wm-l{transform:translate(-50%,-50%) rotate(90deg);}
@@ -15469,7 +15471,8 @@ html body .app.perspective3d .discardSeat .tile::before {
       seat === state.turn ? 'active' : '',
       dealerDashboardPrefixText(seat),
       seatLabelText(seat),
-      String(state.chips[seat] ?? 0)
+      String(state.chips[seat] ?? 0),
+      state.declaredTing[seat] ? 'ting' : ''
     ].join('~')).join('|');
     if (miniDashboardRenderKey !== renderKey || grid.dataset.renderKey !== renderKey) {
       grid.replaceChildren();
@@ -15486,6 +15489,12 @@ html body .app.perspective3d .discardSeat .tile::before {
         const countdown = document.createElement('div');
         countdown.className = 'tw16-mini-dashboard-countdown';
         countdown.dataset.dashboardCountdownSeat = seat;
+        if (state.declaredTing[seat]) {
+          const tingBadge = document.createElement('div');
+          tingBadge.className = 'tw16-mini-dashboard-ting';
+          tingBadge.textContent = '聽';
+          card.appendChild(tingBadge);
+        }
         card.append(name, chip, countdown);
         grid.appendChild(card);
       });
@@ -17529,7 +17538,8 @@ function concealedKongOwnerOfMeld(meld) {
       if (wmEl) {
         const windChar = ({east:'東',south:'南',west:'西',north:'北'})[seat]||'';
         const isDealer = seat === state.dealer;
-        wmEl.innerHTML = (isDealer ? '<span class="tw-wm-dealer">莊</span>' : '') + windChar;
+        const isTing = !!state.declaredTing[seat];
+        wmEl.innerHTML = (isDealer ? '<span class="tw-wm-dealer">莊</span>' : '') + windChar + (isTing ? '<span class="tw-wm-ting">聽</span>' : '');
         const playPhase = state.phase === 'discard' || state.phase === 'claim' || state.phase === 'draw' || state.phase === 'selfwin';
         wmEl.style.visibility = playPhase ? 'visible' : 'hidden';
       }
