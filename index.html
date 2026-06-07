@@ -2469,7 +2469,7 @@
   border-radius:4px!important;
 }
 .actionBtn.actionSkipBtn{
-  margin-top: -1px !important;
+  margin-top: 6px !important;
   padding: 0 4px !important;
   font-size: 26px !important;
   line-height: 1 !important;
@@ -10754,7 +10754,18 @@ html body .app.perspective3d .discardSeat .tile::before {
   }
 
   function submitDiscard(seat, tileId, source, options = {}) {
-    if (isOnlineGuest() && source !== 'remote' && seat === net.assignedSeat) return publishNetworkIntent({ action: 'discard', tileId });
+    if (isOnlineGuest() && source !== 'remote' && seat === net.assignedSeat) {
+      /* 立即觸發本地出牌動畫，讓玩家感覺即時無 lag */
+      try {
+        const tileObj = (state.hands[seat] || []).find(t => t.id === tileId);
+        if (tileObj) {
+          const ms = discardAnimationMs();
+          positionDiscardAnimationAtSeat(seat);
+          showBigTileAnimation(tileObj, { holdMs: Math.max(320, Math.round(ms * 1.55)), fadeMs: Math.max(90, Math.round(ms * 0.24)), className: 'discarding' });
+        }
+      } catch (e) {}
+      return publishNetworkIntent({ action: 'discard', tileId });
+    }
     const allowComputerRecovery = !!(options && options.forceComputer && isOnlineHost() && isHostDrivenSeat(seat) && !state.ended && !state.locked && !state.pending && seat === state.turn && state.phase === 'discard' && (state.hands[seat] || []).length);
     if (!canDiscard(seat) && !allowComputerRecovery) return false;
     clearTurnDeadline();
