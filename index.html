@@ -1328,7 +1328,10 @@
 .tw16-chat-board{position:fixed;top:56px;right:0;z-index:9990;width:80px;display:none;}
 .tw16-chat-board.show{display:block;}
 .tw16-chat-board-close{display:block;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:3px;padding:1px 5px;font-size:11px;cursor:pointer;margin-bottom:2px;}
-#tw16ChatBoardTextarea{width:100%;height:120px;background:transparent;border:none;color:#fff;font-size:10px;font-weight:bold;text-shadow:none;line-height:1.4;resize:none;overflow-y:scroll;pointer-events:auto;font-family:inherit;}
+#tw16ChatBoardList{list-style:none;margin:0;padding:0;height:120px;overflow-y:scroll;pointer-events:auto;touch-action:pan-y;-webkit-overflow-scrolling:touch;}
+.tw16-chat-board-item{font-size:10px;font-weight:bold;line-height:1.5;word-break:break-all;padding:1px 2px;}
+.tw16-chat-board-name{color:#000;font-weight:bold;margin-right:2px;}
+.tw16-chat-board-text{color:#fff;text-shadow:0 1px 2px #000;}
 
 .tw16-mini-dashboard-chip-plus{color:#ef4444;font-weight:1000;margin-right:1px;}
 .tw16-mini-dashboard-chip-sum{position:fixed;left:50%;transform:translateX(-50%);background:rgba(2,6,23,.90);border:1px solid rgba(255,60,60,.80);border-radius:8px;padding:2px 10px;color:#ef4444;font-size:clamp(11px,3vw,15px);font-weight:1000;white-space:nowrap;pointer-events:none;z-index:9999;line-height:1.4;}
@@ -14654,17 +14657,20 @@ html body .app.perspective3d .discardSeat .tile::before {
     const board = document.createElement('div');
     board.id = 'tw16ChatBoard';
     board.className = 'tw16-chat-board';
-    board.innerHTML = '<button class="tw16-chat-board-close" id="tw16ChatBoardClose">✕</button><textarea id="tw16ChatBoardTextarea" readonly></textarea>';
+    board.innerHTML = '<button class="tw16-chat-board-close" id="tw16ChatBoardClose">✕</button><ul id="tw16ChatBoardList"></ul>';
     document.body.appendChild(board);
   })();
   function addChatBoardMessage(seat, text) {
     const board = byId('tw16ChatBoard');
-    const ta = byId('tw16ChatBoardTextarea');
-    if (!board || !ta) return;
+    const list = byId('tw16ChatBoardList');
+    if (!board || !list) return;
     const name = SEAT_NAME[seat] || seat || '玩家';
-    ta.value += (ta.value ? '\n' : '') + name + ' ' + text;
+    const li = document.createElement('li');
+    li.className = 'tw16-chat-board-item';
+    li.innerHTML = '<span class="tw16-chat-board-name">' + escapeHtml(name) + '</span><span class="tw16-chat-board-text">' + escapeHtml(text) + '</span>';
+    list.appendChild(li);
     board.classList.add('show');
-    ta.scrollTop = ta.scrollHeight;
+    list.scrollTop = list.scrollHeight;
     const closeBtn = byId('tw16ChatBoardClose');
     if (closeBtn && !closeBtn._bound) {
       closeBtn._bound = true;
