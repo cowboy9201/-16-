@@ -8493,6 +8493,28 @@ function loadUiSettings() {
   }
 
   function buildLeanSnapshotState() {
+    const guestSeat = isOnlineHost() ? null : (NETWORK_SEAT_ORDER.includes(net.assignedSeat) ? net.assignedSeat : null);
+    function maskedHands() {
+      const result = Object.create(null);
+      SEATS.forEach(seat => {
+        const hand = state.hands[seat];
+        if (!hand) { result[seat] = hand; return; }
+        if (!guestSeat || seat === guestSeat) {
+          result[seat] = hand;
+        } else {
+          result[seat] = hand.map(t => t ? Object.assign({}, t, { code: '?' }) : t);
+        }
+      });
+      return result;
+    }
+    function maskedActiveDrawnTileIds() {
+      if (!guestSeat) return state.activeDrawnTileIds;
+      const result = Object.create(null);
+      SEATS.forEach(seat => {
+        result[seat] = seat === guestSeat ? ((state.activeDrawnTileIds || {})[seat] || '') : '';
+      });
+      return result;
+    }
     return clonePlain({
       handId: state.handId,
       windRound: state.windRound,
@@ -8509,7 +8531,7 @@ function loadUiSettings() {
       openingDeal: state.openingDeal,
       fixedSeatLabelStyles: state.fixedSeatLabelStyles,
       labelPositionsLocked: state.labelPositionsLocked,
-      hands: state.hands,
+      hands: maskedHands(),
       melds: state.melds,
       flowers: state.flowers,
       discards: state.discards,
@@ -8519,7 +8541,7 @@ function loadUiSettings() {
       handVisualColors: state.handVisualColors,
       seatAutoPlay: state.seatAutoPlay,
       declaredTing: state.declaredTing,
-      activeDrawnTileIds: state.activeDrawnTileIds,
+      activeDrawnTileIds: maskedActiveDrawnTileIds(),
       voiceEvents: state.voiceEvents,
       nextRoundPlan: state.nextRoundPlan,
       lastSettlement: state.lastSettlement,
@@ -13395,7 +13417,9 @@ function loadUiSettings() {
 
   function playDrawAnimation(seat, tileObj) {
     if (!tileObj || state.phase === 'opening') return false;
-    if (isNetworked() && isSeatAssignedHuman(seat) && !isSeatLocalHuman(seat)) return false;
+    if (isNetworked()) {
+      if (!isSeatLocalHuman(seat)) return false;
+    }
     const isAuto = isSeatAutoDrivenBySystem(seat) || !!(state.seatAutoPlay && state.seatAutoPlay[seat]);
     positionDrawAnimationAtSeat(seat, tileObj);
     return showBigTileAnimation(tileObj, { holdMs: isAuto ? 80 : 520, fadeMs: isAuto ? 40 : 150, className: 'drawing', autoSeat: isAuto });
