@@ -3716,6 +3716,7 @@ html body .app.perspective3d .discardSeat .tile::before {
   const NETWORK_GUEST_SYNC_STALE_MS = 1200;
   const NETWORK_GUEST_SYNC_MIN_INTERVAL_MS = 650;
   const NETWORK_GUEST_SYNC_SEQ_GAP_THRESHOLD = 2;
+  const NETWORK_GUEST_SNAPSHOT_STALE_MS = 30000; // 30 秒內未收到host snapshot才視為失聯，避免3.6秒誤判導致來賓AI建議被永久關閉
   const NETWORK_GUEST_SYNC_BACKOFF_STEPS_MS = [650, 1000, 1500, 2200];
   const NETWORK_GUEST_ENTRY_RETRY_MS = 2800;
   const NETWORK_GUEST_KEY_RETRY_MAX_ATTEMPTS = 30;
@@ -6387,7 +6388,7 @@ html body .app.perspective3d .discardSeat .tile::before {
     lobby.id = 'tw16Lobby';
     lobby.className = 'tw16-lobby';
     lobby.innerHTML = '<div class="tw16-lobby-card">'
-      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;"><div class="tw16-lobby-chip" style="flex-shrink:0;margin-bottom:0;">Ably 連線 / 單機</div><span style="font-size:clamp(9px,2.5vw,12px);color:#cbd5e1;font-weight:700;white-space:nowrap;">（115.6.12 09：05 改版）</span><span style="margin-left:auto;font-size:11px;font-weight:900;color:#4ade80;background:rgba(74,222,128,.15);border:1px solid rgba(74,222,128,.4);border-radius:999px;padding:2px 10px;white-space:nowrap;">精確動態規劃向聽</span></div>'
+      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;"><div class="tw16-lobby-chip" style="flex-shrink:0;margin-bottom:0;">Ably 連線 / 單機</div><span style="font-size:clamp(9px,2.5vw,12px);color:#cbd5e1;font-weight:700;white-space:nowrap;">（115.6.12 09：20 改版）</span><span style="margin-left:auto;font-size:11px;font-weight:900;color:#4ade80;background:rgba(74,222,128,.15);border:1px solid rgba(74,222,128,.4);border-radius:999px;padding:2px 10px;white-space:nowrap;">精確動態規劃向聽</span></div>'
       + '<div class="tw16-lobby-title">台灣麻將 Ably 連線 / 單機</div>'
       + '<div class="tw16-lobby-sub">★連線對戰：<br><span style="color:#ef4444">每人都要設同房名</span>，設好房名後<br>1人先按<span style="background:#1d4ed8;color:#fff;border-radius:3px;padding:0 3px;">建立房間</span><br>其餘人按<span style="background:#1d4ed8;color:#fff;border-radius:3px;padding:0 3px;">加入房間</span><br>★單人：按<span style="background:#15803d;color:#fff;border-radius:3px;padding:0 3px;">直接離線開始</span></div>'
       + '<div class="tw16-lobby-grid">'
@@ -7649,7 +7650,7 @@ function loadUiSettings() {
   function isGuestSyncRequired() {
     if (net.role !== 'guest') return false;
     const hasAppliedGameSnapshot = !!net.lastAppliedSnapshotSeq;
-    const snapshotStale = !net.lastSnapshotAt || Date.now() - Number(net.lastSnapshotAt || 0) > 3600;
+    const snapshotStale = !net.lastSnapshotAt || Date.now() - Number(net.lastSnapshotAt || 0) > NETWORK_GUEST_SNAPSHOT_STALE_MS;
     const seqGap = guestHostSeqGap() >= NETWORK_GUEST_SYNC_SEQ_GAP_THRESHOLD;
     return !!net.guestSyncing || !hasAppliedGameSnapshot || snapshotStale || seqGap || state.phase === 'syncing';
   }
