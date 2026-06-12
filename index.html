@@ -6388,7 +6388,7 @@ html body .app.perspective3d .discardSeat .tile::before {
     lobby.id = 'tw16Lobby';
     lobby.className = 'tw16-lobby';
     lobby.innerHTML = '<div class="tw16-lobby-card">'
-      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;"><div class="tw16-lobby-chip" style="flex-shrink:0;margin-bottom:0;">Ably 連線 / 單機</div><span style="font-size:clamp(9px,2.5vw,12px);color:#cbd5e1;font-weight:700;white-space:nowrap;">（115.6.12 09：20 改版）</span><span style="margin-left:auto;font-size:11px;font-weight:900;color:#4ade80;background:rgba(74,222,128,.15);border:1px solid rgba(74,222,128,.4);border-radius:999px;padding:2px 10px;white-space:nowrap;">精確動態規劃向聽</span></div>'
+      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;"><div class="tw16-lobby-chip" style="flex-shrink:0;margin-bottom:0;">Ably 連線 / 單機</div><span style="font-size:clamp(9px,2.5vw,12px);color:#cbd5e1;font-weight:700;white-space:nowrap;">（115.6.12 09：35 改版）</span><span style="margin-left:auto;font-size:11px;font-weight:900;color:#4ade80;background:rgba(74,222,128,.15);border:1px solid rgba(74,222,128,.4);border-radius:999px;padding:2px 10px;white-space:nowrap;">精確動態規劃向聽</span></div>'
       + '<div class="tw16-lobby-title">台灣麻將 Ably 連線 / 單機</div>'
       + '<div class="tw16-lobby-sub">★連線對戰：<br><span style="color:#ef4444">每人都要設同房名</span>，設好房名後<br>1人先按<span style="background:#1d4ed8;color:#fff;border-radius:3px;padding:0 3px;">建立房間</span><br>其餘人按<span style="background:#1d4ed8;color:#fff;border-radius:3px;padding:0 3px;">加入房間</span><br>★單人：按<span style="background:#15803d;color:#fff;border-radius:3px;padding:0 3px;">直接離線開始</span></div>'
       + '<div class="tw16-lobby-grid">'
@@ -13100,31 +13100,10 @@ function loadUiSettings() {
 
   function positionTingChoicePanelAtTableCenter() {
     if (!dom.actionPanel || !dom.actionPanel.classList.contains('ting-choice-active')) return false;
-    /* 定位在和吃碰槓按鈕相同的位置（手牌框右上角） */
-    const seat = localHumanSeat();
-    const handEl = seat ? dom[DISPLAY_ELEMENT['bottom'].hand] : null;
-    const meldEl = byId('meldBottom');
-    const tableEl = byId('table');
-    if (handEl && tableEl) {
-      const tR = tableEl.getBoundingClientRect();
-      const hR = handEl.getBoundingClientRect();
-      const mR = meldEl ? meldEl.getBoundingClientRect() : null;
-      const mValid = mR && mR.width > 2 && mR.height > 2;
-      const boxTop   = Math.min(hR.top,   mValid ? mR.top   : hR.top);
-      const boxRight = Math.max(hR.right,  mValid ? mR.right : hR.right);
-      const rightFromTableRight   = Math.max(0, tR.right  - boxRight);
-      const bottomFromTableBottom = Math.max(0, tR.bottom - boxTop) + 8;
-      dom.actionPanel.style.setProperty('left',          'auto',                         'important');
-      dom.actionPanel.style.setProperty('top',           'auto',                         'important');
-      dom.actionPanel.style.setProperty('right',         rightFromTableRight  + 'px',    'important');
-      dom.actionPanel.style.setProperty('bottom',        bottomFromTableBottom + 'px',   'important');
-      dom.actionPanel.style.setProperty('transform',     'none',                         'important');
-      dom.actionPanel.style.setProperty('background',    'rgba(30,30,30,.82)',           'important');
-      dom.actionPanel.style.setProperty('border-radius', '10px',                        'important');
-      dom.actionPanel.style.setProperty('padding',       '6px 8px',                     'important');
-      return true;
-    }
-    /* fallback：桌面中央 */
+    /* 置中在四個座位手牌的正中央（桌面正中央） */
+    ['left','right','top','bottom','transform','transform-origin','background','border-radius','padding','width','height'].forEach(prop => {
+      dom.actionPanel.style.removeProperty(prop);
+    });
     setAbsolutePlacement(dom.actionPanel, {
       position: 'absolute',
       left: '50%',
