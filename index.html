@@ -2910,44 +2910,43 @@ body, .app {
 /* tw16_g104: visible non-autoplay strategy discard suggestion.
    The suggested hand tile is slightly enlarged, framed in red, and marked with a small red label. */
 .hand .hand-tile-row .tile.strategy-discard-suggestion{
-  outline:2px solid #ff2020!important;
+  outline:1px solid #ff2020!important;
   outline-offset:-1px!important;
   box-shadow:inset 0 0 0 1px rgba(255,32,32,.86)!important;
   transform:scale(1.055)!important;
   transform-origin:center bottom!important;
   z-index:92!important;
+  overflow:visible!important;
 }
 .hand .hand-tile-row .tile.strategy-discard-suggestion::before,
 .hand .hand-tile-row .tile.face-image.strategy-discard-suggestion::before,
 .hand .hand-tile-row .tile.face-image.custom-tile-image.strategy-discard-suggestion::before{
-  content:none!important;
-  display:none!important;
-}
-.ai-suggest-wrapper{
-  position:relative;
-  display:inline-flex;
-  flex:0 0 auto;
-  overflow:visible;
-}
-.ai-suggest-label{
-  display:block;
-  position:absolute;
-  left:0;
-  bottom:calc(100% + 1px);
-  top:auto;
-  width:max-content;
-  height:auto;
-  padding:1px 3px;
-  margin:0;
-  border-radius:2px 2px 0 0;
-  background:rgba(220,0,0,.92);
-  color:#fff;
-  font-size:clamp(5px,calc(var(--tw-tile-w,28px) * .26),7px);
-  font-weight:900;
-  line-height:1.15;
-  white-space:nowrap;
-  pointer-events:none;
-  z-index:99;
+  content:"建議"!important;
+  display:block!important;
+  position:absolute!important;
+  left:-1px!important;
+  top:auto!important;
+  bottom:calc(100% + 1px)!important;
+  width:max-content!important;
+  height:auto!important;
+  min-width:0!important;
+  min-height:0!important;
+  padding:0!important;
+  margin:0!important;
+  border:0!important;
+  border-radius:0!important;
+  outline:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  color:#ff2020!important;
+  font-size:clamp(5px,calc(var(--tw-tile-w) * .28),7px)!important;
+  font-weight:1000!important;
+  line-height:.95!important;
+  letter-spacing:0!important;
+  white-space:nowrap!important;
+  text-shadow:0 1px 2px rgba(0,0,0,.70)!important;
+  pointer-events:none!important;
+  z-index:5!important;
 }
 .hand-bottom .hand-tile-row .tile.strategy-discard-suggestion:hover{
   transform:translateY(-6px) scale(1.085)!important;
@@ -6387,7 +6386,7 @@ html body .app.perspective3d .discardSeat .tile::before {
     lobby.id = 'tw16Lobby';
     lobby.className = 'tw16-lobby';
     lobby.innerHTML = '<div class="tw16-lobby-card">'
-      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;"><div class="tw16-lobby-chip" style="flex-shrink:0;margin-bottom:0;">Ably 連線 / 單機</div><span style="font-size:clamp(9px,2.5vw,12px);color:#cbd5e1;font-weight:700;white-space:nowrap;">（115.6.12 08：25 改版）</span><span style="margin-left:auto;font-size:11px;font-weight:900;color:#4ade80;background:rgba(74,222,128,.15);border:1px solid rgba(74,222,128,.4);border-radius:999px;padding:2px 10px;white-space:nowrap;">精確動態規劃向聽</span></div>'
+      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;"><div class="tw16-lobby-chip" style="flex-shrink:0;margin-bottom:0;">Ably 連線 / 單機</div><span style="font-size:clamp(9px,2.5vw,12px);color:#cbd5e1;font-weight:700;white-space:nowrap;">（115.6.11 18：30 改版）</span><span style="margin-left:auto;font-size:11px;font-weight:900;color:#4ade80;background:rgba(74,222,128,.15);border:1px solid rgba(74,222,128,.4);border-radius:999px;padding:2px 10px;white-space:nowrap;">精確動態規劃向聽</span></div>'
       + '<div class="tw16-lobby-title">台灣麻將 Ably 連線 / 單機</div>'
       + '<div class="tw16-lobby-sub">★連線對戰：<br><span style="color:#ef4444">每人都要設同房名</span>，設好房名後<br>1人先按<span style="background:#1d4ed8;color:#fff;border-radius:3px;padding:0 3px;">建立房間</span><br>其餘人按<span style="background:#1d4ed8;color:#fff;border-radius:3px;padding:0 3px;">加入房間</span><br>★單人：按<span style="background:#15803d;color:#fff;border-radius:3px;padding:0 3px;">直接離線開始</span></div>'
       + '<div class="tw16-lobby-grid">'
@@ -11921,7 +11920,7 @@ function loadUiSettings() {
     return completeOwnKong(option, source);
   }
 
-  const TW16_SMART_AI_MONTE_CARLO_SAMPLES = 5;  // 精確DP向聽更快，樣本數從3提升至5
+  const TW16_SMART_AI_MONTE_CARLO_SAMPLES = 3;
   let tw16MonteCarloPoolCache = { key: '', pool: [] };  // pool 快取，同一局面只建一次
   let tw16VisibleCountCache = null;        // ① 每回合 visibleCount 快取
   let tw16StrategyContextKeyCache = null;  // ② 每回合 strategy context key 快取
@@ -18375,38 +18374,26 @@ function showIntegrityReport(precomputed) {
           node.classList.toggle('drawn', shouldRenderActiveDrawnTile(seat, tileObj));
           const isStrategySuggested = !!(strategySuggestedTileId && tileObj && String(tileObj.id) === String(strategySuggestedTileId));
           node.classList.toggle('strategy-discard-suggestion', isStrategySuggested);
-          if (isStrategySuggested) {
-            node.title = '策略建議打出：' + tileText(tileObj.code);
-            const lbl = document.createElement('span');
-            lbl.className = 'ai-suggest-label';
-            lbl.textContent = 'AI建議';
-            // 用 wrapper 包住 tile，讓 label 不受 tile overflow:hidden 裁切
-            const wrapper = document.createElement('div');
-            wrapper.className = 'ai-suggest-wrapper';
-            const ting2 = state.uiSettings && state.uiSettings.tingAssistEnabled ? getTingOptions(seat).find(opt => opt.discardId === tileObj.id) : null;
-            if (ting2) node.title = (node.title ? node.title + '；' : '') + '打出後聽：' + ting2.waits.map(tileText).join('、');
-            bindBottomHandSwipeDiscard(node, seat, tileObj, pos);
-            node.addEventListener('click', ev => {
-              if (consumeBottomSwipeDiscardClick(tileObj.id)) { ev.preventDefault(); ev.stopPropagation(); return; }
-              const tingOpts = getTingOptions(seat);
-              const tingOpt = tingOpts.find(opt => opt.discardId === tileObj.id);
-              if (tingOpt && !state.declaredTing[seat]) { openTingChoicePanel(seat); } else { submitDiscard(seat, tileObj.id, 'human'); }
-            });
-            wrapper.appendChild(lbl);
-            wrapper.appendChild(node);
-            handRow.appendChild(wrapper);
-          } else {
-            const ting = state.uiSettings && state.uiSettings.tingAssistEnabled ? getTingOptions(seat).find(opt => opt.discardId === tileObj.id) : null;
-            if (ting) node.title = (node.title ? node.title + '；' : '') + '打出後聽：' + ting.waits.map(tileText).join('、');
-            bindBottomHandSwipeDiscard(node, seat, tileObj, pos);
-            node.addEventListener('click', ev => {
-              if (consumeBottomSwipeDiscardClick(tileObj.id)) { ev.preventDefault(); ev.stopPropagation(); return; }
-              const tingOpts = getTingOptions(seat);
-              const tingOpt = tingOpts.find(opt => opt.discardId === tileObj.id);
-              if (tingOpt && !state.declaredTing[seat]) { openTingChoicePanel(seat); } else { submitDiscard(seat, tileObj.id, 'human'); }
-            });
-            handRow.appendChild(node);
-          }
+          if (isStrategySuggested) node.title = '策略建議打出：' + tileText(tileObj.code);
+          const ting = state.uiSettings && state.uiSettings.tingAssistEnabled ? getTingOptions(seat).find(opt => opt.discardId === tileObj.id) : null;
+          if (ting) node.title = (node.title ? node.title + '；' : '') + '打出後聽：' + ting.waits.map(tileText).join('、');
+          bindBottomHandSwipeDiscard(node, seat, tileObj, pos);
+          node.addEventListener('click', ev => {
+            if (consumeBottomSwipeDiscardClick(tileObj.id)) {
+              ev.preventDefault();
+              ev.stopPropagation();
+              return;
+            }
+            /* 打出前檢查是否可以聽牌，若可以則彈出聽牌詢問鈕 */
+            const tingOpts = getTingOptions(seat);
+            const tingOpt = tingOpts.find(opt => opt.discardId === tileObj.id);
+            if (tingOpt && !state.declaredTing[seat]) {
+              openTingChoicePanel(seat);
+            } else {
+              submitDiscard(seat, tileObj.id, 'human');
+            }
+          });
+          handRow.appendChild(node);
         });
       } else {
         hand.forEach(() => handRow.appendChild(createBackTile()));
@@ -20001,60 +19988,25 @@ function concealedKongOwnerOfMeld(meld) {
 
   function openCustomTileSkinSqlDatabase() {
     if (customTileSkinDbPromise) return customTileSkinDbPromise;
-    function attemptOpen(allowRepair) {
-      return new Promise((resolve, reject) => {
-        if (!window.indexedDB) { reject(new Error('此瀏覽器不支援 IndexedDB，無法建立多套牌圖資料庫。')); return; }
-        const req = indexedDB.open(CUSTOM_TILE_SKIN_DB_NAME, CUSTOM_TILE_SKIN_DB_VERSION);
-        req.onupgradeneeded = ev => {
-          const db = ev.target.result;
-          let store;
-          if (!db.objectStoreNames.contains(CUSTOM_TILE_SKIN_STORE_NAME)) {
-            store = db.createObjectStore(CUSTOM_TILE_SKIN_STORE_NAME, { keyPath: 'id' });
-          } else {
-            store = ev.target.transaction.objectStore(CUSTOM_TILE_SKIN_STORE_NAME);
-          }
-          if (store && !store.indexNames.contains('updatedAt')) store.createIndex('updatedAt', 'updatedAt', { unique: false });
-          if (store && !store.indexNames.contains('name')) store.createIndex('name', 'name', { unique: false });
-        };
-        req.onsuccess = ev => {
-          const db = ev.target.result;
-          // 開啟成功後檢查 store 是否存在；若不存在（資料庫損壞或結構異常），視為錯誤觸發修復
-          if (!db.objectStoreNames.contains(CUSTOM_TILE_SKIN_STORE_NAME)) {
-            db.close();
-            if (allowRepair) {
-              recreateCustomTileSkinDatabase().then(() => attemptOpen(false).then(resolve, reject), reject);
-            } else {
-              reject(new Error('牌圖資料庫結構異常且修復失敗'));
-            }
-            return;
-          }
-          resolve(db);
-        };
-        req.onerror = () => {
-          const err = req.error || new Error('開啟牌圖資料庫失敗');
-          if (allowRepair) {
-            // ④ 自動修復：刪除損壞的資料庫後重新建立一次
-            recreateCustomTileSkinDatabase().then(() => attemptOpen(false).then(resolve, reject), () => reject(err));
-          } else {
-            reject(err);
-          }
-        };
-        req.onblocked = () => { reject(new Error('牌圖資料庫被其它分頁占用，請關閉其它遊戲分頁後再試。')); };
-      });
-    }
-    customTileSkinDbPromise = attemptOpen(true).catch(err => { customTileSkinDbPromise = null; throw err; });
-    return customTileSkinDbPromise;
-  }
-
-  // ④ 刪除損壞的牌圖資料庫，供 openCustomTileSkinSqlDatabase 自動修復時使用
-  function recreateCustomTileSkinDatabase() {
-    return new Promise((resolve, reject) => {
-      if (!window.indexedDB) { reject(new Error('此瀏覽器不支援 IndexedDB')); return; }
-      const req = indexedDB.deleteDatabase(CUSTOM_TILE_SKIN_DB_NAME);
-      req.onsuccess = () => resolve();
-      req.onerror = () => reject(req.error || new Error('刪除損壞的牌圖資料庫失敗'));
-      req.onblocked = () => reject(new Error('牌圖資料庫被其它分頁占用，無法自動修復'));
+    customTileSkinDbPromise = new Promise((resolve, reject) => {
+      if (!window.indexedDB) { reject(new Error('此瀏覽器不支援 IndexedDB，無法建立多套牌圖資料庫。')); return; }
+      const req = indexedDB.open(CUSTOM_TILE_SKIN_DB_NAME, CUSTOM_TILE_SKIN_DB_VERSION);
+      req.onupgradeneeded = ev => {
+        const db = ev.target.result;
+        let store;
+        if (!db.objectStoreNames.contains(CUSTOM_TILE_SKIN_STORE_NAME)) {
+          store = db.createObjectStore(CUSTOM_TILE_SKIN_STORE_NAME, { keyPath: 'id' });
+        } else {
+          store = ev.target.transaction.objectStore(CUSTOM_TILE_SKIN_STORE_NAME);
+        }
+        if (store && !store.indexNames.contains('updatedAt')) store.createIndex('updatedAt', 'updatedAt', { unique: false });
+        if (store && !store.indexNames.contains('name')) store.createIndex('name', 'name', { unique: false });
+      };
+      req.onsuccess = ev => resolve(ev.target.result);
+      req.onerror = () => { customTileSkinDbPromise = null; reject(req.error || new Error('開啟牌圖資料庫失敗')); };
+      req.onblocked = () => { customTileSkinDbPromise = null; reject(new Error('牌圖資料庫被其它分頁占用，請關閉其它遊戲分頁後再試。')); };
     });
+    return customTileSkinDbPromise;
   }
 
   function customTileSkinSqlRequest(mode, action) {
