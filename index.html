@@ -1296,6 +1296,9 @@
 .tw16-lobby[hidden]{display:none!important;}
 .tw16-lobby-card{width:min(520px,94vw);max-width:100%;margin:0 auto;border-radius:22px;padding:18px;background:linear-gradient(180deg,rgba(19,28,48,.98),rgba(8,12,20,.98));border:1px solid rgba(255,255,255,.12);box-shadow:0 24px 50px rgba(0,0,0,.40);color:#f8fafc;}
 .tw16-lobby-chip{display:inline-flex;align-items:center;justify-content:center;min-width:82px;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.08);color:#bfdbfe;font-size:12px;font-weight:900;margin-bottom:10px;}
+.tw16-mini-dashboard-card.tw16-mini-dashboard-inactive{background:rgba(120,120,120,.32)!important;opacity:.55;filter:grayscale(.6);}
+.tw16-mini-dashboard-card.tw16-mini-dashboard-inactive *{visibility:hidden!important;}
+.tile.tw16-empty-seat-placeholder{visibility:hidden!important;}
 .tw16-lobby-title{font-size:24px;font-weight:900;color:#fde68a;margin-bottom:6px;}
 .tw16-lobby-sub{font-size:13px;color:#cbd5e1;line-height:1.55;margin-bottom:14px;}
 .tw16-lobby-grid{display:grid;gap:10px;}
@@ -3446,6 +3449,19 @@ html body .app.perspective3d .discardSeat .tile::before {
   'use strict';
 
   const SEATS = ['east', 'south', 'west', 'north'];
+  /* tw16_tablemode: 桌面人數模式(4/3/2)輔助函式。
+     2人：只啟用 east/west；3人：停用 north；4人(預設)：全啟用。
+     僅影響發牌對象、輪轉跳過、吃牌限制與顯示/結算，牌牆設定與顯示完全不變。 */
+  function isSeatActiveInTable(seat) {
+    const tm = Number(state.tableMode) || 4;
+    if (tm >= 4) return true;
+    if (tm === 3) return seat !== 'north';
+    if (tm === 2) return seat === 'east' || seat === 'west';
+    return true;
+  }
+  function activeSeats() {
+    return SEATS.filter(isSeatActiveInTable);
+  }
   const WALL_CIRCLE_SEATS = ['east', 'north', 'west', 'south'];
   const SEAT_NAME = { east: '東家', south: '南家', west: '西家', north: '北家' };
   const WIND_NAME = ['東', '南', '西', '北'];
@@ -3535,7 +3551,8 @@ html body .app.perspective3d .discardSeat .tile::before {
     lockedAt: 0,
     lastActionId: 0,
     ended: false,
-    log: []
+    log: [],
+    tableMode: 4
   };
 
 
@@ -6381,6 +6398,12 @@ html body .app.perspective3d .discardSeat .tile::before {
   }
 
 
+  function applyLobbyTableModeSelection() {
+    const sel = byId('tw16LobbyTableMode');
+    const v = sel ? Number(sel.value) : 4;
+    state.tableMode = (v === 2 || v === 3) ? v : 4;
+  }
+
   function createInterface329Lobby() {
     const app = document.querySelector('.app');
     if (!app || byId('tw16Lobby')) return;
@@ -6388,12 +6411,14 @@ html body .app.perspective3d .discardSeat .tile::before {
     lobby.id = 'tw16Lobby';
     lobby.className = 'tw16-lobby';
     lobby.innerHTML = '<div class="tw16-lobby-card">'
-      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;"><div class="tw16-lobby-chip" style="flex-shrink:0;margin-bottom:0;">Ably 連線 / 單機</div><span style="font-size:clamp(9px,2.5vw,12px);color:#cbd5e1;font-weight:700;white-space:nowrap;">（115.6.12 10：05 改版）</span><span style="margin-left:auto;font-size:11px;font-weight:900;color:#4ade80;background:rgba(74,222,128,.15);border:1px solid rgba(74,222,128,.4);border-radius:999px;padding:2px 10px;white-space:nowrap;">精確動態規劃向聽</span></div>'
+      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;"><div class="tw16-lobby-chip" style="flex-shrink:0;margin-bottom:0;">Ably 連線 / 單機</div><span style="font-size:clamp(9px,2.5vw,12px);color:#cbd5e1;font-weight:700;white-space:nowrap;">（115.6.12 21：33 改版）</span><span style="margin-left:auto;font-size:11px;font-weight:900;color:#4ade80;background:rgba(74,222,128,.15);border:1px solid rgba(74,222,128,.4);border-radius:999px;padding:2px 10px;white-space:nowrap;">精確動態規劃向聽</span></div>'
       + '<div class="tw16-lobby-title">台灣麻將 Ably 連線 / 單機</div>'
       + '<div class="tw16-lobby-sub">★連線對戰：<br><span style="color:#ef4444">每人都要設同房名</span>，設好房名後<br>1人先按<span style="background:#1d4ed8;color:#fff;border-radius:3px;padding:0 3px;">建立房間</span><br>其餘人按<span style="background:#1d4ed8;color:#fff;border-radius:3px;padding:0 3px;">加入房間</span><br>★單人：按<span style="background:#15803d;color:#fff;border-radius:3px;padding:0 3px;">直接離線開始</span></div>'
       + '<div class="tw16-lobby-grid">'
       + '<div class="tw16-lobby-row tw16-lobby-inline-row"><label for="tw16LobbyName">玩家名稱</label><input class="tw16-lobby-input" id="tw16LobbyName" value="(請輸入)" onfocus="if(this.value===\'(請輸入)\')this.value=\'\'" onblur="if(!this.value.trim())this.value=\'(請輸入)\'"></div>'
       + '<div class="tw16-lobby-row tw16-lobby-inline-row"><label for="tw16LobbyRoom">房名</label><input class="tw16-lobby-input" id="tw16LobbyRoom" value="(請輸入)" onfocus="if(this.value===\'(請輸入)\')this.value=\'\'" onblur="if(!this.value.trim())this.value=\'(請輸入)\'"></div>'
+      + '<div class="tw16-lobby-row tw16-lobby-inline-row"><label for="tw16LobbyTableMode">人數模式</label><select class="tw16-lobby-input" id="tw16LobbyTableMode"><option value="4" selected>4人</option><option value="3">3人(無北家，禁吃牌)</option><option value="2">2人(僅東/西家)</option></select></div>'
+      + '<div class="tw16-lobby-row" style="margin-top:-6px;"><span style="font-size:11px;color:#94a3b8;font-weight:700;">※人數模式僅「建立房間(房主)」與「直接離線開始」生效；加入房間(來賓)時將自動套用房主設定。</span></div>'
       + '</div>'
       + '<div class="tw16-lobby-actions">'
       + '<button class="tw16-lobby-btn blue tw16-lobby-btn-role-break" id="tw16LobbyHost" type="button"><span class="tw16-lobby-btn-main">建立房間</span><span class="tw16-lobby-btn-role">(房主)</span></button>'
@@ -6435,6 +6460,7 @@ html body .app.perspective3d .discardSeat .tile::before {
     if (keySheetLoadFile) keySheetLoadFile.addEventListener('change', () => handleLobbyAblyApiKeySheetLocalFile(keySheetLoadFile.files && keySheetLoadFile.files[0]));
     if (hostBtn) hostBtn.addEventListener('click', async () => {
       saveLastInputs();
+      applyLobbyTableModeSelection();
       const room = roomValue();
       const key = await ensureLobbyAutoUsableAblyApiKey(room, 'host');
       if (!key) return;
@@ -6452,6 +6478,7 @@ html body .app.perspective3d .discardSeat .tile::before {
     });
     if (offlineBtn) offlineBtn.addEventListener('click', () => {
       saveLastInputs();
+      applyLobbyTableModeSelection();
       if (isNetworked()) disconnectAbly(false);
       applyLocalPlayerName(nameValue(), 'lobby-offline');
       hideInterface329Lobby();
@@ -8529,15 +8556,15 @@ function loadUiSettings() {
       lastActionId: state.lastActionId,
       ended: state.ended,
       locked: state.locked,
-      lockedAt: state.lockedAt
+      lockedAt: state.lockedAt,
+      tableMode: Number(state.tableMode) || 4
     });
   }
-
 
   const NETWORK_STATE_KEY_PACK = {
     handId: 'h', windRound: 'wr', handNo: 'hn', dealerRepeat: 'dr', dealer: 'd', viewSeat: 'v', turn: 't', phase: 'p', pending: 'pd', actionDeadlineAt: 'ad',
     wall: 'w', physicalWall: 'pw', openingDeal: 'od', fixedSeatLabelStyles: 'fs', labelPositionsLocked: 'lp', hands: 'hs', melds: 'm', flowers: 'f',
-    discards: 'ds', chips: 'c', scoreUnits: 'su', scoreChipSettings: 'sc', handVisualColors: 'vc', seatAutoPlay: 'ap', declaredTing: 'dt', activeDrawnTileIds: 'di', voiceEvents: 've', nextRoundPlan: 'nr', lastSettlement: 'ls', winHistory: 'wh', lastActionId: 'la', ended: 'e', locked: 'lk', lockedAt: 'lt'
+    discards: 'ds', chips: 'c', scoreUnits: 'su', scoreChipSettings: 'sc', handVisualColors: 'vc', seatAutoPlay: 'ap', declaredTing: 'dt', activeDrawnTileIds: 'di', voiceEvents: 've', nextRoundPlan: 'nr', lastSettlement: 'ls', winHistory: 'wh', lastActionId: 'la', ended: 'e', locked: 'lk', lockedAt: 'lt', tableMode: 'tm'
   };
   const NETWORK_STATE_KEY_UNPACK = Object.keys(NETWORK_STATE_KEY_PACK).reduce((out, key) => { out[NETWORK_STATE_KEY_PACK[key]] = key; return out; }, {});
 
@@ -10079,8 +10106,12 @@ function loadUiSettings() {
 
 
   function nextSeat(seat) {
-    const index = SEATS.indexOf(seat);
-    return SEATS[(index + 1 + SEATS.length) % SEATS.length];
+    let index = SEATS.indexOf(seat);
+    for (let step = 0; step < SEATS.length; step += 1) {
+      index = (index + 1 + SEATS.length) % SEATS.length;
+      if (isSeatActiveInTable(SEATS[index])) return SEATS[index];
+    }
+    return seat;
   }
 
   function seatDistance(from, to) {
@@ -10697,7 +10728,7 @@ function loadUiSettings() {
     await openingPause(OPENING_PHASE_PAUSE_MS);
     if (!stillCurrent()) return;
 
-    const dealOrder = orderedSeatsFrom(state.dealer);
+    const dealOrder = orderedSeatsFrom(state.dealer).filter(isSeatActiveInTable);
     state.openingDeal.step = 4;
     hideDicePanel();
     setOpeningPrompt('取牌');
@@ -11074,7 +11105,7 @@ function loadUiSettings() {
       if (same.length >= 2) result.push({ seat, type: 'pong', tiles: same.slice(0, 2).map(t => t.id), label: '碰' });
     });
     const chiSeat = nextSeat(discardSeat);
-    if (!state.declaredTing[chiSeat]) getChiCandidates(chiSeat, code).forEach(c => result.push(c));
+    if (Number(state.tableMode) !== 3 && isSeatActiveInTable(chiSeat) && !state.declaredTing[chiSeat]) getChiCandidates(chiSeat, code).forEach(c => result.push(c));
     return result;
   }
 
@@ -11817,9 +11848,13 @@ function loadUiSettings() {
   }
 
   function taiwanSettlementUnitsForSeat(kind, winner, fromSeat, seat, tai) {
+    if (!isSeatActiveInTable(seat)) return { bases: 0, taiUnits: 0 };
     const scoreTai = Math.max(0, Number(tai) || 0);
     if (kind === 'self') {
-      if (seat === winner) return { bases: 3, taiUnits: scoreTai * 3 };
+      /* 零和：贏家獲得 = 在桌對手數 * 1個單位；每位在桌對手各付1個單位。
+         4人模式對手數=3，與原規則(+3/-1)完全相同；2/3人模式自動依對手數調整，總和恆為0。 */
+      const opponents = activeSeats().filter(s => s !== winner).length;
+      if (seat === winner) return { bases: opponents, taiUnits: scoreTai * opponents };
       return { bases: -1, taiUnits: -scoreTai };
     }
     if (kind === 'ron') {
@@ -13938,7 +13973,7 @@ function loadUiSettings() {
     const chipsAfter = args.chipsAfter || {};
     const scoreUnitsBefore = args.scoreUnitsBefore || cloneScoreUnitTotals();
     const scoreUnitsAfter = args.scoreUnitsAfter || cloneScoreUnitTotals();
-    const seatRows = SEATS.map(seat => {
+    const seatRows = activeSeats().map(seat => {
       const before = Number(chipsBefore[seat]) || 0;
       const after = Number(chipsAfter[seat]) || 0;
       const delta = after - before;
@@ -13971,7 +14006,7 @@ function loadUiSettings() {
   }
 
   function buildDrawSettlementPayload(chipsBefore, chipsAfter) {
-    const seatRows = SEATS.map(seat => {
+    const seatRows = activeSeats().map(seat => {
       const before = Number(chipsBefore && chipsBefore[seat]) || 0;
       const after = Number(chipsAfter && chipsAfter[seat]) || 0;
       return { seat, name: SEAT_NAME[seat], before, after, delta: after - before, bases: 0, taiUnits: 0, tai: 0 };
@@ -13994,7 +14029,7 @@ function loadUiSettings() {
   }
 
   function buildRevealPayload(winner, winTile) {
-    return SEATS.map(seat => {
+    return activeSeats().map(seat => {
       const hand = (state.hands[seat] || []).slice().sort((a, b) => tileOrder(a.code) - tileOrder(b.code));
       const displayHand = hand.slice();
       if (seat === winner && winTile && winTile.id && !displayHand.some(t => t && t.id === winTile.id)) displayHand.push(clonePlain(winTile));
@@ -17158,7 +17193,7 @@ function showIntegrityReport(precomputed) {
       miniDashboardRenderKey = '';
       return;
     }
-    const renderKey = SEATS.map(seat => [
+    const renderKey = Number(state.tableMode || 4) + '|' + SEATS.map(seat => [
       seat,
       seat === state.turn ? 'active' : '',
       dealerDashboardPrefixText(seat),
@@ -17177,7 +17212,7 @@ function showIntegrityReport(precomputed) {
       grid.replaceChildren();
       SEATS.forEach(seat => {
         const card = document.createElement('div');
-        card.className = 'tw16-mini-dashboard-card' + (seat === state.turn ? ' active' : '');
+        card.className = 'tw16-mini-dashboard-card' + (seat === state.turn ? ' active' : '') + (!isSeatActiveInTable(seat) ? ' tw16-mini-dashboard-inactive' : '');
         const name = document.createElement('div');
         name.className = 'tw16-mini-dashboard-seat';
         const dealerPrefix = dealerDashboardPrefixText(seat);
@@ -18430,7 +18465,15 @@ function showIntegrityReport(precomputed) {
           }
         });
       } else {
-        hand.forEach(() => handRow.appendChild(createBackTile()));
+        if (!hand.length && !isSeatActiveInTable(seat)) {
+          for (let pi = 0; pi < 16; pi += 1) {
+            const placeholder = createBackTile();
+            placeholder.classList.add('tw16-empty-seat-placeholder');
+            handRow.appendChild(placeholder);
+          }
+        } else {
+          hand.forEach(() => handRow.appendChild(createBackTile()));
+        }
       }
     });
   }
