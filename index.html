@@ -9133,8 +9133,14 @@ function loadUiSettings() {
 
     const incomingScoreChipSettings = incoming.scoreChipSettings || msg.scoreChipSettings || null;
     if (incomingScoreChipSettings) delete incoming.scoreChipSettings;
+    const _guestLocalKeys = isOnlineGuest() ? ['turnHandFrameEnabled', 'tingAssistEnabled', 'miniDashboardEnabled'] : null;
+    const _guestLocalVals = _guestLocalKeys ? {} : null;
+    if (_guestLocalKeys) _guestLocalKeys.forEach(k => { _guestLocalVals[k] = (state.uiSettings || {})[k]; });
     Object.keys(incoming).forEach(key => {
       state[key] = incoming[key];
+    });
+    if (_guestLocalKeys) _guestLocalKeys.forEach(k => {
+      if (_guestLocalVals[k] !== undefined) state.uiSettings[k] = _guestLocalVals[k];
     });
     trimWinHistory();
     if (incomingScoreChipSettings) applyHostScoreChipSettings(incomingScoreChipSettings, msg.reason || 'snapshot');
