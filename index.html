@@ -14,7 +14,7 @@
 <link rel="preconnect" href="https://cdn.ably.com" crossorigin/>
 <link rel="dns-prefetch" href="https://realtime.ably.io"/>
 <style>
-  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#06111f;color:#fff;font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;touch-action:manipulation;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}.app{position:fixed;inset:0;background:linear-gradient(180deg,#1f68aa 0%,#1f3d7b 44%,#10254f 100%);overflow:hidden;contain:strict}.topbar{position:absolute;left:6px;right:6px;top:max(4px,env(safe-area-inset-top));z-index:20;display:flex;gap:8px;align-items:flex-start;pointer-events:none}.menu{pointer-events:auto;display:grid;gap:4px}.btn{border:0;border-radius:14px;color:white;font-weight:1000;cursor:pointer;background:linear-gradient(180deg,#2563eb,#1d4ed8);box-shadow:0 8px 16px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.18);padding:9px 14px;font-size:16px}.btn.red{background:linear-gradient(180deg,#ef4444,#b91c1c)}.btn.small{padding:7px 10px;font-size:13px}.status{pointer-events:none;border-radius:17px;background:rgba(3,10,25,.78);box-shadow:0 8px 18px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,255,255,.14);padding:10px 14px;font-size:16px;font-weight:1000;white-space:nowrap}.roundStatusBlock{display:grid;gap:0;align-items:start;justify-items:start;pointer-events:none}.scoreChipLine{margin:0 0 0 2px;padding:0!important;border:0!important;outline:0!important;box-shadow:none!important;background:transparent!important;border-radius:0!important;color:#ff2020;font-size:10px;font-weight:1000;line-height:1.05;white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,.55),0 0 4px rgba(255,255,255,.22);pointer-events:none}.rightBtns{margin-left:auto;display:flex;gap:7px;pointer-events:auto}.iconBtn{width:58px;height:58px;border-radius:17px;font-size:28px;display:grid;place-items:center}.topbar{gap:0}.menu{gap:0}.topbar .btn{background:rgba(120,80,0,.72)!important;border:0!important;outline:0!important;box-shadow:none!important;border-radius:8px!important;color:#ffe066!important;padding:3px 6px!important;font-size:11px!important;line-height:1.02!important;min-width:0!important}.topbar .btn.small{padding:3px 6px!important;font-size:10px!important}.topbar .iconBtn{width:30px!important;height:30px!important;border-radius:9px!important;font-size:17px!important}.rightBtns{gap:0}.status{padding:5px 8px!important;font-size:12px!important;border-radius:12px!important}.scoreChipLine{font-size:10px!important;background:transparent!important;border:0!important;box-shadow:none!important}.room{position:absolute;left:6px;top:5px;z-index:21;font-size:14px;font-weight:900;text-shadow:0 2px 4px rgba(0,0,0,.45)}.table{position:absolute;inset:0;border:5px solid rgba(255,255,255,.14);border-radius:8px;background:radial-gradient(circle at 50% 50%,rgba(255,255,255,.05),rgba(0,0,0,.18) 42%,rgba(0,0,0,.28) 72%);contain:layout style}.center{position:absolute;left:50%;top:51%;transform:translate(-50%,-50%);width:min(64vw,680px);height:min(54vh,560px);border-radius:15px;background:rgba(72,29,12,.34);box-shadow:inset 0 0 55px rgba(0,0,0,.22);overflow:hidden}.discardGrid{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(36vw,330px);min-height:90px;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:2px;z-index:8;pointer-events:none}.seatLabel{position:absolute;z-index:8;text-align:center;font-weight:1000;line-height:1.08;text-shadow:0 2px 4px rgba(0,0,0,.55),0 0 8px rgba(255,255,255,.2);pointer-events:none}.seatLabel .name{font-size:20px}.seatLabel .score{margin-top:4px;font-size:24px;color:#ffe85a}.seatLabel .meta{margin-top:2px;font-size:14px;color:#fff6a8}.seatLabel.active .name,.seatLabel.active .score{color:#fff06a;text-shadow:0 0 12px rgba(255,232,90,.65),0 2px 5px rgba(0,0,0,.65)}.seatLabel.ting .name:after{content:' 聽';color:#ff3030;font-size:.9em}.seat-bottom{left:14%;bottom:13%;transform:translateX(-50%)}.seat-top{left:50%;top:12%;transform:translateX(-50%)}.seat-left{left:9%;top:43%;transform:translateY(-50%)}.seat-right{right:9%;top:43%;transform:translateY(-50%)}.hand{position:absolute;z-index:14;display:flex;gap:0;align-items:center;justify-content:center}.hand-bottom{left:50%;bottom:calc(12px + env(safe-area-inset-bottom));transform:translateX(-50%);max-width:94vw;overflow:visible}.hand-top{left:50%;top:calc(62px + env(safe-area-inset-top));transform:translateX(-50%)}.hand-left{left:36px;top:50%;transform:translateY(-50%);flex-direction:column}.hand-right{right:36px;top:50%;transform:translateY(-50%);flex-direction:column}.melds{position:absolute;z-index:12;display:flex;gap:calc(var(--tw-tile-w) * .14)!important;align-items:flex-start!important;justify-content:flex-start!important}.meld-bottom{left:50%;bottom:88px;transform:translateX(-50%)}.meld-top{left:50%;top:112px;transform:translateX(-50%)}.meld-left{left:102px;top:50%;transform:translateY(-50%);flex-direction:column}.meld-right{right:102px;top:50%;transform:translateY(-50%);flex-direction:column}.tile{position:relative;flex:0 0 auto;width:28px;height:40px;border-radius:var(--tw-tile-radius,5px);background:linear-gradient(180deg,#fffef7 0%,#f1eadf 72%,#d6c7b3 100%);border:1px solid rgba(70,50,28,.28);box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 2px 4px rgba(0,0,0,.24);display:grid;place-items:center;font-size:19px;font-weight:1000;color:#111;user-select:none}.tile .small{position:absolute;top:1px;right:2px;font-size:9px;color:#333}.tile.red{color:#c41414}.tile.green{color:#047857}.tile.blue{color:#255fd4}.tile.back{width:27px;height:39px;background:linear-gradient(180deg,#b7f0ff 0%,#7dd3fc 58%,#43a9d8 100%);border-color:rgba(35,84,114,.36);box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 2px 4px rgba(0,0,0,.24);color:transparent}.tile.face-image{padding:0;background:transparent!important;border:0!important;box-shadow:0 3px 6px rgba(0,0,0,.25)!important;color:transparent!important}.tile-face{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden;pointer-events:none}.tile-face img{width:100%;height:100%;object-fit:cover;object-position:center;display:block;border-radius:0;user-select:none;-webkit-user-drag:none;pointer-events:none}.tile.kind-suit-s .tile-face img,.tile.kind-honor .tile-face img,.tile.kind-flower .tile-face img{transform:scale(1.04);transform-origin:center center}.tile.back.face-image{background:linear-gradient(180deg,#b7f0ff 0%,#7dd3fc 58%,#43a9d8 100%)!important;border:1px solid rgba(35,84,114,.36)!important}.hand-bottom .tile{cursor:pointer}.hand-bottom .tile:hover{transform:translateY(-4px)}.hand-bottom .tile.drawn{margin-left:5px}.discardGrid .tile{width:22px;height:32px;font-size:15px}.bigDiscard{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(.5);opacity:0;z-index:14;pointer-events:none;transition:transform .16s ease,opacity .16s ease;will-change:transform,opacity}.bigDiscard.show{opacity:1;transform:translate(-50%,-50%) scale(2.6)}.arrow{display:none!important;position:absolute;z-index:-1;width:0;height:0;pointer-events:none}.arrow-bottom{left:50%;bottom:145px;transform:translateX(-50%);border-left:40px solid transparent;border-right:40px solid transparent;border-top:70px solid rgba(255,0,0,.88)}.arrow-top{left:50%;top:145px;transform:translateX(-50%);border-left:40px solid transparent;border-right:40px solid transparent;border-bottom:70px solid rgba(255,0,0,.88)}.arrow-left{left:165px;top:50%;transform:translateY(-50%);border-top:40px solid transparent;border-bottom:40px solid transparent;border-right:70px solid rgba(255,0,0,.88)}.arrow-right{right:165px;top:50%;transform:translateY(-50%);border-top:40px solid transparent;border-bottom:40px solid transparent;border-left:70px solid rgba(255,0,0,.88)}.wall{position:absolute;z-index:6;display:flex;gap:0;pointer-events:none}.wall-bottom{left:50%;bottom:122px;transform:translateX(-50%)}.wall-top{left:50%;top:105px;transform:translateX(-50%)}.wall-left{left:92px;top:50%;transform:translateY(-50%);flex-direction:column}.wall-right{right:92px;top:50%;transform:translateY(-50%);flex-direction:column}.wall .piece{width:12px;height:18px;border-radius:var(--tw-wall-piece-radius,3px);background:linear-gradient(180deg,#b7f0ff,#43a9d8);border:1px solid rgba(35,84,114,.25);margin:0}.wall-left .piece,.wall-right .piece{width:18px;height:12px}.hint{position:absolute;left:50%;bottom:28%;transform:translateX(-50%);z-index:1;max-width:82vw;border-radius:16px;background:rgba(15,23,42,.38);padding:13px 18px;text-align:center;font-size:18px;font-weight:900;color:rgba(255,255,255,.58);line-height:1.45;pointer-events:none}.log{display:none!important;}.result{position:fixed;left:50vw!important;top:50dvh!important;right:auto!important;bottom:auto!important;transform:translate(-50%,-50%)!important;z-index:2147483300;display:none;width:min(92vw,720px);min-width:min(300px,92vw);max-width:calc(100vw - 16px);max-height:calc(100dvh - max(16px,env(safe-area-inset-top)) - max(16px,env(safe-area-inset-bottom)));overflow:hidden;border-radius:18px;padding:18px 18px 16px;background:linear-gradient(180deg,rgba(83,16,24,.98),rgba(31,5,10,.98));box-shadow:0 22px 50px rgba(0,0,0,.45);text-align:center;touch-action:auto;box-sizing:border-box;contain:layout}.result.dragging{transition:none;user-select:none}.result h2{cursor:default;touch-action:auto;user-select:text;-webkit-user-select:text;margin:0 0 10px;color:#ffe85a;flex:0 0 auto}.result h2:active{color:#fde68a}.result.show{display:flex;flex-direction:column}.result #resultText{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}.result .buttons{display:flex;justify-content:center;gap:10px;margin-top:12px;flex:0 0 auto;flex-wrap:wrap}@media(max-width:700px){.status{font-size:13px;padding:6px 9px}.iconBtn{width:34px;height:34px}.center{width:68vw;height:48vh}.tile{width:24px;height:35px;font-size:17px}.discardGrid .tile{width:20px;height:29px}.hand-top .tile.back{width:22px;height:32px}.hand-left .tile.back,.hand-right .tile.back{width:22px;height:32px}.seatLabel .name{font-size:18px}.seatLabel .score{font-size:22px}.seat-left{left:10%}.seat-right{right:10%}.wall-left{left:84px}.wall-right{right:84px}}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#06111f;color:#fff;font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;touch-action:manipulation;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}.app{position:fixed;inset:0;background:linear-gradient(180deg,#1f68aa 0%,#1f3d7b 44%,#10254f 100%);overflow:hidden;contain:strict}.topbar{position:absolute;left:6px;right:6px;top:max(4px,env(safe-area-inset-top));z-index:20;display:flex;gap:8px;align-items:flex-start;pointer-events:none}.menu{pointer-events:auto;display:grid;gap:4px}.btn{border:0;border-radius:14px;color:white;font-weight:1000;cursor:pointer;background:linear-gradient(180deg,#2563eb,#1d4ed8);box-shadow:0 8px 16px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.18);padding:9px 14px;font-size:16px}.btn.red{background:linear-gradient(180deg,#ef4444,#b91c1c)}.btn.small{padding:7px 10px;font-size:13px}.status{pointer-events:none;border-radius:17px;background:rgba(3,10,25,.78);box-shadow:0 8px 18px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,255,255,.14);padding:10px 14px;font-size:16px;font-weight:1000;white-space:nowrap}.roundStatusBlock{display:grid;gap:0;align-items:start;justify-items:start;pointer-events:none}.scoreChipLine{margin:0 0 0 2px;padding:0!important;border:0!important;outline:0!important;box-shadow:none!important;background:transparent!important;border-radius:0!important;color:#ff2020;font-size:10px;font-weight:1000;line-height:1.05;white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,.55),0 0 4px rgba(255,255,255,.22);pointer-events:none}.rightBtns{margin-left:auto;display:flex;gap:7px;pointer-events:auto}.iconBtn{width:58px;height:58px;border-radius:17px;font-size:28px;display:grid;place-items:center}.topbar{gap:0}.menu{gap:0}.topbar .btn{background:rgba(16,90,40,.72)!important;border:0!important;outline:0!important;box-shadow:none!important;border-radius:8px!important;color:#fff!important;padding:3px 6px!important;font-size:11px!important;line-height:1.02!important;min-width:0!important}.topbar .btn.small{padding:3px 6px!important;font-size:10px!important}.topbar .iconBtn{width:30px!important;height:30px!important;border-radius:9px!important;font-size:17px!important}.rightBtns{gap:0}.status{padding:5px 8px!important;font-size:12px!important;border-radius:12px!important}.scoreChipLine{font-size:10px!important;background:transparent!important;border:0!important;box-shadow:none!important}.room{position:absolute;left:6px;top:5px;z-index:21;font-size:14px;font-weight:900;text-shadow:0 2px 4px rgba(0,0,0,.45)}.table{position:absolute;inset:0;border:5px solid rgba(255,255,255,.14);border-radius:8px;background:radial-gradient(circle at 50% 50%,rgba(255,255,255,.05),rgba(0,0,0,.18) 42%,rgba(0,0,0,.28) 72%);contain:layout style}.center{position:absolute;left:50%;top:51%;transform:translate(-50%,-50%);width:min(64vw,680px);height:min(54vh,560px);border-radius:15px;background:rgba(72,29,12,.34);box-shadow:inset 0 0 55px rgba(0,0,0,.22);overflow:hidden}.discardGrid{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(36vw,330px);min-height:90px;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:2px;z-index:8;pointer-events:none}.seatLabel{position:absolute;z-index:8;text-align:center;font-weight:1000;line-height:1.08;text-shadow:0 2px 4px rgba(0,0,0,.55),0 0 8px rgba(255,255,255,.2);pointer-events:none}.seatLabel .name{font-size:20px}.seatLabel .score{margin-top:4px;font-size:24px;color:#ffe85a}.seatLabel .meta{margin-top:2px;font-size:14px;color:#fff6a8}.seatLabel.active .name,.seatLabel.active .score{color:#fff06a;text-shadow:0 0 12px rgba(255,232,90,.65),0 2px 5px rgba(0,0,0,.65)}.seatLabel.ting .name:after{content:' 聽';color:#ff3030;font-size:.9em}.seat-bottom{left:14%;bottom:13%;transform:translateX(-50%)}.seat-top{left:50%;top:12%;transform:translateX(-50%)}.seat-left{left:9%;top:43%;transform:translateY(-50%)}.seat-right{right:9%;top:43%;transform:translateY(-50%)}.hand{position:absolute;z-index:14;display:flex;gap:0;align-items:center;justify-content:center}.hand-bottom{left:50%;bottom:calc(12px + env(safe-area-inset-bottom));transform:translateX(-50%);max-width:94vw;overflow:visible}.hand-top{left:50%;top:calc(62px + env(safe-area-inset-top));transform:translateX(-50%)}.hand-left{left:36px;top:50%;transform:translateY(-50%);flex-direction:column}.hand-right{right:36px;top:50%;transform:translateY(-50%);flex-direction:column}.melds{position:absolute;z-index:12;display:flex;gap:calc(var(--tw-tile-w) * .14)!important;align-items:flex-start!important;justify-content:flex-start!important}.meld-bottom{left:50%;bottom:88px;transform:translateX(-50%)}.meld-top{left:50%;top:112px;transform:translateX(-50%)}.meld-left{left:102px;top:50%;transform:translateY(-50%);flex-direction:column}.meld-right{right:102px;top:50%;transform:translateY(-50%);flex-direction:column}.tile{position:relative;flex:0 0 auto;width:28px;height:40px;border-radius:var(--tw-tile-radius,5px);background:linear-gradient(180deg,#fffef7 0%,#f1eadf 72%,#d6c7b3 100%);border:1px solid rgba(70,50,28,.28);box-shadow:inset 0 1px 0 rgba(255,255,255,.9),0 2px 4px rgba(0,0,0,.24);display:grid;place-items:center;font-size:19px;font-weight:1000;color:#111;user-select:none}.tile .small{position:absolute;top:1px;right:2px;font-size:9px;color:#333}.tile.red{color:#c41414}.tile.green{color:#047857}.tile.blue{color:#255fd4}.tile.back{width:27px;height:39px;background:linear-gradient(180deg,#b7f0ff 0%,#7dd3fc 58%,#43a9d8 100%);border-color:rgba(35,84,114,.36);box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 2px 4px rgba(0,0,0,.24);color:transparent}.tile.face-image{padding:0;background:transparent!important;border:0!important;box-shadow:0 3px 6px rgba(0,0,0,.25)!important;color:transparent!important}.tile-face{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden;pointer-events:none}.tile-face img{width:100%;height:100%;object-fit:cover;object-position:center;display:block;border-radius:0;user-select:none;-webkit-user-drag:none;pointer-events:none}.tile.kind-suit-s .tile-face img,.tile.kind-honor .tile-face img,.tile.kind-flower .tile-face img{transform:scale(1.04);transform-origin:center center}.tile.back.face-image{background:linear-gradient(180deg,#b7f0ff 0%,#7dd3fc 58%,#43a9d8 100%)!important;border:1px solid rgba(35,84,114,.36)!important}.hand-bottom .tile{cursor:pointer}.hand-bottom .tile:hover{transform:translateY(-4px)}.hand-bottom .tile.drawn{margin-left:5px}.discardGrid .tile{width:22px;height:32px;font-size:15px}.bigDiscard{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(.5);opacity:0;z-index:14;pointer-events:none;transition:transform .16s ease,opacity .16s ease;will-change:transform,opacity}.bigDiscard.show{opacity:1;transform:translate(-50%,-50%) scale(2.6)}.arrow{display:none!important;position:absolute;z-index:-1;width:0;height:0;pointer-events:none}.arrow-bottom{left:50%;bottom:145px;transform:translateX(-50%);border-left:40px solid transparent;border-right:40px solid transparent;border-top:70px solid rgba(255,0,0,.88)}.arrow-top{left:50%;top:145px;transform:translateX(-50%);border-left:40px solid transparent;border-right:40px solid transparent;border-bottom:70px solid rgba(255,0,0,.88)}.arrow-left{left:165px;top:50%;transform:translateY(-50%);border-top:40px solid transparent;border-bottom:40px solid transparent;border-right:70px solid rgba(255,0,0,.88)}.arrow-right{right:165px;top:50%;transform:translateY(-50%);border-top:40px solid transparent;border-bottom:40px solid transparent;border-left:70px solid rgba(255,0,0,.88)}.wall{position:absolute;z-index:6;display:flex;gap:0;pointer-events:none}.wall-bottom{left:50%;bottom:122px;transform:translateX(-50%)}.wall-top{left:50%;top:105px;transform:translateX(-50%)}.wall-left{left:92px;top:50%;transform:translateY(-50%);flex-direction:column}.wall-right{right:92px;top:50%;transform:translateY(-50%);flex-direction:column}.wall .piece{width:12px;height:18px;border-radius:var(--tw-wall-piece-radius,3px);background:linear-gradient(180deg,#b7f0ff,#43a9d8);border:1px solid rgba(35,84,114,.25);margin:0}.wall-left .piece,.wall-right .piece{width:18px;height:12px}.hint{position:absolute;left:50%;bottom:28%;transform:translateX(-50%);z-index:1;max-width:82vw;border-radius:16px;background:rgba(15,23,42,.38);padding:13px 18px;text-align:center;font-size:18px;font-weight:900;color:rgba(255,255,255,.58);line-height:1.45;pointer-events:none}.log{display:none!important;}.result{position:fixed;left:50vw!important;top:50dvh!important;right:auto!important;bottom:auto!important;transform:translate(-50%,-50%)!important;z-index:2147483300;display:none;width:min(92vw,720px);min-width:min(300px,92vw);max-width:calc(100vw - 16px);max-height:calc(100dvh - max(16px,env(safe-area-inset-top)) - max(16px,env(safe-area-inset-bottom)));overflow:hidden;border-radius:18px;padding:18px 18px 16px;background:linear-gradient(180deg,rgba(83,16,24,.98),rgba(31,5,10,.98));box-shadow:0 22px 50px rgba(0,0,0,.45);text-align:center;touch-action:auto;box-sizing:border-box;contain:layout}.result.dragging{transition:none;user-select:none}.result h2{cursor:default;touch-action:auto;user-select:text;-webkit-user-select:text;margin:0 0 10px;color:#ffe85a;flex:0 0 auto}.result h2:active{color:#fde68a}.result.show{display:flex;flex-direction:column}.result #resultText{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}.result .buttons{display:flex;justify-content:center;gap:10px;margin-top:12px;flex:0 0 auto;flex-wrap:wrap}@media(max-width:700px){.status{font-size:13px;padding:6px 9px}.iconBtn{width:34px;height:34px}.center{width:68vw;height:48vh}.tile{width:24px;height:35px;font-size:17px}.discardGrid .tile{width:20px;height:29px}.hand-top .tile.back{width:22px;height:32px}.hand-left .tile.back,.hand-right .tile.back{width:22px;height:32px}.seatLabel .name{font-size:18px}.seatLabel .score{font-size:22px}.seat-left{left:10%}.seat-right{right:10%}.wall-left{left:84px}.wall-right{right:84px}}
 
 .actionPanel{position:absolute;left:calc(50% + min(9vw,72px));top:50%;right:auto;bottom:auto;transform:translate(-50%,-50%);z-index:200;display:none;flex-direction:column;gap:0;align-items:center;pointer-events:none;max-width:min(46vw,286px);width:0;height:0;overflow:hidden;contain:layout}.actionPanel.action-panel-visible,.actionPanel.ting-choice-active{display:flex;width:auto;height:auto;overflow:visible;pointer-events:auto}.actionPanel:empty{display:none}.actionBtn{border:0;border-radius:0;color:#fff;font-size:15px;font-weight:1000;padding:2px 3px;min-width:0;background:transparent;box-shadow:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;margin:0}.actionBtn.gray{background:transparent;color:#cbd5e1}.actionBtn .sub{display:none!important;font-size:11px;font-weight:900;opacity:.9;margin-top:1px}.claimHint{padding:7px 10px;border-radius:14px;background:rgba(15,23,42,.82);border:1px solid rgba(255,255,255,.15);font-size:13px;font-weight:1000;color:#fde68a;box-shadow:0 10px 18px rgba(0,0,0,.28);text-align:center}.actionTileStrip{display:flex;align-items:center;justify-content:center;gap:0;margin-top:0}.actionTileStrip .tile{width:calc(var(--tw-tile-w) * 1.22)!important;height:calc(var(--tw-tile-h) * 1.22)!important;min-width:calc(var(--tw-tile-w) * 1.22)!important;min-height:calc(var(--tw-tile-h) * 1.22)!important;font-size:calc(var(--tw-tile-w) * .80)!important;margin:0!important;border:0!important;outline:0!important;border-radius:0!important;background:transparent!important;background-color:transparent!important;box-shadow:none!important}.actionTileStrip .tile.back{background:linear-gradient(180deg,#b7f0ff,#43a9d8)!important;border:1px solid rgba(35,84,114,.36)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 2px 4px rgba(0,0,0,.24)!important}.actionBtnLabel{line-height:1.05}.actionPanel .tile-face img{border-radius:0!important}.actionTargetTile{z-index:2!important}.actionTileStrip .tile.face-image{border:0!important;outline:0!important;background:transparent!important;box-shadow:none!important}.actionTileStrip .tile-face img{border-radius:0!important}.historyWinTileInline{display:inline-flex;align-items:center;vertical-align:middle;margin-left:5px}.historyWinTileInline .tile{width:22px!important;height:32px!important;font-size:15px!important;border-radius:4px!important}
 
@@ -1352,7 +1352,7 @@
 .tw16-mini-dashboard-chip-plus{color:#ef4444;font-weight:1000;margin-right:1px;}
 .tw16-mini-dashboard-chip-sum{position:fixed;left:50%;transform:translateX(-50%);background:rgba(2,6,23,.90);border:1px solid rgba(255,60,60,.80);border-radius:8px;padding:2px 10px;color:#ef4444;font-size:clamp(11px,3vw,15px);font-weight:1000;white-space:nowrap;pointer-events:none;z-index:119;line-height:1.4;}
 .tw16-mini-dashboard-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:2px;align-items:start;width:100%;}
-.tw16-mini-dashboard-card{position:relative;min-width:0;min-height:0;border-radius:8px!important;padding:1px 3px 2px!important;background:transparent!important;border:1px solid rgba(255,255,255,.52)!important;box-shadow:none!important;color:#f8fafc;text-align:center;overflow:hidden;}
+.tw16-mini-dashboard-card{position:relative;min-width:0;min-height:0;border-radius:8px!important;padding:1px 3px 2px!important;background:transparent!important;border:1px solid rgba(255,200,50,.85)!important;box-shadow:0 0 4px rgba(255,200,50,.22)!important;color:#f8fafc;text-align:center;overflow:hidden;}
 .tw16-mini-dashboard-card.active{border:1px solid rgba(255,32,32,.96)!important;border-radius:8px!important;box-shadow:0 0 6px rgba(255,32,32,.50)!important;background:transparent!important;}
 .tw16-mini-dashboard-seat{font-size:clamp(7px,calc(var(--tw-mini-dashboard-card-w,80px) * .13),10px);font-weight:1000;line-height:1.08;color:#dbeafe;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .tw16-mini-dashboard-dealer{color:#ff2020;font-weight:1000;margin-right:2px;text-shadow:0 0 4px rgba(255,255,255,.82),0 1px 2px rgba(0,0,0,.72);}
@@ -3019,14 +3019,14 @@ body, .app {
   top:auto;
   width:max-content;
   height:auto;
-  padding:1px 2px;
+  padding:1px 3px;
   margin:0;
-  border-radius:0 0 2px 0;
+  border-radius:2px 2px 0 0;
   background:rgba(220,0,0,.92);
   color:#fff;
-  font-size:clamp(5px,calc(var(--tw-tile-w,28px) * .24),6px);
+  font-size:clamp(5px,calc(var(--tw-tile-w,28px) * .26),7px);
   font-weight:900;
-  line-height:1.2;
+  line-height:1.15;
   white-space:nowrap;
   pointer-events:none;
   z-index:99;
@@ -3471,6 +3471,11 @@ html body .app.perspective3d .discardSeat .tile::before {
 #tw16HistClose{border:0;border-radius:8px;background:rgba(255,255,255,.08);color:#94a3b8;font-size:16px;width:28px;height:28px;cursor:pointer;display:grid;place-items:center;flex-shrink:0;}
 #tw16HistBody{flex:1 1 auto;overflow-y:auto;padding:6px 10px 16px;}
 #tw16HistBody .historyList{max-height:none;}
+
+.tw16-btn-hint-wrap{position:relative;display:inline-block;}
+.tw16-btn-hint-top{position:absolute;left:50%;top:-1.05em;transform:translateX(-50%);font-size:9px;font-weight:900;color:#ef4444;white-space:nowrap;line-height:1;pointer-events:none;z-index:5;}
+.tw16-btn-hint-bottom{position:absolute;left:50%;bottom:-1.05em;transform:translateX(-50%);font-size:9px;font-weight:900;color:#ef4444;white-space:nowrap;line-height:1;pointer-events:none;z-index:5;}
+
 </style>
 </head>
 <body>
@@ -3489,8 +3494,8 @@ html body .app.perspective3d .discardSeat .tile::before {
 <div class="roundStatusBlock"><div class="status" id="roundStatus">東1局／剩餘0張</div><div class="scoreChipLine" id="scoreChipLine">每底 100／每台 10 籌碼</div></div>
 <div class="rightBtns">
 <button class="btn small red" id="autoBtn" aria-label="電腦托管">電腦托管</button>
-<button class="btn small" id="broadcastBtn" aria-label="打字廣播">打字</button>
-<button class="btn small" id="voiceBtn" aria-label="語音錄音">語音</button>
+<span class="tw16-btn-hint-wrap"><span class="tw16-btn-hint-top">（視窗上點2下開啟）</span><button class="btn small" id="broadcastBtn" aria-label="打字廣播">打字</button></span>
+<span class="tw16-btn-hint-wrap"><span class="tw16-btn-hint-bottom">（視窗上點3下開啟/關閉）</span><button class="btn small" id="voiceBtn" aria-label="語音錄音">語音</button></span>
 <button class="btn iconBtn" id="newGameBtn" aria-label="重新開局">↻</button>
 <button class="btn iconBtn" id="fullBtn" aria-label="全螢幕">⛶</button>
 </div>
@@ -3591,6 +3596,7 @@ html body .app.perspective3d .discardSeat .tile::before {
   const dom = {};
   let tileSerial = 1;
   let autoplayTimer = null;
+  let tw16HistViewing = false;  // 本機獨立旗標：觀看胡牌歷程時暫停本機AI排程，不寫入state，不同步給其他人
   let claimTimer = null;
   let autoNextTimer = null;
   let miniDashboardCountdownTimer = null;
@@ -6512,7 +6518,7 @@ html body .app.perspective3d .discardSeat .tile::before {
     lobby.id = 'tw16Lobby';
     lobby.className = 'tw16-lobby';
     lobby.innerHTML = '<div class="tw16-lobby-card">'
-      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;"><div class="tw16-lobby-chip" style="flex-shrink:0;margin-bottom:0;">Ably 連線 / 單機</div><span style="font-size:clamp(9px,2.5vw,12px);color:#cbd5e1;font-weight:700;white-space:nowrap;">（115.6.15 15:00 改版）</span><span style="margin-left:auto;font-size:11px;font-weight:900;color:#fbbf24;background:rgba(251,191,36,.15);border:1px solid rgba(251,191,36,.4);border-radius:999px;padding:2px 10px;white-space:nowrap;">貪心向聽</span></div>'
+      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;"><div class="tw16-lobby-chip" style="flex-shrink:0;margin-bottom:0;">Ably 連線 / 單機</div><span style="font-size:clamp(9px,2.5vw,12px);color:#cbd5e1;font-weight:700;white-space:nowrap;">（115.6.17 03:16 改版）</span><span style="margin-left:auto;font-size:11px;font-weight:900;color:#4ade80;background:rgba(74,222,128,.15);border:1px solid rgba(74,222,128,.4);border-radius:999px;padding:2px 10px;white-space:nowrap;">精確動態規劃向聽</span></div>'
       + '<div class="tw16-lobby-title">台灣麻將 Ably 連線 / 單機</div>'
       + '<div class="tw16-lobby-sub">★連線對戰：<br><span style="color:#ef4444">每人都要設同房名</span>，設好房名後<br>1人先按<span style="background:#1d4ed8;color:#fff;border-radius:3px;padding:0 3px;">建立房間</span><br>其餘人按<span style="background:#1d4ed8;color:#fff;border-radius:3px;padding:0 3px;">加入房間</span><br>★單人：按<span style="background:#15803d;color:#fff;border-radius:3px;padding:0 3px;">直接離線開始</span></div>'
       + '<div class="tw16-lobby-grid">'
@@ -6703,6 +6709,10 @@ html body .app.perspective3d .discardSeat .tile::before {
   }
 
   function exitToInterface329Lobby() {
+    // 房主退出大廳前自動儲存最新牌局一次
+    if (isOnlineHost()) {
+      try { saveGameState(); } catch (e) {}
+    }
     clearTimeout(claimTimer);
     clearTimeout(autoplayTimer);
     clearAutoNextTimer('exit-lobby');
@@ -6911,7 +6921,18 @@ html body .app.perspective3d .discardSeat .tile::before {
     if (net.role !== 'guest') return false;
     ensureUiSettings();
     let changed = false;
-    try { const _gl = JSON.parse(localStorage.getItem('tw16GuestUiLocal') || 'null'); if (_gl && _gl.turnHandFrameEnabled !== undefined) { if (state.uiSettings.turnHandFrameEnabled !== _gl.turnHandFrameEnabled) { state.uiSettings.turnHandFrameEnabled = _gl.turnHandFrameEnabled; changed = true; } } else if (state.uiSettings.turnHandFrameEnabled !== true) { state.uiSettings.turnHandFrameEnabled = true; changed = true; } } catch(e) { if (state.uiSettings.turnHandFrameEnabled !== true) { state.uiSettings.turnHandFrameEnabled = true; changed = true; } }
+    try {
+      const _gl = JSON.parse(localStorage.getItem('tw16GuestUiLocal') || 'null');
+      ['turnHandFrameEnabled', 'tingAssistEnabled', 'miniDashboardEnabled'].forEach(function(_k) {
+        if (_gl && _gl[_k] !== undefined) {
+          if (state.uiSettings[_k] !== _gl[_k]) { state.uiSettings[_k] = _gl[_k]; changed = true; }
+        } else if (state.uiSettings[_k] !== true) { state.uiSettings[_k] = true; changed = true; }
+      });
+    } catch(e) {
+      ['turnHandFrameEnabled', 'tingAssistEnabled', 'miniDashboardEnabled'].forEach(function(_k) {
+        if (state.uiSettings[_k] !== true) { state.uiSettings[_k] = true; changed = true; }
+      });
+    }
     if (state.uiSettings.avatarEnabled === undefined) { state.uiSettings.avatarEnabled = false; changed = true; }
     const guestSeat = networkSeatOrder().includes(net.assignedSeat) ? net.assignedSeat : (networkSeatOrder().includes(state.viewSeat) ? state.viewSeat : '');
     if (!net.guestAutoplayInitializedSeats || typeof net.guestAutoplayInitializedSeats !== 'object') net.guestAutoplayInitializedSeats = {};
@@ -8663,7 +8684,6 @@ function loadUiSettings() {
     });
   }
 
-
   const NETWORK_STATE_KEY_PACK = {
     handId: 'h', windRound: 'wr', handNo: 'hn', dealerRepeat: 'dr', kongsThisHand: 'kh', dealer: 'd', viewSeat: 'v', turn: 't', phase: 'p', pending: 'pd', actionDeadlineAt: 'ad',
     wall: 'w', physicalWall: 'pw', openingDeal: 'od', fixedSeatLabelStyles: 'fs', labelPositionsLocked: 'lp', hands: 'hs', melds: 'm', flowers: 'f',
@@ -10357,6 +10377,7 @@ function loadUiSettings() {
     state.kongsThisHand = 0;
     tw16SmartShapeCache = new Map();
     tw16WinCheckCache = new Map();
+    tw16ResetPersistentDiscardCache();
     tw16SmartDiscardCache = { key: '', tileId: '', detail: null };
     tw16MonteCarloPoolCache = { key: '', pool: [] };
     tw16TingOptionsCache = null;
@@ -11191,6 +11212,12 @@ function loadUiSettings() {
     const exists = state.discards.some(d => d.actionId === state.lastActionId);
     if (exists) return;
     state.discards.push({ actionId: state.lastActionId, seat, tile: discarded });
+    if (tw16PersistentSeatDiscardSet && discarded && discarded.code) {
+      if (!tw16PersistentSeatDiscardSet[seat]) tw16PersistentSeatDiscardSet[seat] = new Set();
+      if (!tw16PersistentSeatDiscardArray[seat]) tw16PersistentSeatDiscardArray[seat] = [];
+      tw16PersistentSeatDiscardSet[seat].add(discarded.code);
+      tw16PersistentSeatDiscardArray[seat].push(discarded.code);
+    }
   }
 
   function openClaimWindow(discardSeat, discarded, actionId) {
@@ -12177,12 +12204,31 @@ function loadUiSettings() {
   let tw16RonTaiCostCache = null;          // ⑦ 每回合放槍台數估算快取
   let tw16BaseTaiPotential = null;         // ⑥ 全手牌 taiPotential 基準
   let tw16TingOptionsCache = null;         // ② getTingOptions 回合快取
-  let tw16OpponentInferenceCache = null;   // ④ 對手特徵快取
+  let tw16OpponentInferenceCache = null;
+  let tw16WaitCache = null;  // ★ 有效進張快取 { key → waitingPotentialResult }（request-scope）   // ④ 對手特徵快取
   let tw16ScorePressureCache = null;       // ⑤ 分數壓力快取（回合不變）
   let tw16RonCostToleranceCache = null;    // ⑥ 放槍容忍度快取（回合不變）
   let tw16WallCountCache = null;           // ① 牌牆計數快取 { code → count }
   let tw16SeatDiscardSetCache = null;      // ⑥ 各座位已棄牌 Set 快取 { seat → Set<code> }
   let tw16SeatDiscardArrayCache = null;    // 各座位棄牌陣列快取 { seat → code[] }（供花色比例計算用）
+  let tw16PersistentSeatDiscardSet = null;
+  let tw16PersistentSeatDiscardArray = null;
+  function tw16EnsurePersistentDiscardCache() {
+    if (tw16PersistentSeatDiscardSet && tw16PersistentSeatDiscardArray) return;
+    tw16PersistentSeatDiscardSet = Object.create(null);
+    tw16PersistentSeatDiscardArray = Object.create(null);
+    SEATS.forEach(function(s) { tw16PersistentSeatDiscardSet[s] = new Set(); tw16PersistentSeatDiscardArray[s] = []; });
+    (state.discards || []).forEach(function(d) {
+      if (d && d.seat && d.tile && d.tile.code) {
+        tw16PersistentSeatDiscardSet[d.seat].add(d.tile.code);
+        tw16PersistentSeatDiscardArray[d.seat].push(d.tile.code);
+      }
+    });
+  }
+  function tw16ResetPersistentDiscardCache() {
+    tw16PersistentSeatDiscardSet = null;
+    tw16PersistentSeatDiscardArray = null;
+  }
   let tw16MeldCodesCache = null;           // ④ 各座位副露牌碼快取 { seat → code[] }
   let tw16MeldSuitsCache = null;           // ④ 各座位副露花色快取 { seat → Set<suit> }
   let tw16CurrentShapeCache = null;        // ⑥ 當前手牌 shape 快取（向聽退步用）
@@ -12421,6 +12467,12 @@ function loadUiSettings() {
   }
 
   function smartAiWaitingPotential(seat, codes, concealedSetsNeeded) {
+    let _waitKey = null;
+    if (tw16WaitCache) {
+      _waitKey = seat + '|' + (codes || []).slice().sort().join(',') + '|' + concealedSetsNeeded;
+      const _cached = tw16WaitCache.get(_waitKey);
+      if (_cached) return _cached;
+    }
     const clean = smartAiCodesFromHand(codes);
     const shape = smartAiApproxShape(clean, concealedSetsNeeded);
     const allCodes = allNonFlowerCodes();
@@ -12479,7 +12531,9 @@ function loadUiSettings() {
       + liveRemaining * 7
       + effectiveRemaining * 9 * wallFactor
       + effectiveKinds * 5;
-    return Object.assign({}, shape, { waits, waitRemaining, liveRemaining, effectiveRemaining, effectiveKinds, value });
+    const _result = Object.assign({}, shape, { waits, waitRemaining, liveRemaining, effectiveRemaining, effectiveKinds, value });
+    if (tw16WaitCache && _waitKey) tw16WaitCache.set(_waitKey, _result);
+    return _result;
   }
 
   function smartAiRankTingOption(seat, option) {
@@ -12618,6 +12672,12 @@ function loadUiSettings() {
     const potential = smartAiWaitingPotential(seat, afterCodes, needed);
     const code = tileObj && tileObj.code;
     let score = potential.value;
+    const _beforeShape = tw16CurrentShapeCache || smartAiApproxShape((hand || []).map(t => t && t.code).filter(c => c && !isFlower(c)), needed);
+    const _deltaShanten = (_beforeShape.shanten || 0) - (potential.shanten || 0);
+    const tempoScore = _deltaShanten * (_anyTing ? 5 : 8);
+    score += tempoScore;
+    const waitScore = Math.min(potential.effectiveKinds || 0, 6) * 1.5 + Math.min(potential.effectiveRemaining || 0, 20) * 0.3;
+    score += waitScore * (_anyTing ? 0.6 : 1.0);
     score += smartAiTileRoughDiscardValue(code, handCounts[code] || 1, handCounts);
     score += smartAiSafetyDiscardScore(seat, code);
     score += strategyLibraryDiscardBonus(seat, hand, tileObj);
@@ -12625,8 +12685,8 @@ function loadUiSettings() {
     if (index === (hand || []).length - 1) score += (_anyTing ? 1.5 : 4.0);
     // 台數潛力：⑤ 傳入已計算的 potential（含 shanten），避免重算 smartAiApproxShape
     const taiPot = smartAiTaiPotential(seat, afterCodes, potential);
-    score += taiPot * (_anyTing ? 3.0 : 6.0);
-    score -= smartAiThreatAwareDiscardRisk(seat, code) * (_anyTing ? 1.2 : 0.4);
+    score += taiPot * (_anyTing ? 2.0 : 6.0);
+    score -= smartAiThreatAwareDiscardRisk(seat, code) * (_anyTing ? 1.8 : 0.4);
     // ③ 七對子路線：若棄此牌後七對向聽更優，額外加分；若拆了對子則懲罰
     if (potential.isSevenPairsPath || (potential.sevenPairsShanten !== undefined && potential.sevenPairsShanten <= 2)) {
       const handCodes2 = (hand || []).map(t => t && t.code).filter(c => c && !isFlower(c));
@@ -12642,14 +12702,14 @@ function loadUiSettings() {
         const safetyGain = smartAiSafetyDiscardScore(seat, code);
         const shantenCost = (potential.shanten - currentShape.shanten) * 80;
         if (safetyGain > shantenCost + 20) score += safetyGain * 0.4;
-        else score -= shantenCost * 0.3;
+        else score -= shantenCost * 0.2;
       }
     }
     // ① 殘局感知：殘局時強化安全牌偏好
     const endgame = smartAiEndgameLevel();
     score += smartAiEndgameDiscardAdjust(seat, code, endgame);
     // ③ 對手手型推算：根據對手棄牌模式增加危險牌懲罰
-    score -= smartAiOpponentHandInference(seat, code) * (_anyTing ? 1.2 : 0.5);
+    score -= smartAiOpponentHandInference(seat, code) * (_anyTing ? 1.6 : 0.5);
     // ④ 放槍成本：接近流局時容忍放槍給籌碼較多的對手
     score += smartAiRonCostDiscardAdjust(seat, code, endgame);
     // ⑥ 輸分壓力：領先時更保守（中張懲罰），落後時可以冒險
@@ -12689,7 +12749,7 @@ function loadUiSettings() {
         if (hasSuji) {
           const otherMelds = (state.melds[other] || []).length;
           const isTing = state.declaredTing && state.declaredTing[other];
-          if (isTing) score -= 12;
+          if (isTing) score -= 18;
           else if (otherMelds >= 1) score -= 6;
           else score -= 3;
         }
@@ -13782,6 +13842,7 @@ function loadUiSettings() {
     return false;
   }
   async function driveSeat(reason) {
+    if (tw16HistViewing) return;
     if (isTileManagementPausingGame()) return;
     if (isOnlineGuest()) return;
     if (state.openingDeal && state.openingDeal.active) return;
@@ -13904,6 +13965,7 @@ function loadUiSettings() {
 
   function scheduleDriveSeat(reason) {
     clearTimeout(autoplayTimer);
+    if (tw16HistViewing) { autoplayTimer = null; return; }
     if (isTileManagementPausingGame()) {
       autoplayTimer = null;
       return;
@@ -13978,19 +14040,10 @@ function loadUiSettings() {
     (state.wall || []).forEach(t => {
       if (t && t.code && !isFlower(t.code)) tw16WallCountCache[t.code] = (tw16WallCountCache[t.code] || 0) + 1;
     });
-    // ⑥ 建立各座位已棄牌 Set 快取
-    tw16SeatDiscardSetCache = Object.create(null);
-    tw16SeatDiscardArrayCache = Object.create(null);
-    SEATS.forEach(s => {
-      tw16SeatDiscardSetCache[s] = new Set();
-      tw16SeatDiscardArrayCache[s] = [];
-    });
-    (state.discards || []).forEach(d => {
-      if (d && d.seat && d.tile && d.tile.code) {
-        tw16SeatDiscardSetCache[d.seat].add(d.tile.code);
-        tw16SeatDiscardArrayCache[d.seat].push(d.tile.code);
-      }
-    });
+    tw16EnsurePersistentDiscardCache();
+    tw16SeatDiscardSetCache = tw16PersistentSeatDiscardSet;
+    tw16SeatDiscardArrayCache = tw16PersistentSeatDiscardArray;
+    if (!tw16WaitCache) tw16WaitCache = new Map();
     const candidates = hand.map((t, idx) => smartAiDiscardCandidateScore(seat, t, idx, hand));
     tw16VisibleCountCache = null;
     tw16StrategyContextKeyCache = null;
@@ -14002,6 +14055,7 @@ function loadUiSettings() {
     tw16WallCountCache = null;
     tw16SeatDiscardSetCache = null;
     tw16SeatDiscardArrayCache = null;
+    tw16WaitCache = null;
     tw16MeldCodesCache = null;
     tw16MeldSuitsCache = null;
     tw16CurrentShapeCache = null;
@@ -15858,6 +15912,8 @@ function showWinHistory() {
     _tw16HistInit();
     const panel=document.getElementById('tw16HistPanel');
     if(!panel)return;
+    // 觀看胡牌歷程：只暫停本機AI排程，不寫入state，不影響來賓
+    tw16HistViewing = true;
     panel.style.left='';panel.style.top='';panel.style.transform='translate(-50%,-50%)';
     panel.classList.add('show');tw16RenderHistPanel();
   }
@@ -15866,7 +15922,11 @@ function showWinHistory() {
     if(_tw16HistInited)return;_tw16HistInited=true;
     const panel=document.getElementById('tw16HistPanel'),bar=document.getElementById('tw16HistBar'),close=document.getElementById('tw16HistClose');
     if(!panel||!bar||!close)return;
-    close.addEventListener('click',()=>panel.classList.remove('show'));
+    close.addEventListener('click',()=>{
+      panel.classList.remove('show');
+      tw16HistViewing = false;
+      scheduleDriveSeat('win-history-closed');
+    });
     let drag=null;
     function onMove(cx,cy){if(!drag)return;let nx=drag.ox+cx-drag.sx,ny=drag.oy+cy-drag.sy;nx=Math.max(0,Math.min(window.innerWidth-panel.offsetWidth,nx));ny=Math.max(0,Math.min(window.innerHeight-panel.offsetHeight,ny));panel.style.left=nx+'px';panel.style.top=ny+'px';panel.style.transform='none';}
     bar.addEventListener('mousedown',e=>{if(e.target===close)return;const r=panel.getBoundingClientRect();drag={sx:e.clientX,sy:e.clientY,ox:r.left,oy:r.top};panel.style.left=r.left+'px';panel.style.top=r.top+'px';panel.style.transform='none';e.preventDefault();});
@@ -17468,62 +17528,59 @@ function showIntegrityReport(precomputed) {
   }
 
   /* renderAll 節流：使用 renderSerial 防止同一幀重複渲染 */
+  var _triLastTurn = null;
   function tw16Tri() {
     try {
       const turn = state && state.turn;
       const viewSeat = state && state.viewSeat;
-      const phase = state && state.phase;
-      if (!turn || !viewSeat || phase !== 'discard') {
+      const tbl = document.getElementById('table');
+      if (!tbl) return;
+      const openingActive = state && state.openingDeal && state.openingDeal.active;
+      if (openingActive || (state && state.ended) || !viewSeat) {
+        _triLastTurn = null;
         ['_triL','_triR'].forEach(function(id) {
           const el = document.getElementById(id); if (el) el.style.display = 'none';
         });
         return;
       }
-      const seats = ['east','south','west','north'];
-      const dist = ((seats.indexOf(turn) - seats.indexOf(viewSeat)) + 4) % 4;
-      const pos = ['bottom','right','top','left'][dist];
+      if (turn && turn !== _triLastTurn) _triLastTurn = turn;
+      const showTurn = _triLastTurn;
+      if (!showTurn) return;
       const grid = document.getElementById('discardGrid');
-      const tbl = document.getElementById('table');
-      if (!grid || !tbl) return;
+      if (!grid) return;
       const dr = grid.getBoundingClientRect();
       const tbr = tbl.getBoundingClientRect();
       if (!dr.width || !dr.height) return;
+      const seats = ['east','south','west','north'];
+      const dist = ((seats.indexOf(showTurn) - seats.indexOf(viewSeat)) + 4) % 4;
+      const pos = ['bottom','right','top','left'][dist];
       const cs = getComputedStyle(document.documentElement);
       const sz = Math.round(parseFloat(cs.getPropertyValue('--tw-discard-h')) / 2) || 13;
-      const gL = dr.left - tbr.left;
-      const gT = dr.top  - tbr.top;
-      const gW = dr.width;
-      const gH = dr.height;
+      const h = sz; const w = Math.round(sz / 2);
+      const gL = dr.left - tbr.left; const gT = dr.top - tbr.top;
+      const gW = dr.width; const gH = dr.height;
       const colors = { east:'#ef4444', south:'#22c55e', west:'#3b82f6', north:'#f59e0b' };
-      const color = colors[turn] || '#facc15';
-      let specs;
+      const color = colors[showTurn] || '#facc15';
+      let arrowBW, arrowBC, specs;
       if (pos === 'bottom') {
-        specs = [
-          [gL,       gT+gH-sz, '0 '+sz+'px '+sz+'px 0', 'transparent transparent '+color+' transparent'],
-          [gL+gW-sz, gT+gH-sz, '0 0 '+sz+'px '+sz+'px', 'transparent transparent '+color+' transparent']
-        ];
+        arrowBW = h+'px '+w+'px 0 '+w+'px'; arrowBC = color+' transparent transparent transparent';
+        specs = [[gL+w, gT+gH-h], [gL+gW-w*3, gT+gH-h]];
       } else if (pos === 'top') {
-        specs = [
-          [gL,       gT,       sz+'px '+sz+'px 0 0', color+' transparent transparent transparent'],
-          [gL+gW-sz, gT,       sz+'px 0 0 '+sz+'px', color+' transparent transparent transparent']
-        ];
+        arrowBW = '0 '+w+'px '+h+'px '+w+'px'; arrowBC = 'transparent transparent '+color+' transparent';
+        specs = [[gL+w, gT], [gL+gW-w*3, gT]];
       } else if (pos === 'left') {
-        specs = [
-          [gL,       gT,       sz+'px '+sz+'px 0 0', color+' transparent transparent transparent'],
-          [gL,       gT+gH-sz, '0 '+sz+'px '+sz+'px 0', 'transparent transparent '+color+' transparent']
-        ];
+        arrowBW = w+'px '+h+'px '+w+'px 0'; arrowBC = 'transparent '+color+' transparent transparent';
+        specs = [[gL, gT+w], [gL, gT+gH-w*3]];
       } else {
-        specs = [
-          [gL+gW-sz, gT,       sz+'px 0 0 '+sz+'px', color+' transparent transparent transparent'],
-          [gL+gW-sz, gT+gH-sz, '0 0 '+sz+'px '+sz+'px', 'transparent transparent '+color+' transparent']
-        ];
+        arrowBW = w+'px 0 '+w+'px '+h+'px'; arrowBC = 'transparent transparent transparent '+color;
+        specs = [[gL+gW-h, gT+w], [gL+gW-h, gT+gH-w*3]];
       }
       ['_triL','_triR'].forEach(function(id, i) {
         let el = document.getElementById(id);
         if (!el) { el = document.createElement('div'); el.id = id; tbl.appendChild(el); }
-        el.style.cssText = 'position:absolute;width:0;height:0;border-style:solid;pointer-events:none;z-index:9999;';
+        el.style.cssText = 'position:absolute;width:0;height:0;border-style:solid;pointer-events:none;z-index:9999;display:block;';
         el.style.left = specs[i][0]+'px'; el.style.top = specs[i][1]+'px';
-        el.style.borderWidth = specs[i][2]; el.style.borderColor = specs[i][3];
+        el.style.borderWidth = arrowBW; el.style.borderColor = arrowBC;
       });
     } catch(e) {}
   }
@@ -20569,7 +20626,6 @@ function concealedKongOwnerOfMeld(meld) {
       req.onblocked = () => reject(new Error('牌圖資料庫被其它分頁占用，無法自動修復'));
     });
   }
-
 
   function customTileSkinSqlRequest(mode, action) {
     return openCustomTileSkinSqlDatabase().then(db => new Promise((resolve, reject) => {
