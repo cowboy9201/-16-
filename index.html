@@ -3941,6 +3941,7 @@ html body .hand-bottom .hand-tile-row .tingWaitAssistGroupAllSeats[data-view-sea
   let tw16UiPriorityMode = false;  // 本機 UI 優先旗標：選單/設定/歷程開啟時暫停托管排程，不寫入state，不同步給其他人
   let tw16AiDriveRunning = false;
   let tw16AiDriveStartedAt = 0;
+  let discardSubmitGuard = null;
   let claimTimer = null;
   let autoNextTimer = null;
   let miniDashboardCountdownTimer = null;
@@ -11319,6 +11320,7 @@ function loadUiSettings() {
     }
     clearTimeout(autoplayTimer);
     clearTimeout(claimTimer);
+    discardSubmitGuard = null;
     clearAutoNextTimer('clear');
     ensureContinuousRunObject();
     tileSerial = 1;
@@ -12153,6 +12155,17 @@ function loadUiSettings() {
     return count % 3 === 2;
   }
 
+  function isDiscardSubmitGuardActive(seat) {
+    const guard = discardSubmitGuard;
+    if (!guard) return false;
+    const timeoutMs = Math.max(1200, Math.round(discardAnimationMs() * 4.5));
+    if (!guard.at || Date.now() - guard.at > timeoutMs) {
+      discardSubmitGuard = null;
+      return false;
+    }
+    return guard.handId === state.handId && guard.seat === seat && guard.turn === state.turn && guard.phase === 'discard';
+  }
+
   function submitDiscard(seat, tileId, source, options = {}) {
     if (isOnlineGuest() && source !== 'remote' && seat === net.assignedSeat) {
       tw16BottomMeldFrozen = false;
@@ -12162,6 +12175,10 @@ function loadUiSettings() {
     }
     const allowComputerRecovery = !!(options && options.forceComputer && isOnlineHost() && isHostDrivenSeat(seat) && !state.ended && !state.locked && !state.pending && seat === state.turn && state.phase === 'discard' && (state.hands[seat] || []).length);
     if (!canDiscard(seat) && !allowComputerRecovery) return false;
+    if (isDiscardSubmitGuardActive(seat)) {
+      try { recordNetworkEvent('discard-submit-guard', SEAT_NAME[seat] + '略過重複出牌提交', { seat, source, tileId }); } catch (_) {}
+      return false;
+    }
     // tw16_submit_discard_forbidden_gate_20260624: 最終守門，AI出牌一律過禁打過濾
     let _dangerForcedDiscard = false;
     if (source !== 'remote' && source !== 'remote-ting' && source !== 'human' && source !== 'human-swipe') {
@@ -12230,6 +12247,7 @@ function loadUiSettings() {
     const hand = state.hands[seat];
     const index = hand.findIndex(t => t.id === tileId);
     if (index < 0) return false;
+    discardSubmitGuard = { handId: state.handId, seat, turn: state.turn, phase: state.phase, tileId: String(tileId || ''), at: Date.now(), actionId: 0 };
     const strategyHandBeforeDiscard = hand.map(t => t && t.code).filter(Boolean);
     const [discarded] = hand.splice(index, 1);
     recordStrategyLibraryDiscardDecision(seat, strategyHandBeforeDiscard, discarded, source, options);
@@ -12246,6 +12264,7 @@ function loadUiSettings() {
     state.lockedAt = Date.now();
     state.lastActionId += 1;
     const actionId = state.lastActionId;
+    if (discardSubmitGuard && discardSubmitGuard.handId === state.handId && discardSubmitGuard.seat === seat) discardSubmitGuard.actionId = actionId;
     if (allowComputerRecovery) addLog(SEAT_NAME[seat] + '電腦代管修正卡局後出牌 ' + tileText(discarded.code));
     else addLog(SEAT_NAME[seat] + '打出 ' + tileText(discarded.code));
     speakGameEvent(tileSpeechText(discarded.code), 'discard:' + state.handId + ':' + actionId + ':' + seat + ':' + discarded.id);
@@ -12255,6 +12274,9 @@ function loadUiSettings() {
     recordHandEvent('discard', seat, SEAT_NAME[seat] + '打出 ' + tileFullText(discarded.code), { tile: discarded.code, tileId: discarded.id, recovery: allowComputerRecovery });
     renderAll();
     playDiscardAnimation(seat, discarded, async () => {
+      if (discardSubmitGuard && discardSubmitGuard.actionId === actionId && discardSubmitGuard.seat === seat && discardSubmitGuard.handId === state.handId) {
+        discardSubmitGuard = null;
+      }
       // tw16_fix_discard_lock: 不論 actionId 是否過期，動畫結束必定先解鎖
       // 舊版在 actionId 檢查後才解鎖，若提前 return 則 state.locked 永遠不釋放 → AI 卡住不出牌
       state.locked = false;
