@@ -4045,6 +4045,7 @@ html body .hand-bottom .hand-tile-row .tingWaitAssistGroupAllSeats[data-view-sea
   let renderSerial = 0;
   let _actionPanelContentKey = '';
   let lastUiThemeKey = '';
+  let tw16LastPerspective3dState = null; // 追蹤上次3D狀態，只在真正從開轉關那一刻才需要清除行內定位樣式
   let lastWakeLockEnabled = null;
   let miniDashboardRenderKey = '';
   const rootCssVarCache = Object.create(null);
@@ -7007,7 +7008,7 @@ html body .hand-bottom .hand-tile-row .tingWaitAssistGroupAllSeats[data-view-sea
     lobby.id = 'tw16Lobby';
     lobby.className = 'tw16-lobby';
     lobby.innerHTML = '<div class="tw16-lobby-card">'
-      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;"><div class="tw16-lobby-chip" style="flex-shrink:0;margin-bottom:0;">Ably 連線 / 單機</div><span style="font-size:clamp(9px,2.5vw,12px);color:#cbd5e1;font-weight:700;white-space:nowrap;">（115.7.5 改版｜2026-07-05 09:44 台灣時間）</span></div>'
+      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;"><div class="tw16-lobby-chip" style="flex-shrink:0;margin-bottom:0;">Ably 連線 / 單機</div><span style="font-size:clamp(9px,2.5vw,12px);color:#cbd5e1;font-weight:700;white-space:nowrap;">（115.7.5 改版｜2026-07-05 10:45 台灣時間）</span></div>'
       + '<div class="tw16-lobby-title">台灣麻將 Ably 連線 / 單機</div>'
       + '<div class="tw16-lobby-sub">★連線對戰：<br><span style="color:#ef4444">每人都要設同房名</span>，設好房名後<br>1人先按<span style="background:#1d4ed8;color:#fff;border-radius:3px;padding:0 3px;">建立房間</span><br>其餘人按<span style="background:#1d4ed8;color:#fff;border-radius:3px;padding:0 3px;">加入房間</span><br>★單人：按<span style="background:#15803d;color:#fff;border-radius:3px;padding:0 3px;">直接離線開始</span></div>'
       + '<div class="tw16-lobby-grid">'
@@ -8344,8 +8345,16 @@ function loadUiSettings() {
     }
     applyHandVisualColors();
     app.classList.toggle('perspective3d', !!state.uiSettings.perspective3d);
-    /* 關閉 3D 時還原 hand-bottom 的 CSS 定位（移除 placeByLeftTop 設的 inline style） */
-    if (!state.uiSettings.perspective3d && dom.handBottom) {
+    // tw16_fix_meld_row_flicker_20260705: 原本這段每次 applyUiTheme 執行（也就是每次
+    // renderAll）都會無條件清除 handBottom 的行內定位樣式，不管3D模式有沒有真的變動過。
+    // 這個清除動作是同步的，但花牌副露列的實際定位邏輯多半是透過
+    // requestAnimationFrame 延後到下一影格才執行——中間這一影格「樣式已被清空、還沒
+    // 重新定位」的空窗期，就是造成「先往右偏移、再跳回正確位置」這種閃爍的根本原因。
+    // 改成只在3D狀態「真的從開轉關」那一刻才清除一次，其餘每次renderAll都不動它，
+    // 讓花牌副露的定位邏輯有機會維持自己算好的位置，不會被無謂地重複清空。
+    const _perspective3dNow = !!state.uiSettings.perspective3d;
+    const _perspective3dJustTurnedOff = tw16LastPerspective3dState === true && _perspective3dNow === false;
+    if (_perspective3dJustTurnedOff && dom.handBottom) {
       const hb = dom.handBottom;
       hb.style.removeProperty('position');
       hb.style.removeProperty('left');
@@ -8356,6 +8365,7 @@ function loadUiSettings() {
       hb.style.removeProperty('width');
       hb.style.removeProperty('height');
     }
+    tw16LastPerspective3dState = _perspective3dNow;
     try {
       const hb = dom.handBottom || byId('handBottom');
       if (hb) {
