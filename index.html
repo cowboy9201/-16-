@@ -3039,9 +3039,32 @@ html body .app.perspective3d .discardSeat .tile::before {
 .tw16-btn-hint-top{position:absolute;left:50%;top:-1.3em;transform:translateX(-50%);font-size:8px;font-weight:900;color:#ef4444;white-space:nowrap;line-height:1;pointer-events:none;z-index:30;background:rgba(3,10,25,.55);padding:1px 3px;border-radius:4px;}
 .tw16-btn-hint-bottom{position:absolute;left:50%;bottom:-1.3em;transform:translateX(-50%);font-size:8px;font-weight:900;color:#ef4444;white-space:nowrap;line-height:1;pointer-events:none;z-index:30;background:rgba(3,10,25,.55);padding:1px 3px;border-radius:4px;}
 
-.tw16-claim-float{position:absolute;transform:translate(-50%,-50%);font-size:34px;font-weight:1000;pointer-events:none;z-index:9998;display:none;text-shadow:0 0 10px currentColor,0 2px 6px rgba(0,0,0,.75);animation:tw16ClaimFloatPulse 1.1s ease-in-out infinite;}@keyframes tw16ClaimFloatPulse{0%,100%{transform:translate(-50%,-50%) scale(.75);opacity:.55;}50%{transform:translate(-50%,-50%) scale(1.35);opacity:1;}}
+/* tw16_claim_fx_20261016: 吃／碰／槓／胡 吸睛提示特效（一次性播放；取代舊的輪詢式浮動單字）。
+   結構：衝擊波圈 ×2 ＋ 放射光芒 ＋ 大字 ＋ 迸發粒子；胡牌另加全桌閃光。顏色由 JS 以 --fx-c1／--fx-c2 傳入。 */
+.tw16-fx{position:absolute;width:0;height:0;pointer-events:none;z-index:9998;}
+.tw16-fx>*{position:absolute;left:0;top:0;pointer-events:none;}
+.tw16-fx-ring{width:90px;height:90px;margin:-45px 0 0 -45px;border-radius:50%;border:5px solid var(--fx-c1);box-shadow:0 0 18px var(--fx-c1),inset 0 0 14px var(--fx-c1);opacity:0;animation:tw16FxRing .75s ease-out forwards;}
+.tw16-fx-ring.r2{border-color:var(--fx-c2);box-shadow:0 0 18px var(--fx-c2),inset 0 0 14px var(--fx-c2);animation-delay:.14s;}
+@keyframes tw16FxRing{0%{transform:scale(.15);opacity:.95;}100%{transform:scale(3.4);opacity:0;}}
+.tw16-fx-rays{width:300px;height:300px;margin:-150px 0 0 -150px;border-radius:50%;background:repeating-conic-gradient(from 0deg,var(--fx-c1) 0 5deg,transparent 5deg 15deg);-webkit-mask-image:radial-gradient(circle,transparent 14%,#000 32%,transparent 68%);mask-image:radial-gradient(circle,transparent 14%,#000 32%,transparent 68%);opacity:0;animation:tw16FxRays 1s ease-out forwards;}
+@keyframes tw16FxRays{0%{transform:scale(.3) rotate(0deg);opacity:0;}25%{opacity:.85;}100%{transform:scale(1.5) rotate(40deg);opacity:0;}}
+.tw16-fx-txt{white-space:nowrap;font-weight:1000;line-height:1;font-size:var(--fx-fs,72px);letter-spacing:.04em;color:#fff;-webkit-text-stroke:var(--fx-sw,5px) var(--fx-c1);paint-order:stroke fill;text-shadow:0 0 22px var(--fx-c1),0 0 46px var(--fx-c2),0 5px 10px rgba(0,0,0,.65);opacity:0;transform:translate(-50%,-50%);animation:tw16FxTxt var(--fx-ms,1300ms) cubic-bezier(.2,.9,.3,1) forwards;}
+@keyframes tw16FxTxt{
+  0%{transform:translate(-50%,-50%) scale(3) rotate(-10deg);opacity:0;filter:blur(8px);}
+  14%{transform:translate(-50%,-50%) scale(.88) rotate(2deg);opacity:1;filter:blur(0);}
+  24%{transform:translate(-50%,-50%) scale(1.18) rotate(-1deg);}
+  34%{transform:translate(-50%,-50%) scale(1) rotate(0deg);}
+  78%{transform:translate(-50%,-50%) scale(1.04);opacity:1;}
+  100%{transform:translate(-50%,-62%) scale(1.3);opacity:0;}
+}
+.tw16-fx-p{width:var(--s,8px);height:var(--s,8px);margin:calc(var(--s,8px)/-2) 0 0 calc(var(--s,8px)/-2);border-radius:50%;background:var(--pc);box-shadow:0 0 8px var(--pc);opacity:0;animation:tw16FxP var(--pd,.9s) cubic-bezier(.12,.75,.3,1) var(--d,0s) forwards;}
+.tw16-fx-p.sq{border-radius:2px;}
+@keyframes tw16FxP{0%{transform:translate(0,0) scale(1) rotate(0deg);opacity:1;}70%{opacity:1;}100%{transform:translate(var(--dx),var(--dy)) scale(.2) rotate(var(--rot,180deg));opacity:0;}}
+.tw16-fx-flash{position:absolute;inset:0;pointer-events:none;z-index:9997;background:radial-gradient(circle at var(--fx-x,50%) var(--fx-y,50%),rgba(255,244,200,.8) 0,rgba(239,68,68,.38) 30%,transparent 65%);box-shadow:inset 0 0 80px 10px rgba(251,191,36,.55);opacity:0;animation:tw16FxFlash .95s ease-out forwards;}
+@keyframes tw16FxFlash{0%{opacity:0;}12%{opacity:1;}100%{opacity:0;}}
+@keyframes tw16FxTxtLite{0%{transform:translate(-50%,-50%);opacity:0;}15%,80%{transform:translate(-50%,-50%);opacity:1;}100%{transform:translate(-50%,-50%);opacity:0;}}
+@media (prefers-reduced-motion:reduce){.tw16-fx-ring,.tw16-fx-rays,.tw16-fx-p,.tw16-fx-flash{display:none;}.tw16-fx-txt{animation-name:tw16FxTxtLite;}}
 
-.tw16-win-float{position:absolute;transform:translate(-50%,-50%);font-size:34px;font-weight:1000;color:#ff1414;pointer-events:none;z-index:9999;display:none;text-shadow:0 0 10px rgba(255,20,20,.9),0 2px 6px rgba(0,0,0,.75);animation:tw16WinFloatBounce .55s ease-in-out infinite;}@keyframes tw16WinFloatBounce{0%,100%{transform:translate(-50%,-50%) scale(1) rotate(-3deg);}50%{transform:translate(-50%,-65%) scale(1.25) rotate(3deg);}}
 
 
 
@@ -4195,8 +4218,7 @@ html body .hand-bottom .hand-tile-row .tingWaitAssistGroupAllSeats[data-view-sea
     tw16DiscardTurnGuardKey = tw16BuildDiscardTurnGuardKey(seat);
     return tw16DiscardTurnGuardKey;
   }
-  let _tw16ClaimFlash = null;
-  let _tw16WinFlash = null;
+  let _tw16FxLast = {};  // 吃碰槓胡特效去重：key = seat:type → 上次播放時間（避免同一事件經 settlement 與 snapshot 兩條路徑重複播放）
   let tw16HistViewing = false;  // 本機獨立旗標：觀看胡牌歷程時暫停本機AI排程，不寫入state，不同步給其他人
   let tw16UiPriorityMode = false;  // 本機 UI 優先旗標：選單/設定/歷程開啟時暫停托管排程，不寫入state，不同步給其他人
   let tw16SettingsPanelPausedGame = false;
@@ -4398,9 +4420,10 @@ html body .hand-bottom .hand-tile-row .tingWaitAssistGroupAllSeats[data-view-sea
   const ABLY_API_KEY_STORAGE_KEY = 'tw16_clean_ably_api_key';
   const ABLY_API_KEY_MANUAL_SELECTION_STORAGE_KEY = 'tw16_clean_ably_api_key_manual_selection';
   const ABLY_API_KEY_CANDIDATES_STORAGE_KEY = 'tw16_clean_ably_api_key_candidates';
+  // 安全性：原本寫死在這裡的 Ably 金鑰已移除（網頁原始碼任何人都看得到）。
+  // 連線金鑰請改由「大廳 Api key 欄位」手動輸入，或使用伺服器 KEY 列表載入。
+  // 若一定要內建，請只放「權限已限縮（僅限遊戲頻道、不含管理/歷史）」的新金鑰，格式：{ label: '01', key: 'appId.keyId:secret' }
   const BUILTIN_ABLY_API_KEY_CANDIDATES = [
-    { label: '01', key: 'IqQwQg.b8dH-w:BI5_3ws606bEvyeJss7TotF-1_kUU43Q6EHMuL8ccVg' },
-    { label: '02', key: 'Js257Q.4UsP3Q:DkRt-WCFwrHjEMxlKRwSwbZ3om7539JkeHtc5alhl9k' }
   ];
   const LOBBY_ABLY_KEY_REMOTE_BASE_URL = 'https://textrecbook-u9ahfdck.manus.space/';
   const LOBBY_ABLY_KEY_REMOTE_ORIGIN = 'https://textrecbook-u9ahfdck.manus.space';
@@ -7414,6 +7437,9 @@ html body .hand-bottom .hand-tile-row .tingWaitAssistGroupAllSeats[data-view-sea
     const candidates = seats.length ? seats : ['east'];
     const picked = candidates[Math.floor(Math.random() * candidates.length)] || 'east';
     state.viewSeat = picked;
+    /* 修正：退出至大廳時，托管狀態是以「東家為玩家」重設的；再進入後玩家被隨機安排到別的座位，
+       若不依新座位重設，玩家座位會沿用舊的「電腦托管」狀態而自動開啟托管。這裡依新座位重設：玩家座位＝真人，其餘座位＝電腦。 */
+    SEATS.forEach(seat => { state.seatAutoPlay[seat] = seatAutoplayDefault(seat); });
     net.assignedSeat = '';
     net.role = 'offline';
     net.connected = false;
@@ -7430,7 +7456,7 @@ html body .hand-bottom .hand-tile-row .tingWaitAssistGroupAllSeats[data-view-sea
     lobby.id = 'tw16Lobby';
     lobby.className = 'tw16-lobby';
     lobby.innerHTML = '<div class="tw16-lobby-card">'
-      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;"><div class="tw16-lobby-chip" style="flex-shrink:0;margin-bottom:0;">Ably 連線 / 單機</div><span style="font-size:clamp(9px,2.5vw,12px);color:#cbd5e1;font-weight:700;white-space:nowrap;">（115.7.5 改版｜2026-07-05 15:22 台灣時間）</span></div>'
+      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;"><div class="tw16-lobby-chip" style="flex-shrink:0;margin-bottom:0;">Ably 連線 / 單機</div><span style="font-size:clamp(9px,2.5vw,12px);color:#cbd5e1;font-weight:700;white-space:nowrap;">（115.7.6 改版｜2026-09-22 10:03 台灣時間）</span></div>'
       + '<div class="tw16-lobby-title">台灣麻將 Ably 連線 / 單機</div>'
       + '<div class="tw16-lobby-sub">★連線對戰：<br><span style="color:#ef4444">每人都要設同房名</span>，設好房名後<br>1人先按<span style="background:#1d4ed8;color:#fff;border-radius:3px;padding:0 3px;">建立房間</span><br>其餘人按<span style="background:#1d4ed8;color:#fff;border-radius:3px;padding:0 3px;">加入房間</span><br>★單人：按<span style="background:#15803d;color:#fff;border-radius:3px;padding:0 3px;">直接離線開始</span></div>'
       + '<div class="tw16-lobby-grid">'
@@ -8560,7 +8586,28 @@ function loadUiSettings() {
     /* 綠 */ { base: {r:18,g:172,b:82},   accent: {r:67,g:232,b:124} },
     /* 藍 */ { base: {r:30,g:116,b:235},  accent: {r:80,g:172,b:255} },
     /* 靛 */ { base: {r:84,g:72,b:230},   accent: {r:132,g:118,b:255} },
-    /* 紫 */ { base: {r:178,g:42,b:224},  accent: {r:224,g:94,b:255} }
+    /* 紫 */ { base: {r:178,g:42,b:224},  accent: {r:224,g:94,b:255} },
+    /* ── 擴充色票（增加每局牌背顏色的樣本數）── */
+    /* 玫瑰紅 */ { base: {r:228,g:37,b:101}, accent: {r:241,g:111,b:154} },
+    /* 珊瑚紅 */ { base: {r:235,g:88,b:51}, accent: {r:245,g:151,b:127} },
+    /* 琥珀橙 */ { base: {r:240,g:150,b:15}, accent: {r:248,g:186,b:93} },
+    /* 萊姆黃綠 */ { base: {r:162,g:195,b:29}, accent: {r:202,g:233,b:78} },
+    /* 草綠 */ { base: {r:89,g:182,b:43}, accent: {r:134,g:221,b:90} },
+    /* 薄荷綠 */ { base: {r:31,g:173,b:116}, accent: {r:64,g:226,b:162} },
+    /* 青綠 */ { base: {r:17,g:176,b:155}, accent: {r:42,g:239,b:213} },
+    /* 湖水青 */ { base: {r:17,g:173,b:197}, accent: {r:58,g:218,b:242} },
+    /* 天空藍 */ { base: {r:25,g:158,b:240}, accent: {r:103,g:193,b:249} },
+    /* 寶藍 */ { base: {r:46,g:95,b:229}, accent: {r:120,g:153,b:242} },
+    /* 群青 */ { base: {r:60,g:65,b:226}, accent: {r:132,g:136,b:240} },
+    /* 紫羅蘭 */ { base: {r:133,g:73,b:223}, accent: {r:182,g:144,b:238} },
+    /* 洋紅 */ { base: {r:221,g:44,b:197}, accent: {r:236,g:116,b:220} },
+    /* 桃紅 */ { base: {r:232,g:48,b:152}, accent: {r:244,g:124,b:192} },
+    /* 酒紅寶石 */ { base: {r:169,g:25,b:54}, accent: {r:230,g:51,b:87} },
+    /* 祖母綠 */ { base: {r:18,g:145,b:86}, accent: {r:22,g:227,b:132} },
+    /* 藍寶石 */ { base: {r:16,g:73,b:188}, accent: {r:49,g:113,b:242} },
+    /* 紫水晶 */ { base: {r:110,g:39,b:165}, accent: {r:155,g:73,b:218} },
+    /* 孔雀青 */ { base: {r:11,g:142,b:152}, accent: {r:12,g:222,b:237} },
+    /* 琥珀金 */ { base: {r:213,g:139,b:11}, accent: {r:249,g:180,b:62} }
   ];
 
   /* 從 RGB 轉 HSL，h: 0–360, s: 0–1, l: 0–1 */
@@ -10409,10 +10456,7 @@ function loadUiSettings() {
     state.ended = true;
     state.phase = 'ended';
     const settlementWinner = payload && SEATS.includes(payload.winner) ? payload.winner : '';
-    if (settlementWinner) {
-      _tw16WinFlash = { seat: settlementWinner, until: Date.now() + 1000 };
-      setTimeout(function() { try { tw16WinFloat(); } catch(e) {} }, 1050);
-    }
+    if (settlementWinner) tw16PlayClaimFx(settlementWinner, 'win', payload && payload.kind);
     clearActiveDrawnTile();
     state.locked = false;
     state.lockedAt = 0;
@@ -10658,7 +10702,7 @@ function loadUiSettings() {
     const incomingScoreChipSettings = incoming.scoreChipSettings || msg.scoreChipSettings || null;
     if (incomingScoreChipSettings) delete incoming.scoreChipSettings;
     // 來賓端：套用snapshot前先記錄各座位副露數量，用於偵測吃碰槓動作（房主端的本地旗標不會同步給來賓，故來賓需自行偵測）
-    const _tw16GuestPrevMelds = isOnlineGuest() ? SEATS.map(function(s) { return (state.melds && state.melds[s] || []).length; }) : null;
+    const _tw16GuestPrevMelds = isOnlineGuest() ? SEATS.map(function(s) { const ms = state.melds && state.melds[s] || []; return { n: ms.length, t: ms.reduce(function(a, m) { return a + (m ? m.length : 0); }, 0) }; }) : null;
     const _tw16GuestPrevSettlementId = isOnlineGuest() ? (state.lastSettlement && state.lastSettlement.id || '') : '';
     Object.keys(incoming).forEach(key => {
       state[key] = incoming[key];
@@ -10681,22 +10725,26 @@ function loadUiSettings() {
     if (isOnlineGuest()) {
       try {
         SEATS.forEach(function(seat, idx) {
-          const newCount = (state.melds && state.melds[seat] || []).length;
-          if (newCount > _tw16GuestPrevMelds[idx]) {
-            const newMeld = (state.melds[seat] || [])[newCount - 1];
+          const ms = state.melds && state.melds[seat] || [];
+          const newCount = ms.length;
+          const newTiles = ms.reduce(function(a, m) { return a + (m ? m.length : 0); }, 0);
+          const prev = _tw16GuestPrevMelds[idx];
+          if (newCount > prev.n) {
+            const newMeld = ms[newCount - 1];
             let t = 'pong';
             if (newMeld && newMeld.length === 3) {
               const codes = newMeld.map(function(x) { return x && x.code; });
               if (!codes.every(function(x) { return x === codes[0]; })) t = 'chi';
             } else if (newMeld && newMeld.length === 4) { t = 'kong'; }
-            _tw16ClaimFlash = { seat: seat, type: t, until: Date.now() + 1000 };
-            setTimeout(function() { try { tw16ClaimFloat(); } catch(e) {} }, 1050);
+            tw16PlayClaimFx(seat, t);
+          } else if (newCount === prev.n && newTiles > prev.t) {
+            // 加槓：副露數不變，但某組碰變成四張
+            tw16PlayClaimFx(seat, 'kong');
           }
         });
         const newSettlementId = state.lastSettlement && state.lastSettlement.id || '';
         if (newSettlementId && newSettlementId !== _tw16GuestPrevSettlementId && state.lastSettlement.winner) {
-          _tw16WinFlash = { seat: state.lastSettlement.winner, until: Date.now() + 1000 };
-          setTimeout(function() { try { tw16WinFloat(); } catch(e) {} }, 1050);
+          tw16PlayClaimFx(state.lastSettlement.winner, 'win', state.lastSettlement.kind);
         }
       } catch (e) {}
     }
@@ -11974,7 +12022,12 @@ function loadUiSettings() {
     return array;
   }
 
-  function isFlower(code) { return /^H[1-8]$/.test(code); }
+  function isFlower(code) {
+    if (typeof code !== 'string') return /^H[1-8]$/.test(code);
+    if (code.length !== 2 || code.charCodeAt(0) !== 72) return false;
+    const d = code.charCodeAt(1);
+    return d >= 49 && d <= 56;
+  }
 
   // ① 常數 Set/Map 取代 regex，熱路徑速度快 10-50 倍
   const HONOR_CODE_SET = new Set(['E','S','W','N','C','F','P']);
@@ -13721,8 +13774,7 @@ function loadUiSettings() {
       }
       addLog(SEAT_NAME[candidate.seat] + candidate.label + ' ' + tileText(pending.tile.code));
       emitGameVoiceEvent(gameVoiceClaimText(candidate.seat, candidate.type, candidate.label), 'claim:' + state.handId + ':' + pending.actionId + ':' + candidate.seat + ':' + candidate.type, { kind: 'claim', seat: candidate.seat });
-      _tw16ClaimFlash = { seat: candidate.seat, type: 'kong', until: Date.now() + 1000 };
-      setTimeout(function() { try { tw16ClaimFloat(); } catch(e) {} }, 1050);
+      tw16PlayClaimFx(candidate.seat, 'kong');
       recordHandEvent('claim', candidate.seat, SEAT_NAME[candidate.seat] + candidate.label + ' ' + tileFullText(pending.tile.code), { type: candidate.type, tile: pending.tile.code, supplement: supplement && supplement.code || '' });
       recordHandEvent('kong', candidate.seat, SEAT_NAME[candidate.seat] + '明槓 ' + tileFullText(pending.tile.code), { type: 'claim-kong', tile: pending.tile.code, supplement: supplement && supplement.code || '' });
       if (openSelfWinWindow(candidate.seat, supplement, 'kong-supplement')) {
@@ -13735,8 +13787,7 @@ function loadUiSettings() {
       sortHand(candidate.seat);
       addLog(SEAT_NAME[candidate.seat] + candidate.label + ' ' + tileText(pending.tile.code));
       emitGameVoiceEvent(gameVoiceClaimText(candidate.seat, candidate.type, candidate.label), 'claim:' + state.handId + ':' + pending.actionId + ':' + candidate.seat + ':' + candidate.type, { kind: 'claim', seat: candidate.seat });
-      _tw16ClaimFlash = { seat: candidate.seat, type: candidate.type, until: Date.now() + 1000 };
-      setTimeout(function() { try { tw16ClaimFloat(); } catch(e) {} }, 1050);
+      tw16PlayClaimFx(candidate.seat, candidate.type);
       ensureStatsObject();
       state.stats.claims += 1;
       recordHandEvent('claim', candidate.seat, SEAT_NAME[candidate.seat] + candidate.label + ' ' + tileFullText(pending.tile.code), { type: candidate.type, tile: pending.tile.code });
@@ -13927,7 +13978,18 @@ function loadUiSettings() {
   }
 
   /* 精確向聽計算核心：花色分組 DP + 字牌枚舉 */
+  /* 效能優化A：純函式結果快取（鍵為牌張數量，結果不隨外部狀態改變） */
+  var tw16SuitDPCache = new Map();
   function tw16SuitShantenDP(c9) {
+    const ck = c9.join('');
+    const hit = tw16SuitDPCache.get(ck);
+    if (hit) return hit;
+    if (tw16SuitDPCache.size > 20000) tw16SuitDPCache = new Map();
+    const res = tw16SuitShantenDPRaw(c9);
+    tw16SuitDPCache.set(ck, res);
+    return res;
+  }
+  function tw16SuitShantenDPRaw(c9) {
     const seen = new Map();
     function rec(i, m, p, pair) {
       while (i <= 8 && c9[i] === 0) i++;
@@ -13983,7 +14045,37 @@ function loadUiSettings() {
     return Math.max(-1, 6 - pairs);
   }
 
+  var TW16_FAST_KEY_CODES = (function () {
+    const a = [];
+    ['m','p','s'].forEach(function (su) { for (let i = 1; i <= 9; i++) a.push(su + i); });
+    ['E','S','W','N','C','F','P'].forEach(function (h) { a.push(h); });
+    return a;
+  })();
+  var TW16_FAST_KEY_SET = new Set(TW16_FAST_KEY_CODES);
+  /* 回傳牌張數量字串鍵；若含有非標準牌碼（數量>0）則回傳 null，改走原始計算以確保結果不變 */
+  function tw16FastCountsKey(counts) {
+    for (const k in counts) {
+      if ((counts[k] || 0) > 0 && !TW16_FAST_KEY_SET.has(k)) return null;
+    }
+    const arr = tw16FastKeyBuf;
+    for (let i = 0; i < 34; i++) arr[i] = 48 + (counts[TW16_FAST_KEY_CODES[i]] || 0);
+    return String.fromCharCode.apply(null, arr);
+  }
+  var tw16FastKeyBuf = new Array(34).fill(48);
+  var tw16ExactShantenCache = new Map();
   function tw16ExactShanten(counts, need) {
+    if (need < 0) return -1;
+    const ck = tw16FastCountsKey(counts);
+    if (ck === null) return tw16ExactShantenRaw(counts, need);
+    const key = need + '|' + ck;
+    const hit = tw16ExactShantenCache.get(key);
+    if (hit !== undefined) return hit;
+    if (tw16ExactShantenCache.size > 20000) tw16ExactShantenCache = new Map();
+    const res = tw16ExactShantenRaw(counts, need);
+    tw16ExactShantenCache.set(key, res);
+    return res;
+  }
+  function tw16ExactShantenRaw(counts, need) {
     if (need < 0) return -1;
     const groups = ['m','p','s'].map(suit => {
       const c9 = Array.from({ length: 9 }, (_, i) => counts[suit + (i + 1)] || 0);
@@ -14080,7 +14172,40 @@ function loadUiSettings() {
     return false;
   }
 
+  var tw16WinListCache = new Map();
   function isWinningCodeList(codes, concealedSetsNeeded) {
+    if (!Array.isArray(codes)) return false;
+    const need = concealedSetsNeeded * 3 + 2;
+    if (codes.length !== need) return false;
+    const counts = Object.create(null);
+    codes.forEach(code => { if (code && !isFlower(code)) counts[code] = (counts[code] || 0) + 1; });
+    const ck = tw16FastCountsKey(counts);
+    if (ck === null) return isWinningCodeListRaw(codes, concealedSetsNeeded);
+    // 必要條件快篩：胡牌型 = 若干面子 + 1 組雀頭，三種花色與字牌四個群組中，
+    // 必須恰有一個群組張數除以3餘2（雀頭所在），其餘群組餘0；不符合者必定不是胡牌（結果與完整拆解相同）
+    {
+      const b = tw16FastKeyBuf;
+      let g = 0, twos = 0, ok = true;
+      for (let i = 0; i < 34; i++) {
+        g += b[i] - 48;
+        if (i === 8 || i === 17 || i === 26 || i === 33) {
+          const r = g % 3;
+          if (r === 2) twos++; else if (r === 1) { ok = false; break; }
+          g = 0;
+        }
+      }
+      if (!ok || twos !== 1) return false;
+    }
+    // 結果會受桌型（2人連七對）影響，所以鍵一併包含 tableMode
+    const key = concealedSetsNeeded + '|' + (Number(state.tableMode) || 4) + '|' + ck;
+    const hit = tw16WinListCache.get(key);
+    if (hit !== undefined) return hit;
+    if (tw16WinListCache.size > 30000) tw16WinListCache = new Map();
+    const res = isWinningCodeListRaw(codes, concealedSetsNeeded);
+    tw16WinListCache.set(key, res);
+    return res;
+  }
+  function isWinningCodeListRaw(codes, concealedSetsNeeded) {
     if (!Array.isArray(codes)) return false;
     const need = concealedSetsNeeded * 3 + 2;
     if (codes.length !== need) return false;
@@ -14181,6 +14306,7 @@ function loadUiSettings() {
     renderSettlementPanel(state.lastSettlement, 'host-win');
     addLog(title + '（' + tai + '台）');
     emitGameVoiceEvent(voiceTitle, 'win:' + state.handId + ':' + winner + ':' + kind + ':' + (winTile && winTile.id || ''), { kind: 'win', seat: winner });
+    tw16PlayClaimFx(winner, 'win', kind);
     renderAll();
     if (isOnlineHost()) {
       publishNetworkSettlement(state.lastSettlement, 'end-win');
@@ -14512,6 +14638,7 @@ function loadUiSettings() {
       state.melds[option.seat].push(taken);
       addLog(SEAT_NAME[option.seat] + '暗槓 ' + tileText(option.code));
       emitGameVoiceEvent(SEAT_NAME[option.seat] + '槓', 'own-kong:' + state.handId + ':' + state.lastActionId + ':' + option.seat + ':' + option.code + ':concealed', { kind: 'kong', seat: option.seat });
+      tw16PlayClaimFx(option.seat, 'kong');
       ensureStatsObject();
       state.stats.kongs += 1;
       state.kongsThisHand = (Number(state.kongsThisHand) || 0) + 1;
@@ -14525,6 +14652,7 @@ function loadUiSettings() {
       meld.push(taken);
       addLog(SEAT_NAME[option.seat] + '加槓 ' + tileText(option.code));
       emitGameVoiceEvent(SEAT_NAME[option.seat] + '槓', 'own-kong:' + state.handId + ':' + state.lastActionId + ':' + option.seat + ':' + option.code + ':add', { kind: 'kong', seat: option.seat });
+      tw16PlayClaimFx(option.seat, 'kong');
       ensureStatsObject();
       state.stats.kongs += 1;
       state.kongsThisHand = (Number(state.kongsThisHand) || 0) + 1;
@@ -14615,14 +14743,8 @@ function loadUiSettings() {
     if (!Array.isArray(codes)) return false;
     const need = concealedSetsNeeded * 3 + 2;
     if (codes.length !== need) return false;
-    // ② 先用長度和 need 快速過濾，再排序建 key
-    const sorted = codes.slice().sort((a, b) => (TILE_ORDER_MAP[a] || 999) - (TILE_ORDER_MAP[b] || 999));
-    const key = sorted.join(',') + '|' + concealedSetsNeeded;
-    if (tw16WinCheckCache.has(key)) return tw16WinCheckCache.get(key);
-    if (tw16WinCheckCache.size > 4000) { tw16WinCheckCache = new Map(); }
-    const result = isWinningCodeList(codes, concealedSetsNeeded);
-    tw16WinCheckCache.set(key, result);
-    return result;
+    // 效能優化A：快取已內建於 isWinningCodeList，這裡直接委派（省去重複排序）
+    return isWinningCodeList(codes, concealedSetsNeeded);
   }
   let tw16SmartDiscardCache = { key: '', tileId: '', detail: null };
   let tw16SmartShapeCache = new Map();
@@ -14670,9 +14792,15 @@ function loadUiSettings() {
 
   function smartAiApproxShape(codes, concealedSetsNeeded) {
     const clean = smartAiCodesFromHand(codes);
-    const key = smartAiShapeCacheKey(clean, concealedSetsNeeded);
+    // 效能優化：以牌張數量字串當鍵（同一組牌、不同排列 → 同鍵，與原本排序鍵語意一致），並把桌型納入鍵
+    let key;
+    {
+      const kc = tw16FastCountsKey(smartAiCountsFromCodes(clean));
+      key = kc === null ? smartAiShapeCacheKey(clean, concealedSetsNeeded)
+                        : String(concealedSetsNeeded) + '|' + (Number(state.tableMode) || 4) + '#' + kc;
+    }
     if (tw16SmartShapeCache.has(key)) return tw16SmartShapeCache.get(key);
-    if (tw16SmartShapeCache.size > 800) tw16SmartShapeCache = new Map();
+    if (tw16SmartShapeCache.size > 20000) tw16SmartShapeCache = new Map();
     const need = Math.max(0, Number(concealedSetsNeeded) || 0);
     // ⑤ 先用快取版胡牌判斷，命中率高且避免重跑完整DP
     if (isWinningCodeListCached(clean, need)) {
@@ -20678,8 +20806,8 @@ if (action === 'submenu-tiles') {
         list = list.slice(0, -1);
       }
     }
-    localStorage.removeItem(GAME_SAVE_POINTS_STORAGE_KEY);
-    localStorage.removeItem(GAME_LEGACY_SAVE_KEY);
+    try { localStorage.removeItem(GAME_SAVE_POINTS_STORAGE_KEY); } catch (e) {}
+    try { localStorage.removeItem(GAME_LEGACY_SAVE_KEY); } catch (e) {}
     return [];
   }
 
@@ -20838,8 +20966,8 @@ if (action === 'submenu-tiles') {
 
 
   function clearAllGameSavePoints() {
-    localStorage.removeItem(GAME_SAVE_POINTS_STORAGE_KEY);
-    localStorage.removeItem(GAME_LEGACY_SAVE_KEY);
+    try { localStorage.removeItem(GAME_SAVE_POINTS_STORAGE_KEY); } catch (e) {}
+    try { localStorage.removeItem(GAME_LEGACY_SAVE_KEY); } catch (e) {}
     addLog('已清除所有還原點');
     openMenuSubmenu('儲存牌局', '<button class="btn" data-menu="save">儲存牌局</button><button class="btn" data-menu="restore">還原牌局</button><button class="btn red" data-menu="clear-save">清除所有還原點</button>');
   }
@@ -22771,95 +22899,91 @@ function showIntegrityReport(precomputed) {
     } catch(e) {}
   }
 
-  function tw16ClaimFloat() {
+  // tw16_claim_fx_20261016: 吃／碰／槓／胡 一次性吸睛特效。
+  // 以事件觸發（executeClaim／completeOwnKong／endHandWin，以及訪客端的 snapshot／settlement 偵測），
+  // 不再由 renderAll 輪詢；四個座位（含自己）一律播放，特效定位在該座位手牌靠桌面中央的一側。
+  function tw16PlayClaimFx(seat, type, winKind) {
     try {
-      if (!_tw16ClaimFlash) return;
+      const CFG = {
+        chi:  { label: '吃', c1: '#22d3ee', c2: '#86efac', n: 16, r: 120, ms: 1300, scale: 1 },
+        pong: { label: '碰', c1: '#fb923c', c2: '#fde047', n: 16, r: 120, ms: 1300, scale: 1 },
+        kong: { label: '槓', c1: '#c084fc', c2: '#f9a8d4', n: 22, r: 150, ms: 1500, scale: 1.15 },
+        win:  { label: winKind === 'self' ? '自摸' : '胡', c1: '#ef4444', c2: '#fbbf24', n: 36, r: 210, ms: 2200, scale: 1.55 }
+      };
+      const cfg = CFG[type];
+      if (!cfg) return;
       const tbl = document.getElementById('table');
       if (!tbl) return;
       const viewSeat = state && state.viewSeat;
-      if (!viewSeat) return;
-      if (_tw16ClaimFlash.until < Date.now()) {
-        _tw16ClaimFlash = null;
-        const _oldEl = document.getElementById('_claimFloatEl');
-        if (_oldEl) _oldEl.style.display = 'none';
-        return;
-      }
-      const seats = ['east','south','west','north'];
-      const colorMap = { chi:'#ef4444', pong:'#ef4444', kong:'#ef4444' };
-      const labelMap = { chi:'吃', pong:'碰', kong:'槓' };
-      const handIdMap = { bottom:'handBottom', top:'handTop', left:'handLeft', right:'handRight' };
-      const dist = ((seats.indexOf(_tw16ClaimFlash.seat) - seats.indexOf(viewSeat)) + 4) % 4;
-      const pos = ['bottom','right','top','left'][dist];
+      const seats = ['east', 'south', 'west', 'north'];
+      if (!viewSeat || seats.indexOf(seat) < 0) return;
+      // 去重：同一事件可能同時經 settlement 與 snapshot 抵達訪客端
+      const now = Date.now();
+      const key = seat + ':' + type;
+      if (_tw16FxLast[key] && now - _tw16FxLast[key] < (type === 'win' ? 4000 : 1200)) return;
+      _tw16FxLast[key] = now;
+      const handIdMap = { bottom: 'handBottom', top: 'handTop', left: 'handLeft', right: 'handRight' };
+      const dist = ((seats.indexOf(seat) - seats.indexOf(viewSeat)) + 4) % 4;
+      const pos = ['bottom', 'right', 'top', 'left'][dist];
       const handEl = document.getElementById(handIdMap[pos]);
       if (!handEl) return;
       const hr = handEl.getBoundingClientRect();
       const tr = tbl.getBoundingClientRect();
       if (!hr.width && !hr.height) return;
-      let el = document.getElementById('_claimFloatEl');
-      if (!el) {
-        el = document.createElement('div');
-        el.id = '_claimFloatEl';
-        el.className = 'tw16-claim-float';
-        tbl.appendChild(el);
+      const fs = Math.round(Math.max(52, Math.min(tr.width * 0.15, 88)) * cfg.scale);
+      const halfW = fs * cfg.label.length * 0.6 + 10;
+      const gap = Math.round(fs * 0.8);
+      let cx = (hr.left + hr.right) / 2 - tr.left;
+      let cy = (hr.top + hr.bottom) / 2 - tr.top;
+      if (pos === 'bottom') cy = hr.top - tr.top - gap;
+      else if (pos === 'top') cy = hr.bottom - tr.top + gap;
+      else if (pos === 'left') cx = hr.right - tr.left + gap;
+      else cx = hr.left - tr.left - gap;
+      cx = Math.max(halfW, Math.min(tr.width - halfW, cx));
+      cy = Math.max(fs, Math.min(tr.height - fs, cy));
+      const root = document.createElement('div');
+      root.className = 'tw16-fx tw16-fx-' + type;
+      root.style.cssText = 'left:' + cx + 'px;top:' + cy + 'px;--fx-c1:' + cfg.c1 + ';--fx-c2:' + cfg.c2 + ';--fx-fs:' + fs + 'px;--fx-sw:' + Math.max(3, Math.round(fs * 0.07)) + 'px;--fx-ms:' + cfg.ms + 'ms;';
+      const parts = ['<i class="tw16-fx-rays"></i><i class="tw16-fx-ring"></i><i class="tw16-fx-ring r2"></i>'];
+      for (let i = 0; i < cfg.n; i++) {
+        const ang = (i / cfg.n) * Math.PI * 2 + (Math.random() - 0.5) * 0.45;
+        const d = cfg.r * (0.55 + Math.random() * 0.75);
+        const sz = 5 + Math.random() * (type === 'win' ? 9 : 6);
+        const col = i % 2 ? cfg.c1 : cfg.c2;
+        const sq = type === 'win' && i % 3 === 0 ? ' sq' : '';
+        parts.push('<i class="tw16-fx-p' + sq + '" style="--dx:' + Math.round(Math.cos(ang) * d) + 'px;--dy:' + Math.round(Math.sin(ang) * d) + 'px;--s:' + sz.toFixed(1) + 'px;--pc:' + col + ';--d:' + (Math.random() * 0.09).toFixed(2) + 's;--pd:' + (0.75 + Math.random() * 0.45).toFixed(2) + 's;--rot:' + Math.round((Math.random() - 0.5) * 540) + 'deg;"></i>');
       }
-      const cx = (hr.left + hr.right) / 2 - tr.left;
-      let cy;
-      if (pos === 'bottom') cy = hr.top - tr.top - 26;
-      else if (pos === 'top') cy = hr.bottom - tr.top + 26;
-      else cy = (hr.top + hr.bottom) / 2 - tr.top;
-      let cx2 = cx;
-      if (pos === 'left') cx2 = hr.right - tr.left + 30;
-      else if (pos === 'right') cx2 = hr.left - tr.left - 30;
-      el.style.display = 'block';
-      el.style.left = cx2 + 'px';
-      el.style.top = cy + 'px';
-      el.style.color = colorMap[_tw16ClaimFlash.type] || '#22d3ee';
-      el.textContent = labelMap[_tw16ClaimFlash.type] || '';
+      parts.push('<b class="tw16-fx-txt">' + cfg.label + '</b>');
+      root.innerHTML = parts.join('');
+      tbl.appendChild(root);
+      let flash = null;
+      if (type === 'win') {
+        flash = document.createElement('div');
+        flash.className = 'tw16-fx-flash';
+        flash.style.setProperty('--fx-x', cx + 'px');
+        flash.style.setProperty('--fx-y', cy + 'px');
+        tbl.appendChild(flash);
+      }
+      setTimeout(function() {
+        try { root.remove(); if (flash) flash.remove(); } catch (e) {}
+      }, cfg.ms + 250);
     } catch (e) {}
   }
 
-  function tw16WinFloat() {
+  // tw16_render_step_guard_20260922: renderAll 由二十多個渲染子步驟依序組成，任何一步
+  // 若對非預期的資料形狀（例如網路同步過渡瞬間的殘缺 state）拋出例外，舊版會讓整個
+  // renderAll 直接中止在那一行，後面所有步驟——包括本函式尾端負責「推進自動回合」的
+  // ensureAutoDrivenTurn——完全不會執行到。對玩家來說就是畫面卡住、電腦托管不出牌、
+  // 倒數也不會繼續，看起來像整局遊戲中止。這裡把每個渲染子步驟包一層輕量防護：單一步驟
+  // 失敗只記一筆事件並跳過該步驟，其餘步驟（以及最重要的自動回合推進）照常執行，不會
+  // 因為一次局部渲染例外就讓整個流程卡死。正常情況下（無例外）行為與原本完全相同。
+  function tw16RunRenderStep(label, fn) {
     try {
-      if (!_tw16WinFlash) return;
-      if (_tw16WinFlash.until < Date.now()) {
-        _tw16WinFlash = null;
-        const _oldW = document.getElementById('_winFloatEl');
-        if (_oldW) _oldW.style.display = 'none';
-        return;
-      }
-      const tbl = document.getElementById('table');
-      if (!tbl) return;
-      const viewSeat = state && state.viewSeat;
-      if (!viewSeat) return;
-      const seats = ['east','south','west','north'];
-      const handIdMap = { bottom:'handBottom', top:'handTop', left:'handLeft', right:'handRight' };
-      const dist = ((seats.indexOf(_tw16WinFlash.seat) - seats.indexOf(viewSeat)) + 4) % 4;
-      const pos = ['bottom','right','top','left'][dist];
-      const handEl = document.getElementById(handIdMap[pos]);
-      if (!handEl) return;
-      const hr = handEl.getBoundingClientRect();
-      const tr = tbl.getBoundingClientRect();
-      if (!hr.width && !hr.height) return;
-      let w = document.getElementById('_winFloatEl');
-      if (!w) {
-        w = document.createElement('div');
-        w.id = '_winFloatEl';
-        w.className = 'tw16-win-float';
-        w.textContent = '胡';
-        tbl.appendChild(w);
-      }
-      const cx = (hr.left + hr.right) / 2 - tr.left;
-      let cy;
-      if (pos === 'bottom') cy = hr.top - tr.top - 30;
-      else if (pos === 'top') cy = hr.bottom - tr.top + 30;
-      else cy = (hr.top + hr.bottom) / 2 - tr.top;
-      let cx2 = cx;
-      if (pos === 'left') cx2 = hr.right - tr.left + 34;
-      else if (pos === 'right') cx2 = hr.left - tr.left - 34;
-      w.style.display = 'block';
-      w.style.left = cx2 + 'px';
-      w.style.top = cy + 'px';
-    } catch (e) {}
+      return fn();
+    } catch (e) {
+      try { recordNetworkEvent('render-step-error', 'renderAll 執行「' + label + '」時發生例外，已跳過並繼續其餘渲染', { label, error: String((e && e.message) || e) }); } catch (_) {}
+      return undefined;
+    }
   }
 
   function renderAll() {
@@ -22868,39 +22992,43 @@ function showIntegrityReport(precomputed) {
     const serial = renderSerial;
     if (serial !== renderSerial) return;
     const map = displayMap();
-    dom.roundStatus.textContent = WIND_NAME[state.windRound] + state.handNo + '局／剩餘' + state.wall.length + '張／莊' + SEAT_NAME[state.dealer].replace('家','') + (isNetworked() ? '／' + networkStatusText() : '') + (state.continuousRun.enabled ? '／連跑' + state.continuousRun.remaining : '');
-    updateScoreChipLine();
-    if (dom.autoBtn) {
-      dom.autoBtn.textContent = state.seatAutoPlay[state.viewSeat] ? '停止托管' : '電腦托管';
-      dom.autoBtn.classList.toggle('autoplay-on', !!state.seatAutoPlay[state.viewSeat]);
-    }
-    updateRoomText();
-    updateAdaptiveLayout();
-    applyUiTheme();
-    updateBottomSeatTouchClass(map);
-    prepareBottomHandScaleBeforeHandRender('renderAll-before-hands');
-    const bottomHandDrawScrollSnapshot = captureBottomHandScrollBeforeHandRender(map);
-    renderHands(map);
-    fitBottomHandToTableWidthAfterOpening();
-    restoreBottomHandScrollAfterDrawRender(bottomHandDrawScrollSnapshot);
-    ensureBottomHandPinchListeners();
-    renderMelds(map);
-    renderWall(map);
-    renderDiscards();
-    updateMiniDashboard();
-    positionTopWindowHudAdaptive();
-    positionTileContainers(map);
-    restoreBottomHandScrollAfterDrawRender(bottomHandDrawScrollSnapshot);
-    scheduleTingWaitAssistAdaptivePlacement();
-    positionOpeningFloatingElements();
-    positionNetworkWaitHint();
-    renderLabels(map);
-    renderArrow(map);
-    renderActionPanel();
-    refreshAiSuggestFloatingLabels();
-    renderTingDangerExamplesPanel();
-    updateInterface329Extras(map);
-    updateBattleStatsWindow();
+    tw16RunRenderStep('roundStatus', () => {
+      dom.roundStatus.textContent = WIND_NAME[state.windRound] + state.handNo + '局／剩餘' + state.wall.length + '張／莊' + SEAT_NAME[state.dealer].replace('家','') + (isNetworked() ? '／' + networkStatusText() : '') + (state.continuousRun.enabled ? '／連跑' + state.continuousRun.remaining : '');
+    });
+    tw16RunRenderStep('updateScoreChipLine', () => updateScoreChipLine());
+    tw16RunRenderStep('autoBtn', () => {
+      if (dom.autoBtn) {
+        dom.autoBtn.textContent = state.seatAutoPlay[state.viewSeat] ? '停止托管' : '電腦托管';
+        dom.autoBtn.classList.toggle('autoplay-on', !!state.seatAutoPlay[state.viewSeat]);
+      }
+    });
+    tw16RunRenderStep('updateRoomText', () => updateRoomText());
+    tw16RunRenderStep('updateAdaptiveLayout', () => updateAdaptiveLayout());
+    tw16RunRenderStep('applyUiTheme', () => applyUiTheme());
+    tw16RunRenderStep('updateBottomSeatTouchClass', () => updateBottomSeatTouchClass(map));
+    tw16RunRenderStep('prepareBottomHandScaleBeforeHandRender', () => prepareBottomHandScaleBeforeHandRender('renderAll-before-hands'));
+    const bottomHandDrawScrollSnapshot = tw16RunRenderStep('captureBottomHandScrollBeforeHandRender', () => captureBottomHandScrollBeforeHandRender(map));
+    tw16RunRenderStep('renderHands', () => renderHands(map));
+    tw16RunRenderStep('fitBottomHandToTableWidthAfterOpening', () => fitBottomHandToTableWidthAfterOpening());
+    tw16RunRenderStep('restoreBottomHandScrollAfterDrawRender-1', () => restoreBottomHandScrollAfterDrawRender(bottomHandDrawScrollSnapshot));
+    tw16RunRenderStep('ensureBottomHandPinchListeners', () => ensureBottomHandPinchListeners());
+    tw16RunRenderStep('renderMelds', () => renderMelds(map));
+    tw16RunRenderStep('renderWall', () => renderWall(map));
+    tw16RunRenderStep('renderDiscards', () => renderDiscards());
+    tw16RunRenderStep('updateMiniDashboard', () => updateMiniDashboard());
+    tw16RunRenderStep('positionTopWindowHudAdaptive', () => positionTopWindowHudAdaptive());
+    tw16RunRenderStep('positionTileContainers', () => positionTileContainers(map));
+    tw16RunRenderStep('restoreBottomHandScrollAfterDrawRender-2', () => restoreBottomHandScrollAfterDrawRender(bottomHandDrawScrollSnapshot));
+    tw16RunRenderStep('scheduleTingWaitAssistAdaptivePlacement', () => scheduleTingWaitAssistAdaptivePlacement());
+    tw16RunRenderStep('positionOpeningFloatingElements', () => positionOpeningFloatingElements());
+    tw16RunRenderStep('positionNetworkWaitHint', () => positionNetworkWaitHint());
+    tw16RunRenderStep('renderLabels', () => renderLabels(map));
+    tw16RunRenderStep('renderArrow', () => renderArrow(map));
+    tw16RunRenderStep('renderActionPanel', () => renderActionPanel());
+    tw16RunRenderStep('refreshAiSuggestFloatingLabels', () => refreshAiSuggestFloatingLabels());
+    tw16RunRenderStep('renderTingDangerExamplesPanel', () => renderTingDangerExamplesPanel());
+    tw16RunRenderStep('updateInterface329Extras', () => updateInterface329Extras(map));
+    tw16RunRenderStep('updateBattleStatsWindow', () => updateBattleStatsWindow());
     // tw16_ai_suggest_self_heal_20260704: AI建議框有時會不定時漏掉（不只是縮放手勢結束
     // 那一種情境），推測是計算當下手牌資料處於某個瞬間不一致的狀態（例如摸花自動補花
     // 的過渡瞬間）。與其花時間精確追出每一種競態時機，改成自我修復：渲染完成後檢查
@@ -22940,19 +23068,22 @@ function showIntegrityReport(precomputed) {
         }
       }
     } catch (_) {}
-    if (isGuestSyncRequired()) updateGuestSyncStatus('render');
+    tw16RunRenderStep('updateGuestSyncStatus', () => { if (isGuestSyncRequired()) updateGuestSyncStatus('render'); });
     if (serial !== renderSerial) return;
-    ensureAutoDrivenTurn('render');
-    if (isOnlineHost() && hasStartedNetworkHand(state)) {
-      const now = Date.now();
-      if (now - Number(net.lastRenderSnapshotRequestAt || 0) >= NETWORK_RENDER_SNAPSHOT_MIN_INTERVAL_MS) {
-        net.lastRenderSnapshotRequestAt = now;
-        scheduleNetworkSnapshot('render');
+    // tw16_render_step_guard_20260922: ensureAutoDrivenTurn 是推進電腦托管／自動回合的
+    // 關鍵呼叫，獨立包一層防護，確保就算上面任何渲染步驟或這裡的網路快照排程出錯，
+    // 自動回合推進與後面的動畫觸發仍然會執行，不會整段卡住。
+    tw16RunRenderStep('ensureAutoDrivenTurn', () => ensureAutoDrivenTurn('render'));
+    tw16RunRenderStep('networkRenderSnapshot', () => {
+      if (isOnlineHost() && hasStartedNetworkHand(state)) {
+        const now = Date.now();
+        if (now - Number(net.lastRenderSnapshotRequestAt || 0) >= NETWORK_RENDER_SNAPSHOT_MIN_INTERVAL_MS) {
+          net.lastRenderSnapshotRequestAt = now;
+          scheduleNetworkSnapshot('render');
+        }
       }
-    }
-    tw16Tri();
-    tw16ClaimFloat();
-    tw16WinFloat();
+    });
+    tw16RunRenderStep('tw16Tri', () => tw16Tri());
   }
 
 
@@ -22998,8 +23129,15 @@ function showIntegrityReport(precomputed) {
         card.className = 'tw16-mini-dashboard-card' + (seat === state.turn ? ' active' : '') + (!isSeatActiveInTable(seat) ? ' tw16-mini-dashboard-inactive' : '') + (_deciding ? ' deciding' : '') + (_pausedBy ? ' tw16-paused-by-card' : '');
         const name = document.createElement('div');
         name.className = 'tw16-mini-dashboard-seat';
-        const dealerPrefix = dealerDashboardPrefixText(seat);
-        name.innerHTML = (dealerPrefix ? '<span class="tw16-mini-dashboard-dealer">' + escapeHtml(dealerPrefix) + '</span>' : '') + '<span class="tw16-mini-dashboard-name-text' + (seat === state.viewSeat ? ' tw16-mini-dashboard-self' : '') + '">' + escapeHtml(seatLabelText(seat)) + '</span>';
+        const dealerPrefix = (seat === state.dealer) ? '莊' : '';
+        name.innerHTML = (dealerPrefix ? '<span class="tw16-mini-dashboard-dealer">' + escapeHtml(dealerPrefix) + '</span>' : '') + (function(){
+            const _full = seatLabelText(seat);
+            const _full2 = String(_full || '');
+            const _wind = SEAT_NAME[seat] ? SEAT_NAME[seat].charAt(0) : '';
+            const _rest = (_wind && _full2.indexOf(SEAT_NAME[seat]) === 0) ? _full2.slice(SEAT_NAME[seat].length) : _full2;
+            const _cls = 'tw16-mini-dashboard-name-text' + (seat === state.viewSeat ? ' tw16-mini-dashboard-self' : '');
+            return (_wind ? '<span class="tw16-mini-dashboard-wind-seal' + (seat === state.viewSeat ? ' self' : '') + '">' + escapeHtml(_wind) + '</span>' : '') + (_rest ? '<span class="' + _cls + '">' + escapeHtml(_rest) + '</span>' : '');
+          })();
         const chip = document.createElement('div');
         chip.className = 'tw16-mini-dashboard-chip';
         chip.innerHTML = escapeHtml(String(state.chips[seat] ?? 0)) + '<span class="tw16-mini-dashboard-chip-plus" style="display:none">+</span>';
@@ -23029,7 +23167,31 @@ function showIntegrityReport(precomputed) {
           const p = chip.querySelector('.tw16-mini-dashboard-chip-plus');
           if (p) p.style.display = '';
         }
-        card.append(name, chip, countdown);
+        /* 莊字移到名稱右邊緊貼 */
+          { const _d = name.querySelector('.tw16-mini-dashboard-dealer'); const _n = name.querySelector('.tw16-mini-dashboard-name-text');
+            if (_d && _n) _n.after(_d); else if (_d) name.appendChild(_d);
+            if (_d) card.classList.add('has-dealer-mark'); }
+          card.append(name, chip, countdown);
+          /* 連N拉N：縮成 2×2 四字方印，貼在當事者儀表板格右下角 */
+          { const _rep = currentDealerRepeatCount();
+            if (seat === state.dealer && _rep > 0) {
+              const stamp = document.createElement('div');
+              stamp.className = 'tw16-mini-dashboard-repeat-stamp' + (_rep > 9 ? ' wide' : '');
+              stamp.setAttribute('aria-label', '連' + _rep + '拉' + _rep);
+              stamp.innerHTML = '<span>連</span><span>' + _rep + '</span><span>拉</span><span>' + _rep + '</span>';
+              card.classList.add('has-repeat-stamp');
+              card.appendChild(stamp);
+              /* 方印依格子實際高寬自適應，避免壓到其他元件 */
+              const _fitStamp = () => {
+                if (!card.isConnected) return;
+                const _h = card.clientHeight, _w = card.clientWidth;
+                if (!_h || !_w) return;
+                const _sz = Math.max(12, Math.min(19, _h - 5, _w * 0.24));
+                card.style.setProperty('--tw-stamp', _sz.toFixed(1) + 'px');
+              };
+              requestAnimationFrame(() => requestAnimationFrame(_fitStamp));
+              if (typeof ResizeObserver !== 'undefined') { try { new ResizeObserver(_fitStamp).observe(card); } catch (_e) {} }
+            } }
         grid.appendChild(card);
       });
       miniDashboardRenderKey = renderKey;
@@ -25453,6 +25615,31 @@ function showIntegrityReport(precomputed) {
     return 0;
   }
 
+  var tw16SampleWaitCache = new Map();
+  var TW16_CODE_GROUP = (function () {
+    const m = new Map();
+    for (let i = 0; i < TW16_FAST_KEY_CODES.length; i++) m.set(TW16_FAST_KEY_CODES[i], i < 9 ? 0 : i < 18 ? 1 : i < 27 ? 2 : 3);
+    return m;
+  })();
+  var tw16SWG = [0, 0, 0, 0]; // 最近一次 tw16SampleWaitMap 手牌的 [萬,筒,條,字] 張數
+  /* 依手牌內容（含桌型、所需面子數）取得「摸進某張是否胡牌」的結果表；手牌含花牌／非標準牌碼時回傳 null，改走原始計算 */
+  function tw16SampleWaitMap(hand, need) {
+    if (!Array.isArray(hand)) return null;
+    const counts = Object.create(null);
+    for (let i = 0; i < hand.length; i++) { const c = hand[i]; counts[c] = (counts[c] || 0) + 1; }
+    const ck = tw16FastCountsKey(counts);
+    if (ck === null) return null;
+    { const b = tw16FastKeyBuf; let g = 0, gi = 0;
+      for (let i = 0; i < 34; i++) { g += b[i] - 48; if (i === 8 || i === 17 || i === 26 || i === 33) { tw16SWG[gi++] = g; g = 0; } } }
+    const key = need + '|' + (Number(state.tableMode) || 4) + '|' + ck;
+    let m = tw16SampleWaitCache.get(key);
+    if (!m) {
+      if (tw16SampleWaitCache.size > 8000) tw16SampleWaitCache = new Map();
+      m = new Map();
+      tw16SampleWaitCache.set(key, m);
+    }
+    return m;
+  }
   function tw16MonteCarloDangerEntries(seat, targetSeat, sampleCount, limit, candidateCodes, forceBuild) {
     if (!SEATS.includes(seat) || !SEATS.includes(targetSeat) || seat === targetSeat) return [];
     // tw16_exact_first_20260708: 精確推估優先——結構可行性（smartAiStructuralWaitShapeCount，
@@ -25501,9 +25688,30 @@ function showIntegrityReport(precomputed) {
     if (peekSamples.length >= 24) {
       peekSamples.forEach(function(sample) {
         let hitAny = false;
+        // 效能優化：同一手牌「摸進某張是否胡牌」與候選清單無關，依手牌內容快取，重複樣本與重複呼叫不再重算
+        const waitMap = tw16SampleWaitMap(sample.hand, concealedSetsNeeded);
+        const g0 = tw16SWG[0], g1 = tw16SWG[1], g2 = tw16SWG[2], g3 = tw16SWG[3];
         candidateList.forEach(function(code) {
-          const trial = sample.hand.concat([code]);
-          if (isWinningCodeListCached(trial, concealedSetsNeeded)) {
+          let hit;
+          if (waitMap) {
+            hit = waitMap.get(code);
+            if (hit === undefined) {
+              // 必要條件快篩（同 isWinningCodeList）：摸進此牌後，四個群組須恰一組餘2、其餘餘0，否則必不胡
+              let pass = true;
+              const gi = TW16_CODE_GROUP.get(code);
+              if (gi !== undefined) {
+                const r0 = (g0 + (gi === 0 ? 1 : 0)) % 3, r1 = (g1 + (gi === 1 ? 1 : 0)) % 3,
+                      r2 = (g2 + (gi === 2 ? 1 : 0)) % 3, r3 = (g3 + (gi === 3 ? 1 : 0)) % 3;
+                const twos = (r0 === 2 ? 1 : 0) + (r1 === 2 ? 1 : 0) + (r2 === 2 ? 1 : 0) + (r3 === 2 ? 1 : 0);
+                if (r0 === 1 || r1 === 1 || r2 === 1 || r3 === 1 || twos !== 1) pass = false;
+              }
+              hit = pass ? !!isWinningCodeListCached(sample.hand.concat([code]), concealedSetsNeeded) : false;
+              waitMap.set(code, hit);
+            }
+          } else {
+            hit = isWinningCodeListCached(sample.hand.concat([code]), concealedSetsNeeded);
+          }
+          if (hit) {
             waitFreq[code] = (waitFreq[code] || 0) + 1;
             hitAny = true;
           }
@@ -29045,7 +29253,7 @@ function concealedKongOwnerOfMeld(meld) {
   async function deleteCustomTileSkinSetRecord(id) {
     if (!id) return false;
     await customTileSkinSqlRequest('readwrite', store => store.delete(id));
-    if (localStorage.getItem(CUSTOM_TILE_ACTIVE_SKIN_KEY) === id) localStorage.removeItem(CUSTOM_TILE_ACTIVE_SKIN_KEY);
+    try { if (localStorage.getItem(CUSTOM_TILE_ACTIVE_SKIN_KEY) === id) localStorage.removeItem(CUSTOM_TILE_ACTIVE_SKIN_KEY); } catch (e) {}
     return true;
   }
 
@@ -37323,6 +37531,538 @@ body.tw16-gallery-open #menuBtn, body.tw16-gallery-open .result{display:none}
 .ai-suggest-wrapper{cursor:pointer!important;touch-action:none!important;}
 .ai-suggest-wrapper>.tile.tw16-ai-suggest-inner-tile{pointer-events:none!important;}
 </style>
+<style id="tw-back-glass-20261015">
+/* 牌背面：寫實玻璃／壓克力質感——不加亮點與漸層噴光，改用真實的光學細節：
+   頂部窗光反射、斜面（倒角）受光與背光、底部厚度陰影、接觸陰影。
+   保留每局隨機底色、邊框色與外光暈，不動濾鏡與其他元件。 */
+html body .app .tile.back,
+html body .actionTileStrip .tile.back {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.30) 0%, rgba(255,255,255,.09) 13%, rgba(255,255,255,0) 32%),
+    linear-gradient(135deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,0) 44%, rgba(0,0,0,.12) 100%),
+    radial-gradient(105% 95% at 50% 42%, rgba(255,255,255,.07) 0%, rgba(255,255,255,0) 58%, rgba(0,0,0,.12) 100%),
+    var(--tw16-random-back-bg) !important;
+  box-shadow:
+    inset 1px 1px 0 rgba(255,255,255,.50),
+    inset -1px -1px 0 rgba(0,0,0,.18),
+    inset 0 2px 3px rgba(255,255,255,.16),
+    inset 0 -3px 4px rgba(0,0,0,.12),
+    0 1px 1px rgba(0,0,0,.50),
+    0 3px 6px rgba(0,0,0,.34),
+    0 0 10px var(--tw16-random-back-glow) !important;
+}
+</style>
+
+<style id="nx-neo-aurora-ui">
+/* ================================================================
+   NEO-AURORA GLOW · 純燈光層（light-only overlay）
+   ────────────────────────────────────────────────────────────────
+   本區塊只有「光」：box-shadow / text-shadow / outline / 加法光層。
+   刻意完全不設定任何元素的 background、background-color、border、
+   color、backdrop-filter、opacity —— 包含牌張、牌面圖庫、選單、
+   面板、輸入框，因此所有底色與原視覺 100% 保持不變，
+   單純在原有外觀「上面加上光」。
+   ================================================================ */
+
+:root{
+  --nx-cyan:34,211,238;
+  --nx-blue:59,130,246;
+  --nx-violet:168,85,247;
+  --nx-mint:52,211,153;
+  --nx-amber:251,191,36;
+  --nx-red:239,68,68;
+}
+
+@keyframes nxAmbientDrift{
+  0%   { transform:translate3d(-4%,-3%,0) scale(1.06); }
+  50%  { transform:translate3d(4%,3%,0)  scale(1.16); }
+  100% { transform:translate3d(-2%,5%,0)  scale(1.09); }
+}
+@keyframes nxSeatGlow{
+  0%,100%{ filter:drop-shadow(0 0 5px rgba(255,232,90,.45)); }
+  50%    { filter:drop-shadow(0 0 16px rgba(255,232,90,.95)); }
+}
+
+/* ── 1. 牌桌霓虹光暈：保留原陰影，只往外/往內疊加光 ────────────── */
+html body .app .table{
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.08),
+    inset 0 -18px 28px rgba(0,0,0,.18),
+    inset 0 0 140px rgba(var(--nx-cyan),.13),
+    inset 0 0 0 3px rgba(var(--nx-cyan),.16),
+    0 0 60px rgba(var(--nx-cyan),.22),
+    0 0 130px rgba(var(--nx-blue),.13)!important;
+}
+
+/* ── 2. 環境極光：加法光線（screen 混合＝只加亮、不壓暗），
+       不接收任何點擊，也不覆蓋任何元素的顏色 ──────────────────── */
+html body .app::after{
+  content:"";
+  position:absolute;
+  inset:-12%;
+  z-index:40;
+  pointer-events:none;
+  mix-blend-mode:screen;
+  opacity:.40;
+  background:
+    radial-gradient(34% 30% at 16% 20%, rgba(var(--nx-cyan),.32), transparent 72%),
+    radial-gradient(38% 34% at 84% 16%, rgba(var(--nx-violet),.28), transparent 74%),
+    radial-gradient(40% 36% at 78% 86%, rgba(var(--nx-blue),.28), transparent 74%),
+    radial-gradient(30% 28% at 22% 84%, rgba(var(--nx-mint),.24), transparent 72%);
+  animation:nxAmbientDrift 36s ease-in-out infinite alternate;
+  will-change:transform;
+}
+
+/* ── 3. 彈窗外緣光：只加光暈與原有深度的投影，不動底色 ────────── */
+html body .tw16-gallery-card,
+html body .tw16-lobby-card,
+html body .tw16-lobby-key-sheet-card,
+html body .customTileImportSheet,
+html body .customTileImportEditPanel,
+html body .saveRestorePanel{
+  box-shadow:
+    0 20px 44px rgba(0,0,0,.50),
+    0 0 0 1px rgba(var(--nx-cyan),.18),
+    0 0 34px rgba(var(--nx-cyan),.26),
+    0 0 92px rgba(var(--nx-blue),.15)!important;
+}
+/* 結算面板本身是紅金配色，光暈也跟著走暖色系 */
+html body .result{
+  box-shadow:
+    0 20px 40px rgba(0,0,0,.35),
+    0 0 0 1px rgba(var(--nx-amber),.22),
+    0 0 36px rgba(var(--nx-amber),.30),
+    0 0 96px rgba(var(--nx-red),.22)!important;
+}
+
+/* ── 4. 文字霓虹：只加 text-shadow ──────────────────────────── */
+html body #roundStatus,
+html body #roomText,
+html body .tw16-gallery-card header strong,
+html body .tw16-lobby-key-sheet-title,
+html body .settlement-word{
+  text-shadow:
+    0 0 10px rgba(var(--nx-cyan),.55),
+    0 0 28px rgba(var(--nx-blue),.35),
+    0 2px 6px rgba(0,0,0,.70)!important;
+}
+html body .seatLabel{
+  text-shadow:0 0 10px rgba(140,210,255,.45),0 2px 5px rgba(0,0,0,.72)!important;
+}
+html body .seatLabel.active{
+  animation:nxSeatGlow 2.6s ease-in-out infinite!important;
+}
+
+/* ── 5. 互動光暈：僅滑鼠裝置的 hover，且排除 :active，
+       所以原本的按壓回饋動畫與手感完全不受影響 ────────────────── */
+@media (hover:hover){
+  html body .btn:hover:not(:disabled):not(:active),
+  html body button:hover:not(:disabled):not(:active){
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,.18),
+      0 0 18px rgba(var(--nx-cyan),.38),
+      0 0 44px rgba(var(--nx-blue),.24)!important;
+  }
+  /* 牌張 hover：只用 outline 畫霓虹外框（不佔版面、不取代原陰影） */
+  html body .app .tile:hover,
+  html body .app .tile.face-image:hover{
+    outline:2px solid rgba(var(--nx-cyan),.62)!important;
+    outline-offset:1px!important;
+  }
+}
+
+/* ── 6. 鍵盤焦點光環（不影響滑鼠操作與版面） ────────────────── */
+html body :focus-visible{
+  outline:2px solid rgba(var(--nx-cyan),.80)!important;
+  outline-offset:2px!important;
+}
+
+/* ── 7. 尊重系統「減少動態」設定 ────────────────────────────── */
+@media (prefers-reduced-motion:reduce){
+  html body .app::after,
+  html body .seatLabel.active{ animation:none!important; }
+}
+
+</style>
+<style id="tw-polish-faces-buttons-20261017">
+/* ================================================================
+   細緻化層：牌面 × 功能按鈕（只動「畫面質感」，不動尺寸、位置、牌局邏輯）
+   ① 牌面：圖片牌加一圈「斜面受光」——上緣亮邊、右下暗邊，牌看起來有厚度
+   ② 手牌：多層柔和落影（用 :where 壓低權重，不蓋過摸牌、AI建議等狀態）
+   ③ 吃碰槓胡跳過：玻璃托盤＋漸層字＋按壓回彈；胡牌用金色，跳過用低調灰
+   ④ 上方按鈕：只調整放開時的彈性回彈，外觀與狀態樣式維持原樣
+   ================================================================ */
+
+/* ① 牌面斜面受光 ------------------------------------------------ */
+html body .app .tile.face-image:not(.tw16-drawn-mark)::after,
+html body .app .tile.face-image.custom-tile-image:not(.tw16-drawn-mark)::after{
+  content:""!important;
+  display:block!important;
+  position:absolute!important;
+  inset:0!important;
+  z-index:3!important;
+  border-radius:inherit!important;
+  background:transparent!important;
+  pointer-events:none!important;
+  box-shadow:
+    inset 0 0 0 .5px rgba(30,20,10,.34),
+    inset 0 1.2px 0 rgba(255,255,255,.62),
+    inset 1.2px 0 0 rgba(255,255,255,.20),
+    inset 0 -1.6px 1px rgba(60,40,20,.22),
+    inset -1px 0 0 rgba(60,40,20,.12)!important;
+}
+
+/* ② 手牌柔和落影 ------------------------------------------------ */
+:where(html body .app .hand-bottom) .tile.face-image,
+:where(html body .app .hand-top) .tile.face-image{
+  box-shadow:
+    0 1px 1px rgba(0,0,0,.30),
+    0 3px 5px rgba(0,0,0,.24),
+    0 8px 12px rgba(0,0,0,.12)!important;
+}
+
+/* ③ 吃／碰／槓／胡／跳過 ------------------------------------------ */
+html body .actionPanel.action-panel-visible:not(.ting-choice-active) .actionBtn{
+  isolation:isolate;
+}
+html body .actionPanel.action-panel-visible:not(.ting-choice-active) .actionBtn::before{
+  content:"";
+  position:absolute;
+  inset:-3px -7px;
+  z-index:-1;
+  border-radius:12px;
+  pointer-events:none;
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.22) 0%,rgba(255,255,255,.05) 38%,rgba(255,255,255,0) 52%),
+    linear-gradient(160deg,rgba(34,92,160,.74) 0%,rgba(14,40,86,.82) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(170,222,255,.34),
+    inset 0 1px 0 rgba(255,255,255,.55),
+    inset 0 -3px 5px rgba(2,10,30,.35),
+    0 5px 12px rgba(2,10,30,.45),
+    0 0 14px rgba(70,170,255,.22);
+  transition:filter .18s ease,transform .26s cubic-bezier(.34,1.56,.64,1);
+}
+/* 胡：暖紅金托盤 */
+html body .actionPanel.action-panel-visible:not(.ting-choice-active) .actionBtn[data-action="win"]::before,
+html body .actionPanel.action-panel-visible:not(.ting-choice-active) .actionBtn.win-btn::before{
+  inset:-4px -9px;
+  border-radius:14px;
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.26) 0%,rgba(255,255,255,.06) 38%,rgba(255,255,255,0) 52%),
+    linear-gradient(160deg,rgba(200,44,44,.82) 0%,rgba(104,14,24,.88) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255,218,130,.60),
+    inset 0 1px 0 rgba(255,244,200,.70),
+    inset 0 -4px 7px rgba(60,0,10,.40),
+    0 6px 16px rgba(40,0,8,.50),
+    0 0 22px rgba(255,190,60,.38);
+}
+/* 跳過：低調灰藍托盤 */
+html body .actionPanel.action-panel-visible:not(.ting-choice-active) .actionBtn.actionSkipBtn::before{
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.16) 0%,rgba(255,255,255,.04) 38%,rgba(255,255,255,0) 52%),
+    linear-gradient(160deg,rgba(70,84,108,.66) 0%,rgba(30,40,60,.76) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.16),
+    inset 0 1px 0 rgba(255,255,255,.34),
+    inset 0 -3px 5px rgba(0,0,0,.32),
+    0 4px 10px rgba(2,10,30,.38);
+}
+/* 文字：冰白漸層＋細陰影 */
+html body .actionPanel.action-panel-visible:not(.ting-choice-active) .actionBtn .actionBtnLabel{
+  background:linear-gradient(180deg,#ffffff 0%,#dcf1ff 55%,#93d0ff 100%)!important;
+  -webkit-background-clip:text!important;
+  background-clip:text!important;
+  -webkit-text-fill-color:transparent!important;
+  filter:drop-shadow(0 1px 0 rgba(0,24,60,.65));
+  letter-spacing:.05em;
+}
+/* 胡：金色大字 */
+html body .actionPanel.action-panel-visible:not(.ting-choice-active) .actionBtn[data-action="win"] .actionBtnLabel,
+html body .actionPanel.action-panel-visible:not(.ting-choice-active) .actionBtn.win-btn .actionBtnLabel{
+  background:linear-gradient(180deg,#fffbe0 0%,#ffe27a 42%,#f5a623 100%)!important;
+  -webkit-background-clip:text!important;
+  background-clip:text!important;
+  -webkit-text-fill-color:transparent!important;
+  filter:drop-shadow(0 2px 0 rgba(110,40,0,.60)) drop-shadow(0 0 12px rgba(255,196,64,.55));
+  letter-spacing:0;
+}
+/* 跳過：字色柔和 */
+html body .actionPanel.action-panel-visible:not(.ting-choice-active) .actionBtn.actionSkipBtn .actionBtnLabel{
+  background:linear-gradient(180deg,#f4f7fb 0%,#c7d3e2 100%)!important;
+  -webkit-background-clip:text!important;
+  background-clip:text!important;
+  -webkit-text-fill-color:transparent!important;
+}
+/* 按壓：托盤微亮縮、文字下沉 1px；滑鼠裝置多一層 hover 提亮 */
+html body .actionPanel.action-panel-visible:not(.ting-choice-active) .actionBtn:active::before{
+  filter:brightness(1.28) saturate(1.1);
+  transform:scale(.965);
+}
+html body .actionPanel.action-panel-visible:not(.ting-choice-active) .actionBtn .actionBtnLabel{
+  transition:translate .12s ease;
+}
+html body .actionPanel.action-panel-visible:not(.ting-choice-active) .actionBtn:active .actionBtnLabel{
+  translate:0 1px;
+}
+@media (hover:hover){
+  html body .actionPanel.action-panel-visible:not(.ting-choice-active) .actionBtn:hover::before{
+    filter:brightness(1.18);
+  }
+}
+
+/* ④ 上方按鈕：放開時彈性回彈，按下時維持快速 ------------------------- */
+html body .topbar .btn,
+html body .rightBtns .btn{
+  transition:
+    transform .32s cubic-bezier(.34,1.56,.64,1),
+    box-shadow .25s ease,
+    filter .2s ease,
+    background-color .2s ease!important;
+}
+html body .topbar .btn:active,
+html body .rightBtns .btn:active,
+html body .topbar .btn.tw16-button-pressing,
+html body .rightBtns .btn.tw16-button-pressing{
+  transition-duration:.07s!important;
+}
+
+@media (prefers-reduced-motion:reduce){
+  html body .actionPanel .actionBtn::before,
+  html body .actionPanel .actionBtn .actionBtnLabel,
+  html body .topbar .btn,
+  html body .rightBtns .btn{ transition:none!important; }
+}
+
+/* ⑤ 連N拉N 方印：2×2 四字印章，貼在儀表板格右下角 ---------------------- */
+html body .tw16-mini-dashboard-card.has-repeat-stamp{
+  --tw-stamp:clamp(15px,calc(var(--tw-mini-dashboard-card-w,80px) * .21),19px);
+}
+html body .tw16-mini-dashboard-card .tw16-mini-dashboard-repeat-stamp{
+  position:absolute;
+  right:2px;
+  bottom:1px;
+  z-index:6;
+  box-sizing:border-box;
+  width:var(--tw-stamp);
+  height:var(--tw-stamp);
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  grid-template-rows:1fr 1fr;
+  place-items:center;
+  padding:1px;
+  color:#d4182a;
+  background:rgba(255,246,238,.95);
+  border:1.5px solid #d4182a;
+  border-radius:3px;
+  box-shadow:inset 0 0 0 .5px rgba(212,24,42,.45),0 1px 2px rgba(0,0,0,.45);
+  font-family:"Noto Serif TC","Songti TC","PMingLiU",serif;
+  font-weight:900;
+  font-size:calc(var(--tw-stamp) * .40);
+  line-height:1;
+  transform:rotate(-6deg);
+  pointer-events:none;
+  user-select:none;
+}
+html body .tw16-mini-dashboard-card .tw16-mini-dashboard-repeat-stamp.wide{
+  grid-template-columns:auto auto;
+  font-size:calc(var(--tw-stamp) * .33);
+}
+/* 倒數文字讓出右下角 */
+html body .tw16-mini-dashboard-card.has-repeat-stamp .tw16-mini-dashboard-countdown{
+  right:calc(var(--tw-stamp) + 6px);
+}
+
+/* ⑥ 風位小印章：只留風字（去掉「家」），縮成小方印 ---------------------- */
+html body .tw16-mini-dashboard-wind-seal{
+  display:inline-block;
+  box-sizing:border-box;
+  width:1.25em;
+  height:1.25em;
+  margin-right:2px;
+  vertical-align:-.18em;
+  text-align:center;
+  line-height:1.1em;
+  font-size:.92em;
+  font-family:"Noto Serif TC","Songti TC","PMingLiU",serif;
+  font-weight:900;
+  color:#d4182a;
+  background:rgba(255,246,238,.95);
+  border:1px solid #d4182a;
+  border-radius:2px;
+  box-shadow:inset 0 0 0 .5px rgba(212,24,42,.4),0 1px 1.5px rgba(0,0,0,.4);
+  transform:rotate(-4deg);
+}
+html body .tw16-mini-dashboard-wind-seal.self{color:#fff;background:#d4182a;border-color:#fff;}
+
+/* ⑦ 風位印章移到格子右上角 -------------------------------------------- */
+html body .tw16-mini-dashboard-card{
+  --tw-wind-seal:clamp(11.5px,calc(var(--tw-mini-dashboard-card-w,80px) * .168),14.7px);
+}
+html body .tw16-mini-dashboard-card .tw16-mini-dashboard-wind-seal{
+  position:absolute;
+  top:2px;
+  right:2px;
+  z-index:6;
+  width:var(--tw-wind-seal);
+  height:var(--tw-wind-seal);
+  margin:0;
+  vertical-align:baseline;
+  font-size:calc(var(--tw-wind-seal) * .76);
+  line-height:calc(var(--tw-wind-seal) - 2px);
+  pointer-events:none;
+}
+/* 名字不要壓到印章 */
+html body .tw16-mini-dashboard-card .tw16-mini-dashboard-seat{
+  padding-right:calc(var(--tw-wind-seal) + 3px);
+}
+/* 暫停標籤讓開右上角 */
+html body .tw16-mini-dashboard-card .tw16-mini-dashboard-paused-by{
+  right:calc(var(--tw-wind-seal) + 5px);
+}
+
+/* ⑧ 風位印章：放大 1.5 倍並擺正 */
+html body .tw16-mini-dashboard-card .tw16-mini-dashboard-wind-seal{
+  transform:none;
+  border-width:1.5px;
+  border-radius:3px;
+}
+
+/* ⑨ 連N拉N 方印移到左下角 */
+html body .tw16-mini-dashboard-card .tw16-mini-dashboard-repeat-stamp{
+  right:auto;
+  left:2px;
+}
+/* 倒數文字回到右下角 */
+html body .tw16-mini-dashboard-card.has-repeat-stamp .tw16-mini-dashboard-countdown{
+  right:3px;
+}
+/* 「聽」標籤讓到印章右側 */
+html body .tw16-mini-dashboard-card.has-repeat-stamp .tw16-mini-dashboard-ting{
+  left:calc(var(--tw-stamp) + 6px);
+}
+
+/* ⑩ 連N拉N 方印移到左上角；莊字貼在名稱右側 */
+html body .tw16-mini-dashboard-card .tw16-mini-dashboard-repeat-stamp{
+  top:2px;
+  bottom:auto;
+  left:2px;
+  right:auto;
+}
+html body .tw16-mini-dashboard-card.has-repeat-stamp .tw16-mini-dashboard-ting{
+  left:3px;
+}
+html body .tw16-mini-dashboard-card.has-repeat-stamp .tw16-mini-dashboard-seat{
+  padding-left:calc(var(--tw-stamp) + 3px);
+}
+html body .tw16-mini-dashboard-card .tw16-mini-dashboard-dealer{
+  margin:0 0 0 1px;
+}
+
+/* ⑪ 莊字圓外框 */
+html body .tw16-mini-dashboard-card .tw16-mini-dashboard-dealer{
+  display:inline-block;
+  box-sizing:border-box;
+  width:1.3em;
+  height:1.3em;
+  margin:0 0 0 2px;
+  vertical-align:-.2em;
+  text-align:center;
+  line-height:calc(1.3em - 2px);
+  border:1px solid #ff2020;
+  border-radius:50%;
+  box-shadow:0 0 3px rgba(255,32,32,.45);
+}
+
+/* ⑫ 莊字略放大（約 1.15 倍），用負邊距避免撐高名稱列 */
+html body .tw16-mini-dashboard-card .tw16-mini-dashboard-dealer{
+  font-size:1.15em;
+  margin:-.2em 0 -.2em 2px;
+}
+
+/* ⑬ 莊字移到右上角，緊貼風位印章左側 */
+html body .tw16-mini-dashboard-card .tw16-mini-dashboard-dealer{
+  position:absolute;
+  top:2px;
+  right:calc(var(--tw-wind-seal) + 3px);
+  z-index:6;
+  width:calc(var(--tw-wind-seal) * 1.05);
+  height:calc(var(--tw-wind-seal) * 1.05);
+  margin:0;
+  vertical-align:baseline;
+  font-size:calc(var(--tw-wind-seal) * .68);
+  line-height:calc(var(--tw-wind-seal) * 1.05 - 2px);
+  pointer-events:none;
+}
+html body .tw16-mini-dashboard-card.has-dealer-mark .tw16-mini-dashboard-seat{
+  padding-right:calc(var(--tw-wind-seal) * 2.05 + 6px);
+}
+html body .tw16-mini-dashboard-card.has-dealer-mark .tw16-mini-dashboard-paused-by{
+  right:calc(var(--tw-wind-seal) * 2.05 + 8px);
+}
+
+/* ⑭ 連N拉N 方印自適應：其他元件讓出印章的位置，印章不超出格子 */
+html body .tw16-mini-dashboard-card.has-repeat-stamp .tw16-mini-dashboard-chip{
+  padding-left:calc(var(--tw-stamp) + 4px);
+}
+html body .tw16-mini-dashboard-card.has-repeat-stamp .tw16-mini-dashboard-ting{
+  left:calc(var(--tw-stamp) + 6px);
+}
+html body .tw16-mini-dashboard-card .tw16-mini-dashboard-repeat-stamp{
+  max-width:calc(100% - 4px);
+  max-height:calc(100% - 4px);
+}
+
+/* ⑮ 連N拉N 方印轉正 */
+html body .tw16-mini-dashboard-card .tw16-mini-dashboard-repeat-stamp{
+  transform:none;
+}
+
+/* ⑯ 連N拉N 方印與名稱列不再保留間距，允許重疊 */
+html body .tw16-mini-dashboard-card.has-repeat-stamp .tw16-mini-dashboard-seat{
+  padding-left:0;
+}
+
+/* ⑰ 名稱標箋永遠靠上置中，不因任何印章讓位（可被印章遮住） */
+html body .tw16-mini-dashboard-card .tw16-mini-dashboard-seat,
+html body .tw16-mini-dashboard-card.has-dealer-mark .tw16-mini-dashboard-seat,
+html body .tw16-mini-dashboard-card.has-repeat-stamp .tw16-mini-dashboard-seat,
+html body .tw16-mini-dashboard-card.has-dealer-mark.has-repeat-stamp .tw16-mini-dashboard-seat{
+  padding-left:0!important;
+  padding-right:0!important;
+  margin-top:0!important;
+  text-align:center!important;
+}
+
+/* ⑱ 籌碼列永遠靠下置中，不因任何元件讓位 */
+html body .tw16-mini-dashboard-card{
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+}
+html body .tw16-mini-dashboard-card .tw16-mini-dashboard-chip,
+html body .tw16-mini-dashboard-card.has-repeat-stamp .tw16-mini-dashboard-chip,
+html body .tw16-mini-dashboard-card.has-dealer-mark .tw16-mini-dashboard-chip{
+  margin-top:auto!important;
+  padding-left:0!important;
+  padding-right:0!important;
+  text-align:center!important;
+}
+
+/* ⑲ 「聽」標籤固定在儀表板格最左下角，不因其他元件改變 */
+html body .tw16-mini-dashboard-card .tw16-mini-dashboard-ting,
+html body .tw16-mini-dashboard-card.has-repeat-stamp .tw16-mini-dashboard-ting,
+html body .tw16-mini-dashboard-card.has-dealer-mark .tw16-mini-dashboard-ting,
+html body .tw16-mini-dashboard-card.has-dealer-mark.has-repeat-stamp .tw16-mini-dashboard-ting{
+  position:absolute!important;
+  left:2px!important;
+  right:auto!important;
+  top:auto!important;
+  bottom:1px!important;
+}
+</style>
+
 </body>
 </html>
 
