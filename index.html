@@ -425,6 +425,10 @@
 .tw16-mini-dashboard-ting{position:absolute;left:3px;bottom:2px;font-size:clamp(8px,calc(var(--tw-mini-dashboard-card-w,80px)*.14),11px);font-weight:1000;color:#ef4444;border:1px solid #ef4444;border-radius:3px;padding:0 2px;line-height:1.2;pointer-events:none;}
 .tw16-mini-dashboard-paused-by{position:absolute;right:2px;top:2px;font-size:clamp(7px,calc(var(--tw-mini-dashboard-card-w,80px)*.12),10px);font-weight:1000;color:#fff;background:rgba(220,38,38,.94);border-radius:3px;padding:0 3px;line-height:1.3;white-space:nowrap;pointer-events:none;box-shadow:0 0 5px rgba(255,32,32,.6);z-index:8;}
 .tw16-mini-dashboard-card.tw16-paused-by-card{outline:2px solid rgba(220,38,38,.85)!important;box-shadow:0 0 8px rgba(220,38,38,.5)!important;}
+/* own_seat_wind_watermark: 玩家自己桌面的座風浮水印。置於桌面最上層、不攔截點擊，因此不會被牌/棄牌/標籤遮蔽。 */
+.own-wind-wm{position:absolute;left:50%;bottom:calc(var(--tw-tile-h,40px) * 2.1 + 10px);transform:translateX(-50%);z-index:150;pointer-events:none;user-select:none;font-weight:1000;line-height:1;font-size:clamp(56px,calc(var(--tw-tile-w,26px) * 4.2),120px);color:rgba(255,255,255,.17);text-shadow:0 0 12px rgba(0,0,0,.18);font-family:"Noto Serif TC","Songti TC","PMingLiU",serif;display:none}
+.own-wind-wm.on{display:block}
+.own-wind-wm.dealer{color:rgba(255,120,120,.22)}
 .tw-wm-b{transform:translate(-50%,-50%);}
 .tw-wm-t{transform:translate(-50%,-50%) rotate(180deg);}
 .tw-wm-l{transform:translate(-50%,-50%) rotate(90deg);}
@@ -4102,6 +4106,7 @@ html body .hand-bottom .hand-tile-row .tingWaitAssistGroupAllSeats[data-view-sea
 <div class="hand hand-top" id="handTop"></div>
 <div class="hand hand-left" id="handLeft"></div>
 <div class="hand hand-right" id="handRight"></div>
+<div class="own-wind-wm" id="ownWindWm" aria-hidden="true"></div>
 <div class="tw-wm tw-wm-b" id="wmBottom"></div>
 <div class="tw-wm tw-wm-t" id="wmTop"></div>
 <div class="tw-wm tw-wm-l" id="wmLeft"></div>
@@ -13166,8 +13171,10 @@ function loadUiSettings() {
   // 這是完全已知資訊的純數學問題，不是猜測，準確度可以做到接近100%。用
   // tw16ExactShanten（精確DP版，不是approx版）算出每種棄牌選擇之後的向聽數，以及
   // 「進張數」（還有多少種、多少張牌可以讓向聽再往下一步），排序給AI選牌／建議顯示用。
-  function tw16OwnHandUkeireCount(seat, codesAfterDiscard) {
+  function tw16OwnHandUkeireCount(seat, codesAfterDiscard, remArr) {
     const need = requiredConcealedSets(seat);
+    const fastInfo = tw16Core2Ukeire(seat, need, codesAfterDiscard, remArr); // 組合語言核心；null 時走下方原 JS
+    if (fastInfo) return fastInfo;
     const baseCounts = smartAiCountsFromCodes(codesAfterDiscard);
     let baseShanten = 9;
     try { baseShanten = tw16ExactShanten(baseCounts, need); } catch (_) {}
@@ -13202,11 +13209,12 @@ function loadUiSettings() {
     if (!candidates.length) return [];
     const hand = state.hands[seat] || [];
     const baseCodes = smartAiCodesFromHand(hand);
+    const remArr = tw16Core2RemArray(seat); // 各牌剩餘張數只算一次，所有候選共用
     const results = candidates.map(function(c) {
       const codesAfter = baseCodes.slice();
       const idx = codesAfter.indexOf(c.tile.code);
       if (idx >= 0) codesAfter.splice(idx, 1);
-      const info = tw16OwnHandUkeireCount(seat, codesAfter);
+      const info = tw16OwnHandUkeireCount(seat, codesAfter, remArr);
       return { id: c.tile.id, code: c.tile.code, shanten: info.shanten, ukeireTileTypes: info.ukeireTileTypes, ukeireTileCount: info.ukeireTileCount, ukeireCodes: info.ukeireCodes };
     });
     // tw16_shape_quality_tiebreak_20260705: 進張數（一階，只看下一張牌能不能推進向聽）
@@ -14220,6 +14228,74 @@ function loadUiSettings() {
     ['E','S','W','N','C','F','P'].forEach(function (c) { o[c] = i++; });
     return o;
   })();
+  /* ===== 第二組合語言核心（tw16_core2.wat 組譯）：進張(ukeire)分析、AI蒙地卡羅整局試算 =====
+     純運算、不碰圖形；結果與原 JS 逐筆比對一致，任何失敗（載入、牌碼未知、手牌張數異常）皆自動退回原 JS。 */
+  var tw16Core2 = (function () {
+    try {
+      var bin = Uint8Array.from(atob("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"), function (c) { return c.charCodeAt(0); });
+      var inst = new WebAssembly.Instance(new WebAssembly.Module(bin), {});
+      return { e: inst.exports, m: new Uint8Array(inst.exports.memory.buffer), dv: new DataView(inst.exports.memory.buffer) };
+    } catch (err) { return null; }
+  })();
+  var TW16_CORE2_CODES = (function () {
+    var a = [];
+    Object.keys(TW16_WASM_IDX).forEach(function (k) { a[TW16_WASM_IDX[k]] = k; });
+    return a;
+  })();
+  function tw16Core2RemArray(seat) {
+    if (!tw16Core2) return null;
+    try {
+      var arr = new Uint8Array(34);
+      for (var i = 0; i < 34; i++) {
+        var remaining = 4;
+        try { remaining = 4 - smartAiVisibleCount(TW16_CORE2_CODES[i], seat); } catch (_) {}
+        arr[i] = remaining > 0 ? Math.min(255, remaining) : 0;
+      }
+      return arr;
+    } catch (_) { return null; }
+  }
+  function tw16Core2Ukeire(seat, need, codes, remArr) {
+    if (!tw16Core2) return null;
+    try {
+      if (!(need >= 1 && need <= 5) || need !== Math.floor(need)) return null;
+      if (!remArr) remArr = tw16Core2RemArray(seat);
+      if (!remArr) return null;
+      var m = tw16Core2.m, i, k, total = 0;
+      for (i = 0; i < 34; i++) m[i] = 0;
+      for (i = 0; i < codes.length; i++) {
+        var c = codes[i];
+        if (!c || isFlower(c)) continue;
+        k = TW16_WASM_IDX[c];
+        if (k === undefined) return null;
+        if (++m[k] > 4) return null;
+        total++;
+      }
+      if (total !== need * 3 + 1 && total !== need * 3 + 2) return null;
+      for (i = 0; i < 34; i++) m[64 + i] = remArr[i];
+      tw16Core2.e.tw2_ukeire(need);
+      var dv = tw16Core2.dv, list = [];
+      for (i = 0; i < 34; i++) if (m[524 + i]) list.push(TW16_CORE2_CODES[i]);
+      return { shanten: dv.getInt32(512, true), ukeireTileTypes: dv.getInt32(516, true), ukeireTileCount: dv.getInt32(520, true), ukeireCodes: list };
+    } catch (_) { return null; }
+  }
+  function tw16Core2McSetup(need, remain, wall, baseSeed, horizon) {
+    if (!tw16Core2) return false;
+    try {
+      if (!(need >= 1 && need <= 5) || need !== Math.floor(need)) return false;
+      if (!(horizon >= 0 && horizon <= 200)) return false;
+      var n = remain.length, p = wall.length, m = tw16Core2.m, i, k;
+      if (n !== need * 3 + 1 || p < 1 || p > 200) return false;
+      for (i = 0; i < n; i++) { k = TW16_WASM_IDX[remain[i]]; if (k === undefined) return false; m[4608 + i] = k; }
+      for (i = 0; i < p; i++) { k = TW16_WASM_IDX[wall[i]]; if (k === undefined) return false; m[4096 + i] = k; }
+      tw16Core2.e.tw2_set_mode(Number(state.tableMode) || 4);
+      tw16Core2.e.tw2_mc_setup(need, n, p, baseSeed | 0);
+      return true;
+    } catch (_) { return false; }
+  }
+  function tw16Core2McResult() {
+    var dv = tw16Core2.dv;
+    return { win: dv.getInt32(4888, true), ting: dv.getInt32(4892, true), shantenSum: dv.getInt32(4896, true), valueSum: dv.getFloat64(4880, true) };
+  }
   function isWinningCodeListRaw(codes, concealedSetsNeeded) {
     if (!Array.isArray(codes)) return false;
     if (!tw16Wasm) return isWinningCodeListRawJS(codes, concealedSetsNeeded);
@@ -17792,9 +17868,12 @@ function loadUiSettings() {
     let win = 0, ting = 0, shantenSum = 0, valueSum = 0, effectiveSum = 0, ronRiskSum = 0, done = 0;
     const baseSeed = tw16AiMonteCarloSeed([state.handSeq || 0,state.wall.length || 0,state.discards.length || 0,seat,candidate.id,candidate.code,trials,horizon].join('|'));
     const discardRisk = smartAiThreatAwareDiscardRisk(seat, candidate.code) + smartAiOpponentHandInference(seat, candidate.code);
+    const core2Ready = tw16Core2McSetup(needed, candidate.remain, wall, baseSeed, Math.ceil(horizon));
+    const core2Horizon = Math.ceil(horizon);
     for (let r = 0; r < trials; r += 1) {
       if (deadlineAt && Date.now() > deadlineAt && r >= 12) break;
       done += 1;
+      if (core2Ready) { ronRiskSum += discardRisk; tw16Core2.e.tw2_mc_trial(r, core2Horizon); continue; }
       const seedObj = { v: (baseSeed + Math.imul(r + 1, 2654435761)) >>> 0 };
       const pool = wall.slice();
       let codes = candidate.remain.slice();
@@ -17816,6 +17895,10 @@ function loadUiSettings() {
         valueSum += shape.value || 0;
         effectiveSum += shape.effectiveRemaining || 0;
       }
+    }
+    if (core2Ready) {
+      const mc2 = tw16Core2McResult();
+      win = mc2.win; ting = mc2.ting; shantenSum = mc2.shantenSum; valueSum = mc2.valueSum; effectiveSum = 0;
     }
     const norm = Math.max(1, done);
     return (win / norm) * 160000 * trials + (ting / norm) * 22000 * trials - shantenSum * 1600 + valueSum * 2.2 + effectiveSum * 380 - ronRiskSum * 950;
@@ -28363,6 +28446,14 @@ function concealedKongOwnerOfMeld(meld) {
         const isDealer = seat === state.dealer;
         const isTing = !!state.declaredTing[seat];
         wmEl.innerHTML = (isDealer ? '<span class="tw-wm-dealer">莊</span>' : '') + windChar + (isTing ? '<span class="tw-wm-ting">聽</span>' : '');
+        if (pos === 'bottom') {
+          const ow = document.getElementById('ownWindWm');
+          if (ow) {
+            ow.textContent = windChar;
+            ow.classList.toggle('on', !!windChar && isSeatActiveInTable(seat));
+            ow.classList.toggle('dealer', isDealer);
+          }
+        }
         wmEl.style.color = isSeatActiveInTable(seat) ? '' : 'transparent';
         const playPhase = state.phase === 'discard' || state.phase === 'claim' || state.phase === 'draw' || state.phase === 'selfwin';
         wmEl.style.visibility = isSeatActiveInTable(seat) ? 'visible' : 'hidden';
