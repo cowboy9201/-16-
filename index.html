@@ -23233,23 +23233,40 @@ function showIntegrityReport(precomputed) {
   let tw16LayoutGateLast = '';
   let tw16LabelGateLast = '';
   const tw16LayoutGateEnabled = (function() { try { return !/[?&]gate=0/.test(location.search); } catch (_) { return true; } })();
+  const TW16_GATE_NAMES = ['vbL','vbT','vbW','vbH','topbarH','uiSettings','counts','pinch','drawn','phase','openStep','physWall','wall','viewSeat','tableMode','dealer','handId','ended'];
+  function tw16LayoutGateParts() {
+    const vb = viewportBox();
+    const ui = state.uiSettings || {};
+    const cnt = SEATS.map(function(seat) {
+      return [(state.hands[seat] || []).length, (state.melds[seat] || []).length, (state.flowers[seat] || []).length].join('.');
+    }).join(',');
+    const pinch = bottomHandPinchScaleState ? [bottomHandPinchScaleState.userScale, bottomHandPinchScaleState.currentScale, bottomHandPinchScaleState.baseScale].join('.') : '';
+    const drawn = state.activeDrawnTileIds ? Object.keys(state.activeDrawnTileIds).map(function(k) { return k + ':' + state.activeDrawnTileIds[k]; }).join(',') : '';
+    const tb = document.querySelector('.topbar');
+    const tbH = tb ? tb.offsetHeight : 0;
+    return [vb.left, vb.top, vb.width, vb.height, tbH, JSON.stringify(ui), cnt, pinch, drawn,
+      state.phase, state.openingDeal && state.openingDeal.active ? state.openingDeal.step : 0,
+      (state.physicalWall || []).length, (state.wall || []).length, state.viewSeat, state.tableMode,
+      state.dealer, state.handId, state.ended ? 1 : 0];
+  }
   function tw16LayoutGateSignature() {
     if (!tw16LayoutGateEnabled) return '';
+    try { return tw16LayoutGateParts().join('|'); } catch (_) { return ''; }
+  }
+  /* 診斷：統計是哪個欄位讓排版閘門失效（只在 ?prof=1 時啟用） */
+  const tw16GateDiag = { prev: null, miss: 0, hit: 0, chg: Object.create(null) };
+  function tw16GateDiagRecord() {
     try {
-      const vb = viewportBox();
-      const ui = state.uiSettings || {};
-      const cnt = SEATS.map(function(seat) {
-        return [(state.hands[seat] || []).length, (state.melds[seat] || []).length, (state.flowers[seat] || []).length].join('.');
-      }).join(',');
-      const pinch = bottomHandPinchScaleState ? [bottomHandPinchScaleState.userScale, bottomHandPinchScaleState.currentScale, bottomHandPinchScaleState.baseScale].join('.') : '';
-      const drawn = state.activeDrawnTileIds ? Object.keys(state.activeDrawnTileIds).map(function(k) { return k + ':' + state.activeDrawnTileIds[k]; }).join(',') : '';
-      const tb = document.querySelector('.topbar');
-      const tbH = tb ? tb.offsetHeight : 0;
-      return [vb.left, vb.top, vb.width, vb.height, tbH, JSON.stringify(ui), cnt, pinch, drawn,
-        state.phase, state.openingDeal && state.openingDeal.active ? state.openingDeal.step : 0,
-        (state.physicalWall || []).length, (state.wall || []).length, state.viewSeat, state.tableMode,
-        state.dealer, state.handId, state.ended ? 1 : 0].join('|');
-    } catch (_) { return ''; }
+      const cur = tw16LayoutGateParts();
+      if (tw16GateDiag.prev) {
+        let changed = false;
+        for (let k = 0; k < cur.length; k++) {
+          if (String(cur[k]) !== String(tw16GateDiag.prev[k])) { changed = true; tw16GateDiag.chg[TW16_GATE_NAMES[k]] = (tw16GateDiag.chg[TW16_GATE_NAMES[k]] || 0) + 1; }
+        }
+        if (changed) tw16GateDiag.miss += 1; else tw16GateDiag.hit += 1;
+      }
+      tw16GateDiag.prev = cur;
+    } catch (_) {}
   }
 
   /* lag_profiler: 在網址後加 ?prof=1（或 localStorage tw16Prof=1）可顯示 renderAll 各步驟耗時，用來定位手機卡頓。預設關閉、零成本。 */
@@ -23267,7 +23284,8 @@ function showIntegrityReport(precomputed) {
     }
     const rows = Object.keys(tw16ProfStats).map(function(k) { const v = tw16ProfStats[k]; return { k: k, avg: v.total / v.n, max: v.max, n: v.n }; })
       .sort(function(a, b) { return b.avg - a.avg; }).slice(0, 8);
-    tw16ProfBox.textContent = 'renderAll steps (avg/max ms)\n' + rows.map(function(r) { return r.avg.toFixed(1).padStart(6) + '/' + r.max.toFixed(0).padEnd(4) + ' x' + r.n + ' ' + r.k; }).join('\n');
+    const _gd = tw16GateDiag; const _gchg = Object.keys(_gd.chg).sort(function(a, b) { return _gd.chg[b] - _gd.chg[a]; }).slice(0, 5).map(function(k) { return k + ':' + _gd.chg[k]; }).join(' ');
+    tw16ProfBox.textContent = 'gate hit/miss ' + _gd.hit + '/' + _gd.miss + ' ' + _gchg + '\n' + 'renderAll steps (avg/max ms)\n' + rows.map(function(r) { return r.avg.toFixed(1).padStart(6) + '/' + r.max.toFixed(0).padEnd(4) + ' x' + r.n + ' ' + r.k; }).join('\n');
   }
   function tw16RunRenderStep(label, fn) {
     const t0 = tw16ProfOn ? performance.now() : 0;
@@ -23320,6 +23338,7 @@ function showIntegrityReport(precomputed) {
     tw16RunRenderStep('positionTileContainers', () => {
       /* lag_fix_layout_gate: 排版輸入沒變（視窗、各家牌數、縮放、階段等）就跳過這個最耗時的版面重算。
          網址加 ?gate=0 可關閉此優化以便比對。 */
+      if (tw16ProfOn) tw16GateDiagRecord();
       const _sig = tw16LayoutGateSignature();
       if (_sig && _sig === tw16LayoutGateLast) return;
       positionTileContainers(map);
