@@ -12093,10 +12093,23 @@ function loadUiSettings() {
       return false;
     }
     if (net.role === 'host' && !net.channel) {
-      updateLobbyStatus('Ably 房間頻道尚未建立，房主不可開局；請重新建立房間。');
-      addLog('Ably房間頻道尚未建立，禁止房主開局');
-      renderAll();
-      return false;
+      // host_newgame_unblock: 連線曾失敗/中斷（failConnection 會把 net.channel 清成 null，但 role 仍是 host），
+      // 以往這裡直接拒絕開局，導致房主永遠無法開新局。改為：背景重新取得 KEY 並重連，同時照常開局，
+      // 重連成功後由既有的快照機制把新局狀態補送給來賓。
+      addLog('Ably房間頻道已中斷，房主先開新局並於背景重新連線');
+      updateLobbyStatus('Ably 連線已中斷，背景重新連線中…');
+      if (!net._ablyReconnecting && net.room) {
+        net._ablyReconnecting = true;
+        const _hRoom = net.room, _hName = net.name;
+        Promise.resolve(ensureLobbyAutoUsableAblyApiKey(_hRoom, 'host')).then(function(newKey) {
+          net._ablyReconnecting = false;
+          if (!newKey) { addLog('重新取得 Ably API KEY 失敗，請手動重連'); return; }
+          if (net.role === 'host' && !net.channel) connectAbly('host', _hRoom, _hName, newKey);
+        }).catch(function(e) {
+          net._ablyReconnecting = false;
+          addLog('重新取得 Ably API KEY 發生錯誤：' + (e && e.message ? e.message : e));
+        });
+      }
     }
     if (net.role === 'host' && net.channel && net.channel.state !== 'attached') {
       try { net.channel.attach(() => {}); } catch (e) {}
