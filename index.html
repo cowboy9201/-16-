@@ -23229,6 +23229,28 @@ function showIntegrityReport(precomputed) {
   // 倒數也不會繼續，看起來像整局遊戲中止。這裡把每個渲染子步驟包一層輕量防護：單一步驟
   // 失敗只記一筆事件並跳過該步驟，其餘步驟（以及最重要的自動回合推進）照常執行，不會
   // 因為一次局部渲染例外就讓整個流程卡死。正常情況下（無例外）行為與原本完全相同。
+  /* lag_fix_layout_gate */
+  let tw16LayoutGateLast = '';
+  const tw16LayoutGateEnabled = (function() { try { return !/[?&]gate=0/.test(location.search); } catch (_) { return true; } })();
+  function tw16LayoutGateSignature() {
+    if (!tw16LayoutGateEnabled) return '';
+    try {
+      const vb = viewportBox();
+      const ui = state.uiSettings || {};
+      const cnt = SEATS.map(function(seat) {
+        return [(state.hands[seat] || []).length, (state.melds[seat] || []).length, (state.flowers[seat] || []).length].join('.');
+      }).join(',');
+      const pinch = bottomHandPinchScaleState ? [bottomHandPinchScaleState.userScale, bottomHandPinchScaleState.currentScale, bottomHandPinchScaleState.baseScale].join('.') : '';
+      const drawn = state.activeDrawnTileIds ? Object.keys(state.activeDrawnTileIds).map(function(k) { return k + ':' + state.activeDrawnTileIds[k]; }).join(',') : '';
+      const tb = document.querySelector('.topbar');
+      const tbH = tb ? tb.offsetHeight : 0;
+      return [vb.left, vb.top, vb.width, vb.height, tbH, JSON.stringify(ui), cnt, pinch, drawn,
+        state.phase, state.openingDeal && state.openingDeal.active ? state.openingDeal.step : 0,
+        (state.physicalWall || []).length, (state.wall || []).length, state.viewSeat, state.tableMode,
+        state.dealer, state.handId, state.ended ? 1 : 0].join('|');
+    } catch (_) { return ''; }
+  }
+
   /* lag_profiler: 在網址後加 ?prof=1（或 localStorage tw16Prof=1）可顯示 renderAll 各步驟耗時，用來定位手機卡頓。預設關閉、零成本。 */
   const tw16ProfOn = (function() { try { return /[?&]prof=1/.test(location.search) || localStorage.getItem('tw16Prof') === '1'; } catch (_) { return false; } })();
   const tw16ProfStats = Object.create(null);
@@ -23294,7 +23316,14 @@ function showIntegrityReport(precomputed) {
     tw16RunRenderStep('renderDiscards', () => renderDiscards());
     tw16RunRenderStep('updateMiniDashboard', () => updateMiniDashboard());
     tw16RunRenderStep('positionTopWindowHudAdaptive', () => positionTopWindowHudAdaptive());
-    tw16RunRenderStep('positionTileContainers', () => positionTileContainers(map));
+    tw16RunRenderStep('positionTileContainers', () => {
+      /* lag_fix_layout_gate: 排版輸入沒變（視窗、各家牌數、縮放、階段等）就跳過這個最耗時的版面重算。
+         網址加 ?gate=0 可關閉此優化以便比對。 */
+      const _sig = tw16LayoutGateSignature();
+      if (_sig && _sig === tw16LayoutGateLast) return;
+      positionTileContainers(map);
+      tw16LayoutGateLast = tw16LayoutGateSignature();
+    });
     tw16RunRenderStep('restoreBottomHandScrollAfterDrawRender-2', () => restoreBottomHandScrollAfterDrawRender(bottomHandDrawScrollSnapshot));
     tw16RunRenderStep('scheduleTingWaitAssistAdaptivePlacement', () => scheduleTingWaitAssistAdaptivePlacement());
     tw16RunRenderStep('positionOpeningFloatingElements', () => positionOpeningFloatingElements());
