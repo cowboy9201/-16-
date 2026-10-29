@@ -23231,6 +23231,7 @@ function showIntegrityReport(precomputed) {
   // 因為一次局部渲染例外就讓整個流程卡死。正常情況下（無例外）行為與原本完全相同。
   /* lag_fix_layout_gate */
   let tw16LayoutGateLast = '';
+  let tw16LabelGateLast = '';
   const tw16LayoutGateEnabled = (function() { try { return !/[?&]gate=0/.test(location.search); } catch (_) { return true; } })();
   function tw16LayoutGateSignature() {
     if (!tw16LayoutGateEnabled) return '';
@@ -28558,7 +28559,15 @@ function concealedKongOwnerOfMeld(meld) {
         wmEl.style.color = isActiveTurn ? '#ff3333' : (isSeatActiveInTable(seat) ? '' : 'transparent');
       }
     });
-    positionSeatLabels(map);
+    /* lag_fix_layout_gate: 座位標籤的避讓定位很耗時；排版輸入與標籤內容都沒變就沿用上次位置 */
+    {
+      const _ls = tw16LayoutGateSignature();
+      const _lsFull = _ls ? (_ls + '#' + (state.discards || []).length + '#' + DISPLAY_POSITIONS.map(function(pp) { const e = dom[DISPLAY_ELEMENT[pp].label]; return e ? e.innerHTML.length + ':' + (e.textContent || '') : ''; }).join('~')) : '';
+      if (!_lsFull || _lsFull !== tw16LabelGateLast) {
+        positionSeatLabels(map);
+        tw16LabelGateLast = _lsFull;
+      }
+    }
     /* 方形頭像浮水印：用實際牌位置定位 */
     (function(){
       const tEl=byId('table'); if(!tEl) return;
