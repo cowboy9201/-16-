@@ -23229,12 +23229,37 @@ function showIntegrityReport(precomputed) {
   // 倒數也不會繼續，看起來像整局遊戲中止。這裡把每個渲染子步驟包一層輕量防護：單一步驟
   // 失敗只記一筆事件並跳過該步驟，其餘步驟（以及最重要的自動回合推進）照常執行，不會
   // 因為一次局部渲染例外就讓整個流程卡死。正常情況下（無例外）行為與原本完全相同。
+  /* lag_profiler: 在網址後加 ?prof=1（或 localStorage tw16Prof=1）可顯示 renderAll 各步驟耗時，用來定位手機卡頓。預設關閉、零成本。 */
+  const tw16ProfOn = (function() { try { return /[?&]prof=1/.test(location.search) || localStorage.getItem('tw16Prof') === '1'; } catch (_) { return false; } })();
+  const tw16ProfStats = Object.create(null);
+  let tw16ProfBox = null, tw16ProfLastDraw = 0, tw16ProfCount = 0;
+  function tw16ProfDraw() {
+    const now = Date.now();
+    if (now - tw16ProfLastDraw < 1000) return;
+    tw16ProfLastDraw = now;
+    if (!tw16ProfBox) {
+      tw16ProfBox = document.createElement('pre');
+      tw16ProfBox.style.cssText = 'position:fixed;left:4px;top:4px;z-index:2147483000;margin:0;padding:4px 6px;font:10px/1.25 monospace;color:#0f0;background:rgba(0,0,0,.75);pointer-events:none;max-width:70vw;white-space:pre;border-radius:4px';
+      document.body.appendChild(tw16ProfBox);
+    }
+    const rows = Object.keys(tw16ProfStats).map(function(k) { const v = tw16ProfStats[k]; return { k: k, avg: v.total / v.n, max: v.max, n: v.n }; })
+      .sort(function(a, b) { return b.avg - a.avg; }).slice(0, 8);
+    tw16ProfBox.textContent = 'renderAll steps (avg/max ms)\n' + rows.map(function(r) { return r.avg.toFixed(1).padStart(6) + '/' + r.max.toFixed(0).padEnd(4) + ' x' + r.n + ' ' + r.k; }).join('\n');
+  }
   function tw16RunRenderStep(label, fn) {
+    const t0 = tw16ProfOn ? performance.now() : 0;
     try {
       return fn();
     } catch (e) {
       try { recordNetworkEvent('render-step-error', 'renderAll 執行「' + label + '」時發生例外，已跳過並繼續其餘渲染', { label, error: String((e && e.message) || e) }); } catch (_) {}
       return undefined;
+    } finally {
+      if (tw16ProfOn) {
+        const d = performance.now() - t0;
+        const v = tw16ProfStats[label] || (tw16ProfStats[label] = { n: 0, total: 0, max: 0 });
+        v.n += 1; v.total += d; if (d > v.max) v.max = d;
+        tw16ProfDraw();
+      }
     }
   }
 
