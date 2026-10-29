@@ -10192,7 +10192,7 @@ function loadUiSettings() {
       voiceEvents: state.voiceEvents,
       nextRoundPlan: state.nextRoundPlan,
       lastSettlement: state.lastSettlement,
-      winHistory: normalizeWinHistoryList(state.winHistory),
+      winHistory: normalizeWinHistoryList(Array.isArray(state.winHistory) ? state.winHistory.slice(-12) : []), /* lag_fix_winhistory_cap */
       opponentMemory: state.opponentMemory || {},
       lastActionId: state.lastActionId,
       ended: state.ended,
@@ -10709,9 +10709,33 @@ function loadUiSettings() {
     // 來賓端：套用snapshot前先記錄各座位副露數量，用於偵測吃碰槓動作（房主端的本地旗標不會同步給來賓，故來賓需自行偵測）
     const _tw16GuestPrevMelds = isOnlineGuest() ? SEATS.map(function(s) { const ms = state.melds && state.melds[s] || []; return { n: ms.length, t: ms.reduce(function(a, m) { return a + (m ? m.length : 0); }, 0) }; }) : null;
     const _tw16GuestPrevSettlementId = isOnlineGuest() ? (state.lastSettlement && state.lastSettlement.id || '') : '';
+    const _lagPrevHandId = state.handId;
+    const _lagPrevWinHistory = Array.isArray(state.winHistory) ? state.winHistory : [];
     Object.keys(incoming).forEach(key => {
       state[key] = incoming[key];
     });
+    /* lag_fix_winhistory_cap: 快照只含最近幾筆，合併回來賓自己已有的歷程（只在出現新筆時才合併，避免每個快照都全量處理） */
+    try {
+      const _inWin = Array.isArray(state.winHistory) ? state.winHistory : [];
+      if (_lagPrevWinHistory.length) {
+        const _prevKeys = new Set(_lagPrevWinHistory.map(winHistoryEntryKey));
+        const _fresh = _inWin.filter(it => !_prevKeys.has(winHistoryEntryKey(it)));
+        state.winHistory = _fresh.length ? _lagPrevWinHistory.concat(_fresh) : _lagPrevWinHistory;
+      }
+    } catch (_e) { state.winHistory = _lagPrevWinHistory; }
+    /* lag_fix_guest_cache_reset: 來賓端 newGame() 會提早 return，原本每局快取（蒙地卡羅樣本、棄牌快取等）
+       永遠不會清，打越多局記憶體與過濾成本越高。偵測到換局時比照房主清除。 */
+    try {
+      if (state.handId !== _lagPrevHandId) {
+        tw16SmartShapeCache = new Map();
+        tw16WinCheckCache = new Map();
+        tw16ResetPersistentDiscardCache();
+        tw16SmartDiscardCache = { key: '', tileId: '', detail: null };
+        tw16MonteCarloPoolCache = { key: '', pool: [] };
+        tw16TingOptionsCache = null;
+        tw16McSampleCache = Object.create(null);
+      }
+    } catch (_e2) {}
     if (isOnlineGuest()) try { const _gl = JSON.parse(localStorage.getItem('tw16GuestUiLocal') || 'null'); if (_gl && state.uiSettings) ['wallVisible','screenWakeLockEnabled','turnHandFrameEnabled','tingAssistEnabled','tingDangerExamplesEnabled','tingDangerGateEnabled','aiSuggestionEnabled','aiMode','tingDeclarationMode','aiMonteCarloLevel2','aiMonteCarloFull','miniDashboardEnabled','avatarEnabled'].forEach(k => { if (_gl[k] !== undefined) state.uiSettings[k] = _gl[k]; }); } catch(e) {}
     if (isOnlineGuest() && net.pendingLocalDiscard) {
       const pendingLocalDiscard = net.pendingLocalDiscard;
@@ -25723,6 +25747,8 @@ function showIntegrityReport(precomputed) {
     if (cache) {
       cache.samples = cache.samples.filter(function(s) { return tw16MonteCarloSampleStillValid(s, seat); });
     } else {
+      /* lag_fix_mc_prune: 只保留目前這局的樣本池 */
+      try { const _suffix = ':' + (state.handId || 0); Object.keys(tw16McSampleCache).forEach(function(k) { if (k.slice(-_suffix.length) !== _suffix) delete tw16McSampleCache[k]; }); } catch (_e) {}
       cache = { samples: [] };
       tw16McSampleCache[cacheKey] = cache;
     }
