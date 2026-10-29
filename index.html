@@ -14075,7 +14075,7 @@ function loadUiSettings() {
     tw16ExactShantenCache.set(key, res);
     return res;
   }
-  function tw16ExactShantenRaw(counts, need) {
+  function tw16ExactShantenRawJS(counts, need) {
     if (need < 0) return -1;
     const groups = ['m','p','s'].map(suit => {
       const c9 = Array.from({ length: 9 }, (_, i) => counts[suit + (i + 1)] || 0);
@@ -14205,7 +14205,139 @@ function loadUiSettings() {
     tw16WinListCache.set(key, res);
     return res;
   }
+  /* ===== WebAssembly 核心（tw16_core.wat 組譯）：胡牌判定、向聽、台數牌型；任何失敗皆自動退回原 JS ===== */
+  var tw16Wasm = (function () {
+    try {
+      var bin = Uint8Array.from(atob("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"), function (c) { return c.charCodeAt(0); });
+      var inst = new WebAssembly.Instance(new WebAssembly.Module(bin), { env: { random_u32: function () {
+        var a = new Uint32Array(1); crypto.getRandomValues(a); return a[0]; } } });
+      return { e: inst.exports, m: new Uint8Array(inst.exports.memory.buffer) };
+    } catch (err) { return null; }
+  })();
+  var TW16_WASM_IDX = (function () {
+    var o = Object.create(null), i = 0;
+    ['m','p','s'].forEach(function (s) { for (var n = 1; n <= 9; n++) o[s + n] = i++; });
+    ['E','S','W','N','C','F','P'].forEach(function (c) { o[c] = i++; });
+    return o;
+  })();
   function isWinningCodeListRaw(codes, concealedSetsNeeded) {
+    if (!Array.isArray(codes)) return false;
+    if (!tw16Wasm) return isWinningCodeListRawJS(codes, concealedSetsNeeded);
+    try {
+      var m = tw16Wasm.m, i;
+      for (i = 0; i < 34; i++) m[i] = 0;
+      for (i = 0; i < codes.length; i++) {
+        var c = codes[i];
+        if (c && !isFlower(c)) { var k = TW16_WASM_IDX[c]; if (k !== undefined) m[k]++; }
+      }
+      tw16Wasm.e.tw_set_mode(Number(state.tableMode) || 4);
+      return tw16Wasm.e.tw_is_winning(concealedSetsNeeded, codes.length) === 1;
+    } catch (err) { return isWinningCodeListRawJS(codes, concealedSetsNeeded); }
+  }
+  function tw16ExactShantenRaw(counts, need) {
+    if (need < 0) return -1;
+    if (!tw16Wasm) return tw16ExactShantenRawJS(counts, need);
+    try {
+      var m = tw16Wasm.m, i, keys = Object.keys(counts);
+      for (i = 0; i < 34; i++) m[i] = 0;
+      for (i = 0; i < keys.length; i++) {
+        var k = TW16_WASM_IDX[keys[i]], v = counts[keys[i]] || 0;
+        if (k === undefined) { if (v >= 2) return tw16ExactShantenRawJS(counts, need); continue; }
+        if (v < 0 || v > 255 || v !== Math.floor(v)) return tw16ExactShantenRawJS(counts, need);
+        m[k] = v;
+      }
+      var r = tw16Wasm.e.tw_shanten(need);
+      return r;
+    } catch (err) { return tw16ExactShantenRawJS(counts, need); }
+  }
+  /* 台數牌型核心：回傳旗標位元；無法確定（含未知牌碼等）時回傳 -1，由 JS 原版接手 */
+  function tw16TaiKernel(winner, winTile, allCodes) {
+    if (!tw16Wasm) return -1;
+    try {
+      var m = tw16Wasm.m, i, k, hand = state.hands[winner] || [], melds = state.melds[winner] || [];
+      for (i = 0; i < 34; i++) { m[i] = 0; m[2048 + i] = 0; m[2100 + i] = 0; }
+      for (i = 0; i < allCodes.length; i++) { k = TW16_WASM_IDX[allCodes[i]]; if (k === undefined) return -1; m[k]++; }
+      for (i = 0; i < hand.length; i++) { k = TW16_WASM_IDX[hand[i].code]; if (k === undefined) return -1; m[2048 + k]++; }
+      if (winTile) { k = TW16_WASM_IDX[winTile.code]; if (k === undefined) return -1; m[2048 + k]++; }
+      var notUniform = 0;
+      for (i = 0; i < melds.length; i++) {
+        var ml = melds[i], codes = ml.map(function (t) { return t.code; });
+        if (ml.length && !ml.every(function (t) { return t.code === ml[0].code; })) notUniform = 1;
+        if (codes.length >= 3 && codes.every(function (c) { return c === codes[0]; })) {
+          k = TW16_WASM_IDX[codes[0]]; if (k === undefined) return -1; m[2100 + k] = 1;
+        }
+      }
+      var si = SEATS.indexOf(winner), rw = state.windRound % 4;
+      if (si < 0 || si > 3 || !(rw >= 0 && rw <= 3) || rw !== Math.floor(rw)) return -1;
+      tw16Wasm.e.tw_set_mode(Number(state.tableMode) || 4);
+      return tw16Wasm.e.tw_tai_kernel(27 + si, 27 + rw, notUniform);
+    } catch (err) { return -1; }
+  }
+  function evaluateWinDetails(winner, kind, fromSeat, winTile, info) {
+    const items = [];
+    let tai = 0;
+    const extra = info || {};
+    const allCodes = collectWinCodes(winner, winTile);
+    const suits = new Set(allCodes.filter(c => c && isSuitPrefix(c[0])).map(c => c[0]));
+    const honorCodes = allCodes.filter(c => isHonorCode(c));
+    const allHonors = allCodes.length > 0 && allCodes.every(c => isHonorCode(c));
+    const closed = isClosedHandLike(winner);
+    const wallAtWin = state.wall ? state.wall.length : 0;
+
+    if (kind === 'self') { tai += 1; items.push('自摸 +1'); }
+    else if (extra.robKong) { items.push('搶槓胡'); }
+    else { items.push('放槍胡'); }
+    if (closed) { tai += 1; items.push('門清 +1'); }
+    if (closed && kind === 'self') { tai += 3; items.push('門清自摸 +3'); }
+    if (extra.robKong) { tai += 1; items.push('搶槓 +1'); }
+    if (extra.kongFlower) { tai += 1; items.push('槓上開花 +1'); }
+    if (wallAtWin <= 16) {
+      if (kind === 'self') { tai += 1; items.push('海底撈月 +1'); }
+      else { tai += 1; items.push('河底撈魚 +1'); }
+    }
+    const dealerRepeatTai = dealerRepeatTaiValue();
+    const dealerRepeat = currentDealerRepeatCount();
+    if (winner === state.dealer) {
+      tai += dealerRepeatTai;
+      items.push(dealerRepeat > 0 ? '莊家連莊（2×' + dealerRepeat + '+1） +' + dealerRepeatTai : '莊家胡 +1');
+    }
+    if (fromSeat === state.dealer && kind === 'ron') {
+      tai += dealerRepeatTai;
+      items.push(dealerRepeat > 0 ? '胡莊拉莊（2×' + dealerRepeat + '+1） +' + dealerRepeatTai : '胡莊 +1');
+    }
+    const waitShape = winShapeWaitDetail(winner, winTile);
+    if (waitShape) { tai += waitShape.tai; items.push('胡' + waitShape.label + ' +' + waitShape.tai); }
+    if (state.declaredTing[winner]) { tai += 1; items.push('聽牌 +1'); }
+    const flowers = (state.flowers[winner] || []).length;
+    if (flowers) { tai += flowers; items.push('花牌 +' + flowers); }
+    const tw16K = tw16TaiKernel(winner, winTile, allCodes);
+    if (tw16K < 0) return evaluateWinDetailsJS(winner, kind, fromSeat, winTile, info);
+    if (tw16K & 65536) { tai += 1; items.push(tileText('C') + '刻 +1'); }
+    if (tw16K & 131072) { tai += 1; items.push(tileText('F') + '刻 +1'); }
+    if (tw16K & 262144) { tai += 1; items.push(tileText('P') + '刻 +1'); }
+    if (tw16K & 524288) { tai += 1; items.push('門風刻 +' + 1); }
+    if (tw16K & 1048576) { tai += 1; items.push('圈風刻 +' + 1); }
+
+
+    if (tw16K & 1) { tai += 16; items.push('字一色 +16'); }
+    else if (tw16K & 2) { tai += 16; items.push('清老頭 +16'); }
+    else if (tw16K & 4) { tai += 8; items.push('混老頭 +8'); }
+    else if (tw16K & 8) { tai += 16; items.push('清龍 +16'); }
+    else if (tw16K & 16) { tai += 8; items.push('清一色 +8'); }
+    else if (tw16K & 32) { tai += 4; items.push('混一色 +4'); }
+    if (tw16K & 64) { tai += 6; items.push('連七對 +6'); }
+    if (tw16K & 128) { tai += 4; items.push('一條龍 +4'); }
+    if (tw16K & 256) { tai += 2; items.push('五門齊 +2'); }
+    if (tw16K & 512) { tai += 2; items.push('斷么九 +2'); }
+    if (tw16K & 1024) { tai += 4; items.push('碰碰胡 +4'); }
+    if (tw16K & 2048) { tai += 8; items.push('大三元 +8'); }
+    else if (tw16K & 4096) { tai += 4; items.push('小三元 +4'); }
+    if (tw16K & 8192) { tai += 16; items.push('大四喜 +16'); }
+    else if (tw16K & 16384) { tai += 8; items.push('小四喜 +8'); }
+    else if (tw16K & 32768) { tai += 4; items.push('三風碰 +4'); }
+    return { tai: Math.max(1, tai), items };
+  }
+  function isWinningCodeListRawJS(codes, concealedSetsNeeded) {
     if (!Array.isArray(codes)) return false;
     const need = concealedSetsNeeded * 3 + 2;
     if (codes.length !== need) return false;
@@ -14353,7 +14485,7 @@ function loadUiSettings() {
     return null;
   }
 
-  function evaluateWinDetails(winner, kind, fromSeat, winTile, info) {
+  function evaluateWinDetailsJS(winner, kind, fromSeat, winTile, info) {
     const items = [];
     let tai = 0;
     const extra = info || {};
