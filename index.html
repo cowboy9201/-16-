@@ -4489,7 +4489,7 @@ html body .hand-bottom .hand-tile-row .tingWaitAssistGroupAllSeats[data-view-sea
   const NETWORK_PULSE_MIN_INTERVAL_MS = 1500;
   const NETWORK_GUEST_SYNC_STALE_MS = 1200;
   const NETWORK_GUEST_SYNC_MIN_INTERVAL_MS = 650;
-  const NETWORK_GUEST_SYNC_SEQ_GAP_THRESHOLD = 2;
+  const NETWORK_GUEST_SYNC_SEQ_GAP_THRESHOLD = 8; /* lag_fix_seq_gap: 原為 2，手機端稍慢就被判定需要同步並封鎖出牌 */
   const NETWORK_GUEST_SNAPSHOT_STALE_MS = 30000; // 30 秒內未收到host snapshot才視為失聯，避免3.6秒誤判導致來賓AI建議被永久關閉
   const NETWORK_GUEST_SYNC_BACKOFF_STEPS_MS = [650, 1000, 1500, 2200];
   const NETWORK_GUEST_ENTRY_RETRY_MS = 2800;
@@ -23858,7 +23858,11 @@ function showIntegrityReport(precomputed) {
   }
 
   function canLocalHumanOperateSeat(seat) {
-    if (isGuestSyncRequired()) return false;
+    /* lag_fix_seq_gap: 來賓只是落後幾筆快照時仍可操作；真正失聯/尚未取得快照/同步中才封鎖 */
+    if (net.role === 'guest') {
+      const _staleBlock = !net.lastSnapshotAt || Date.now() - Number(net.lastSnapshotAt || 0) > NETWORK_GUEST_SNAPSHOT_STALE_MS;
+      if (!!net.guestSyncing || !net.lastAppliedSnapshotSeq || _staleBlock || state.phase === 'syncing') return false;
+    } else if (isGuestSyncRequired()) return false;
     return seat === localHumanSeat() && isSeatLocalHuman(seat) && !state.seatAutoPlay[seat];
   }
 
