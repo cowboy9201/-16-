@@ -11,7 +11,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <title>台灣麻將｜超硬鎖定版（橫拖優先、需明確上滑才出牌）</title>
-<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin/>
+<link rel="preconnect" href="https://cdn.ably.com" crossorigin/>
+<link rel="dns-prefetch" href="https://realtime.ably.io"/>
 <link rel="dns-prefetch" href="https://ghijywcreeidulaedoyy.supabase.co"/>
 <style>
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#06111f;color:#fff;font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;touch-action:manipulation;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}.app{position:fixed;inset:0;background:linear-gradient(180deg,#1f68aa 0%,#1f3d7b 44%,#10254f 100%);overflow:hidden;contain:strict}.btn{border:0;border-radius:14px;color:white;font-weight:1000;cursor:pointer;background:linear-gradient(180deg,#2563eb,#1d4ed8);box-shadow:0 8px 16px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.18);padding:9px 14px;font-size:16px}.btn.red{background:linear-gradient(180deg,#ef4444,#b91c1c)}.btn.small{padding:7px 10px;font-size:13px}.roundStatusBlock{display:grid;gap:0;align-items:start;justify-items:start;pointer-events:none}.iconBtn{width:58px;height:58px;border-radius:17px;font-size:28px;display:grid;place-items:center}.menu{pointer-events:auto;display:grid;gap:0}.rightBtns{margin-left:auto;display:flex;gap:0;pointer-events:auto}.seatLabel.active .name,.seatLabel.active .score{color:#fff06a;text-shadow:0 0 12px rgba(255,232,90,.65),0 2px 5px rgba(0,0,0,.65)}.seatLabel.ting .name:after{content:' 聽';color:#ff3030;font-size:.9em}.seat-bottom{left:14%;bottom:13%;transform:translateX(-50%)}.seat-top{left:50%;top:12%;transform:translateX(-50%)}.seat-left{left:9%;top:43%;transform:translateY(-50%)}.seat-right{right:9%;top:43%;transform:translateY(-50%)}.tile .small{position:absolute;top:1px;right:2px;font-size:9px;color:#333}.tile.red{color:#c41414}.tile.green{color:#047857}.tile.blue{color:#255fd4}.tile.back{width:27px;height:39px;background:linear-gradient(180deg,#b7f0ff 0%,#7dd3fc 58%,#43a9d8 100%);border-color:rgba(35,84,114,.36);box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 2px 4px rgba(0,0,0,.24);color:transparent}.tile.face-image{padding:0;background:transparent!important;border:0!important;box-shadow:0 3px 6px rgba(0,0,0,.25)!important;color:transparent!important}.tile-face{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;overflow:hidden;pointer-events:none}.tile-face img{width:100%;height:100%;object-fit:cover;object-position:center;display:block;border-radius:0;user-select:none;-webkit-user-drag:none;pointer-events:none}.tile.kind-suit-s .tile-face img,.tile.kind-honor .tile-face img,.tile.kind-flower .tile-face img{transform:scale(1.04);transform-origin:center center}.tile.back.face-image{background:linear-gradient(180deg,#b7f0ff 0%,#7dd3fc 58%,#43a9d8 100%)!important;border:1px solid rgba(35,84,114,.36)!important}.hand-bottom .tile{cursor:pointer}.hand-bottom .tile:hover{transform:translateY(-4px)}.hand-bottom .tile.drawn{margin-left:0}.arrow{display:none!important;position:absolute;z-index:-1;width:0;height:0;pointer-events:none}.arrow-bottom{left:50%;bottom:145px;transform:translateX(-50%);border-left:40px solid transparent;border-right:40px solid transparent;border-top:70px solid rgba(255,0,0,.88)}.log{display:none!important;}.result.dragging{transition:none;user-select:none}.result h2:active{color:#fde68a}.result #resultText{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}@media(max-width:700px){.status{font-size:13px;padding:6px 9px}.iconBtn{width:34px;height:34px}.center{width:68vw;height:48vh}.tile{width:24px;height:35px;font-size:17px}.discardGrid .tile{width:20px;height:29px}.hand-top .tile.back{width:22px;height:32px}.hand-left .tile.back,.hand-right .tile.back{width:22px;height:32px}.seatLabel .name{font-size:18px}.seatLabel .score{font-size:22px}.seat-left{left:10%}.seat-right{right:10%}.wall-left{left:84px}.wall-right{right:84px}}.actionPanel.action-panel-visible,.actionPanel.ting-choice-active{display:flex;width:auto;height:auto;overflow:visible;pointer-events:auto}.actionPanel:empty{display:none}.actionBtn .sub{display:none!important;font-size:11px;font-weight:900;opacity:.9;margin-top:1px}.actionTileStrip .tile{width:calc(var(--tw-tile-w) * 1)!important;height:calc(var(--tw-tile-h) * 1)!important;min-width:calc(var(--tw-tile-w) * 1)!important;min-height:calc(var(--tw-tile-h) * 1)!important;font-size:calc(var(--tw-tile-w) * .80)!important;margin:0!important;border:0!important;outline:0!important;border-radius:0!important;background:transparent!important;background-color:transparent!important;box-shadow:none!important}.actionTileStrip .tile.back{background:linear-gradient(180deg,#b7f0ff,#43a9d8)!important;border:1px solid rgba(35,84,114,.36)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 2px 4px rgba(0,0,0,.24)!important}.actionPanel .tile-face img{border-radius:0!important}.actionTargetTile{z-index:2!important}.actionTileStrip .tile.face-image{border:0!important;outline:0!important;background:transparent!important;box-shadow:none!important}.actionTileStrip .tile-face img{border-radius:0!important}.historyWinTileInline{display:inline-flex;align-items:center;vertical-align:middle;margin-left:5px}.historyWinTileInline .tile{width:22px!important;height:32px!important;font-size:15px!important;border-radius:4px!important}
@@ -4151,8 +4152,8 @@ html body .hand-bottom .hand-tile-row .tingWaitAssistGroupAllSeats[data-view-sea
 <div class="buttons"><button class="btn" id="resultBackBtn" type="button">上一頁</button><button class="btn" id="resultNewBtn">再來一局</button><button class="btn red" id="resultCloseBtn">關閉</button></div>
 </div>
 </div>
-<style>.tw16-lobby-key-summary-row,.tw16-lobby-key-actions,.tw16-lobby-hidden-key-row{display:none!important}</style>
-<!-- Supabase Realtime 取代 Ably：以下 shim 提供與 Ably 相同的 Realtime / channel API，原有遊戲程式不用改 -->
+<script src="https://cdn.ably.com/lib/ably.min-1.js" crossorigin="anonymous"></script>
+<!-- Supabase Realtime 選項：以下 shim 提供與 Ably 相同的 Realtime / channel API；大廳可選用 Ably 或 Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.js" crossorigin="anonymous"></script>
 <script>
 (function () {
@@ -4305,9 +4306,20 @@ html body .hand-bottom .hand-tile-row .tingWaitAssistGroupAllSeats[data-view-sea
     this.connection._set('closed');
   };
 
-  window.Ably = { Realtime: Realtime };
+  window.TW16SupabaseRealtime = Realtime;
+  window.tw16GetBackend = function () {
+    try { return localStorage.getItem('tw16Backend') === 'supabase' ? 'supabase' : 'ably'; } catch (e) { return 'ably'; }
+  };
+  window.tw16SetBackend = function (v) {
+    try { localStorage.setItem('tw16Backend', v === 'supabase' ? 'supabase' : 'ably'); } catch (e) {}
+  };
+  window.tw16BackendName = function (b) { return (b || window.tw16GetBackend()) === 'supabase' ? 'Supabase' : 'Ably'; };
+  window.tw16RealtimeClass = function (b) {
+    return (b || window.tw16GetBackend()) === 'supabase' ? window.TW16SupabaseRealtime : window.Ably.Realtime;
+  };
 })();
 </script>
+<style>.tw16-lobby.tw16-backend-supabase .tw16-lobby-key-summary-row,.tw16-lobby.tw16-backend-supabase .tw16-lobby-key-actions,.tw16-lobby.tw16-backend-supabase .tw16-lobby-remote-code-box,.tw16-lobby.tw16-backend-supabase .tw16-lobby-hidden-key-row{display:none!important}</style>
 <script>
 
 (() => {
@@ -4595,7 +4607,7 @@ html body .hand-bottom .hand-tile-row .tingWaitAssistGroupAllSeats[data-view-sea
   const VOICE_BROADCAST_MIN_BYTES = 256;
   const VOICE_BROADCAST_HOLD_TO_RECORD_MS = 650;
 
-  const DEFAULT_ABLY_API_KEY = 'supabase-realtime';
+  const DEFAULT_ABLY_API_KEY = '';
   const ABLY_API_KEY_STORAGE_KEY = 'tw16_clean_ably_api_key';
   const ABLY_API_KEY_MANUAL_SELECTION_STORAGE_KEY = 'tw16_clean_ably_api_key_manual_selection';
   const ABLY_API_KEY_CANDIDATES_STORAGE_KEY = 'tw16_clean_ably_api_key_candidates';
@@ -6367,7 +6379,7 @@ html body .hand-bottom .hand-tile-row .tingWaitAssistGroupAllSeats[data-view-sea
       const timer = setTimeout(() => finish(false, 'Ably key 測試逾時'), LOBBY_ABLY_KEY_TEST_TIMEOUT_MS);
       try {
         const clientId = 'tw16-key-test-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
-        client = new Ably.Realtime({ key: ablyKey, clientId, echoMessages: false });
+        client = new (window.tw16RealtimeClass())({ key: ablyKey, clientId, echoMessages: false });
         channel = client.channels.get(networkRoomChannelName(roomName));
         const attachTestChannel = () => {
           try {
@@ -6738,8 +6750,7 @@ html body .hand-bottom .hand-tile-row .tingWaitAssistGroupAllSeats[data-view-sea
   }
 
   async function ensureLobbyAutoUsableAblyApiKey(room, reason) {
-    // Supabase 版：不需要向伺服器查詢/測試 API KEY，直接回傳固定代號即可連線
-    return 'supabase-realtime';
+    if (window.tw16GetBackend() === 'supabase') return 'supabase-realtime';
     const roomName = String(room || DEFAULT_LOBBY_ROOM_CODE || '').trim() || DEFAULT_LOBBY_ROOM_CODE;
     const actionLabel = reason === 'guest' ? '來賓進桌' : '房主開桌';
     const requestSeq = ++lobbyAblyKeyRemoteRequestSeq;
@@ -7637,12 +7648,13 @@ html body .hand-bottom .hand-tile-row .tingWaitAssistGroupAllSeats[data-view-sea
     lobby.id = 'tw16Lobby';
     lobby.className = 'tw16-lobby';
     lobby.innerHTML = '<div class="tw16-lobby-card">'
-      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;"><div class="tw16-lobby-chip" style="flex-shrink:0;margin-bottom:0;">Supabase 連線 / 單機</div><span style="font-size:clamp(9px,2.5vw,12px);color:#cbd5e1;font-weight:700;white-space:nowrap;">（115.11.2 改版｜2026-11-02 15:51 台灣時間）</span></div>'
-      + '<div class="tw16-lobby-title">台灣麻將 Supabase 連線 / 單機</div>'
+      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;"><div class="tw16-lobby-chip" id="tw16LobbyChipText" style="flex-shrink:0;margin-bottom:0;">Ably 連線 / 單機</div><span style="font-size:clamp(9px,2.5vw,12px);color:#cbd5e1;font-weight:700;white-space:nowrap;">（115.11.2 改版｜2026-11-02 18:58 台灣時間）</span></div>'
+      + '<div class="tw16-lobby-title" id="tw16LobbyTitleText">台灣麻將 Ably 連線 / 單機</div>'
       + '<div class="tw16-lobby-sub">★連線對戰：<br><span style="color:#ef4444">每人都要設同房名</span>，設好房名後<br>1人先按<span style="background:#1d4ed8;color:#fff;border-radius:3px;padding:0 3px;">建立房間</span><br>其餘人按<span style="background:#1d4ed8;color:#fff;border-radius:3px;padding:0 3px;">加入房間</span><br>★單人：按<span style="background:#15803d;color:#fff;border-radius:3px;padding:0 3px;">直接離線開始</span></div>'
       + '<div class="tw16-lobby-grid">'
       + '<div class="tw16-lobby-row tw16-lobby-inline-row"><label for="tw16LobbyName">玩家名稱</label><input class="tw16-lobby-input" id="tw16LobbyName" value="(請輸入)" onfocus="if(this.value===\'(請輸入)\')this.value=\'\'" onblur="if(!this.value.trim())this.value=\'(請輸入)\'"></div>'
       + '<div class="tw16-lobby-row tw16-lobby-inline-row"><label for="tw16LobbyRoom">房名</label><input class="tw16-lobby-input" id="tw16LobbyRoom" value="(請輸入)" onfocus="if(this.value===\'(請輸入)\')this.value=\'\'" onblur="if(!this.value.trim())this.value=\'(請輸入)\'"></div>'
+      + '<div class="tw16-lobby-row tw16-lobby-inline-row"><label for="tw16LobbyBackend">連線伺服器</label><select class="tw16-lobby-input" id="tw16LobbyBackend"><option value="ably">Ably（需 API KEY）</option><option value="supabase">Supabase（免 KEY）</option></select></div>'
       + '<div class="tw16-lobby-row tw16-lobby-inline-row"><label for="tw16LobbyTableMode">人數模式</label><select class="tw16-lobby-input" id="tw16LobbyTableMode"><option value="4" selected>4人</option><option value="3">3人(無北家，禁吃牌)</option><option value="2">2人(僅東/西家)</option></select></div>'
       + '<div class="tw16-lobby-row" style="margin-top:-6px;"><span style="font-size:11px;color:#94a3b8;font-weight:700;">※人數模式僅「建立房間(房主)」與「直接離線開始」生效；加入房間(來賓)時將自動套用房主設定。</span></div>'
       + '</div>'
@@ -7656,7 +7668,7 @@ html body .hand-bottom .hand-tile-row .tingWaitAssistGroupAllSeats[data-view-sea
       + '<div class="tw16-lobby-row tw16-lobby-hidden-key-row"><label for="tw16LobbyAblyKey">目前使用的 Ably API KEY（自動填入／仍可手動修正）</label><input class="tw16-lobby-input" id="tw16LobbyAblyKey" list="tw16LobbyAblyKeyDatalist" autocomplete="off" spellcheck="false" value="' + escapeHtml(getStoredAblyApiKey()) + '"><datalist id="tw16LobbyAblyKeyDatalist"></datalist><div class="tw16-lobby-key-list" id="tw16LobbyAblyKeyCandidateList" hidden></div></div>'
       + '<div class="tw16-lobby-row tw16-lobby-hidden-key-row"><label for="tw16LobbyUsableAblyKey">伺服器測試可用的 Ably API KEY</label><input class="tw16-lobby-input" id="tw16LobbyUsableAblyKey" autocomplete="off" spellcheck="false" readonly value=""></div>'
       + '<div class="tw16-lobby-row tw16-lobby-hidden-key-row"><label for="tw16LobbyUsableAblyKeyCode">可用 KEY 對應的伺服器口令欄位</label><input class="tw16-lobby-input" id="tw16LobbyUsableAblyKeyCode" autocomplete="off" spellcheck="false" readonly value=""></div>'
-      + '<div class="tw16-lobby-remote-code-box" id="tw16LobbyRemoteCodeBox"><div class="tw16-lobby-remote-code-title">連線服務：Supabase Realtime</div><div class="tw16-lobby-remote-code-status" id="tw16LobbyRemoteCodeStatus">不需要 API KEY，輸入房名即可開桌或入桌。</div></div>'
+      + '<div class="tw16-lobby-remote-code-box" id="tw16LobbyRemoteCodeBox"><div class="tw16-lobby-remote-code-title">Ably API KEY 全自動查詢</div><div class="tw16-lobby-remote-code-status" id="tw16LobbyRemoteCodeStatus">房主建立房間或來賓加入房間首次需要使用 API KEY 時，會先一次取回伺服器表格可查到的所有 key，並把本地 KEY 列表更新成和伺服器一致，再本地逐組測試；來賓若無法入桌約 3 秒會自動換不同 Api key，從頭到尾只試一輪，仍進不了就停止並提示檢查房名。公共網址：' + escapeHtml(LOBBY_ABLY_KEY_REMOTE_BASE_URL) + '</div></div>'
       + '<div class="tw16-lobby-key-actions"><button class="tw16-lobby-btn blue" id="tw16LobbyEditAblyKey" type="button">伺服器 KEY 列表</button><button class="tw16-lobby-btn blue" id="tw16LobbyLocalAblyKey" type="button">本地 KEY 列表</button><input id="tw16LobbyKeySheetLoadFile" type="file" accept="application/json,.json,text/plain,.txt,.csv" style="display:none!important"></div>'
       + '</div>';
     app.insertBefore(lobby, app.firstChild);
@@ -7687,6 +7699,24 @@ html body .hand-bottom .hand-tile-row .tingWaitAssistGroupAllSeats[data-view-sea
     renderLobbyAblyApiKeyCandidates(false);
     renderLobbyAblyKeyUseStatusBox();
     setLobbyUsableAblyKeyDisplay('', '', '房主建立房間或來賓加入房間首次需要使用 API KEY 時，會先一次取回伺服器表格可查到的所有 key，並把本地 KEY 列表更新成和伺服器一致，再本地逐組測試；來賓若無法入桌約 3 秒會自動換不同 Api key，從頭到尾只試一輪，仍進不了就停止並提示檢查房名。', '');
+    (function tw16InitBackendSelector() {
+      const sel = byId('tw16LobbyBackend');
+      const apply = (announce) => {
+        const b = window.tw16GetBackend();
+        const name = window.tw16BackendName(b);
+        lobby.classList.toggle('tw16-backend-supabase', b === 'supabase');
+        if (sel) sel.value = b;
+        const chip = byId('tw16LobbyChipText'); if (chip) chip.textContent = name + ' 連線 / 單機';
+        const title = byId('tw16LobbyTitleText'); if (title) title.textContent = '台灣麻將 ' + name + ' 連線 / 單機';
+        if (b === 'supabase') {
+          updateLobbyStatus('使用 Supabase 伺服器：不需要 API KEY，輸入房名即可建立／加入房間。※同一桌所有人必須選同一個伺服器。');
+        } else if (announce) {
+          updateLobbyStatus('已改用 Ably 伺服器：建立／加入房間時會依原本方式取得 API KEY。※同一桌所有人必須選同一個伺服器。');
+        }
+      };
+      if (sel) sel.addEventListener('change', () => { window.tw16SetBackend(sel.value); apply(true); });
+      apply(false);
+    })();
     if (ablyKeyInput) {
       ablyKeyInput.addEventListener('focus', () => renderLobbyAblyApiKeyCandidates(true));
       ablyKeyInput.addEventListener('click', () => renderLobbyAblyApiKeyCandidates(true));
@@ -7711,7 +7741,7 @@ html body .hand-bottom .hand-tile-row .tingWaitAssistGroupAllSeats[data-view-sea
       if (!key) return;
       const ok = connectAbly('host', room, nameValue(), key);
       const el = status();
-      if (el && ok) el.textContent = '正在連線 Supabase。房間建立完成後會自動進入牌桌並開局。';
+      if (el && ok) el.textContent = '正在連線 ' + window.tw16BackendName() + '。房間建立完成後會自動進入牌桌並開局。';
     });
     if (guestBtn) guestBtn.addEventListener('click', async () => {
       saveLastInputs();
@@ -9194,14 +9224,16 @@ function loadUiSettings() {
     el.hidden = false;
     const roleText = net.role === 'host' ? '房主' : ('來賓 ' + (net.assignedSeat ? SEAT_NAME[net.assignedSeat] : '等待座位'));
     const keyPrefix = currentAblyApiKeyPrefix();
-    el.textContent = (keyPrefix ? (keyPrefix + '｜') : '') + 'Ably｜房號 ' + net.room + '｜' + roleText;
+    if ((net.backend || window.tw16GetBackend()) === 'supabase') el.textContent = 'Supabase｜房號 ' + net.room + '｜' + roleText;
+    else el.textContent = (keyPrefix ? (keyPrefix + '｜') : '') + 'Ably｜房號 ' + net.room + '｜' + roleText;
   }
 
   function networkStatusText() {
-    if (net.connecting) return net.role === 'host' ? 'Ably房主連線中' : 'Ably來賓連線中';
+    const _bn = window.tw16BackendName(net.backend);
+    if (net.connecting) return net.role === 'host' ? (_bn + '房主連線中') : (_bn + '來賓連線中');
     if (!isNetworked()) return '單機';
     const stateText = net.connected ? '' : (net.connectionState === 'failed' ? '（連線失敗）' : (net.connectionState === 'suspended' || net.connectionState === 'disconnected' ? '（重連中）' : ''));
-    return net.role === 'host' ? ('Ably房主' + stateText) : ('Ably來賓 ' + (net.assignedSeat ? SEAT_NAME[net.assignedSeat] : '未入座') + stateText);
+    return net.role === 'host' ? (_bn + '房主' + stateText) : (_bn + '來賓 ' + (net.assignedSeat ? SEAT_NAME[net.assignedSeat] : '未入座') + stateText);
   }
 
   function updateLobbyStatus(text) {
@@ -9299,6 +9331,7 @@ function loadUiSettings() {
   }
 
   function scheduleGuestApiKeyRetry(reason, delayMs) {
+    if (window.tw16GetBackend() === 'supabase') return false;
     if (!guestStillNeedsTableEntry()) return false;
     if (net.guestKeyRetryStopped) return false;
     const wait = Math.max(700, Number(delayMs) || NETWORK_GUEST_ENTRY_RETRY_MS);
@@ -11820,8 +11853,9 @@ function loadUiSettings() {
 
   function connectAbly(role, room, name, key) {
     if (!room) { addLog('請輸入房號'); updateLobbyStatus('請輸入房號。'); return false; }
-    if (!window.Ably) { addLog('Ably SDK 尚未載入'); updateLobbyStatus('Ably SDK 尚未載入，請確認網路後重開。'); return false; }
-    const ablyApiKey = saveStoredAblyApiKey(key || getStoredAblyApiKey());
+    const tw16Backend = window.tw16GetBackend();
+    if (tw16Backend === 'supabase' ? !window.TW16SupabaseRealtime : !window.Ably) { const _bn = window.tw16BackendName(tw16Backend); addLog(_bn + ' SDK 尚未載入'); updateLobbyStatus(_bn + ' SDK 尚未載入，請確認網路後重開。'); return false; }
+    const ablyApiKey = tw16Backend === 'supabase' ? 'supabase-realtime' : saveStoredAblyApiKey(key || getStoredAblyApiKey());
     if (!ablyApiKey) { updateLobbyStatus('尚未找到可用 Ably API KEY，請先自動查詢或手動輸入。'); const keyInput = byId('tw16LobbyAblyKey'); if (keyInput) { keyInput.focus(); keyInput.select(); } return false; }
     disconnectAbly(false);
     const connectGeneration = (net.connectGeneration || 0) + 1;
@@ -11844,6 +11878,7 @@ function loadUiSettings() {
     tw16InitEcdhIdentity();
     net.connected = false;
     net.connecting = true;
+    net.backend = tw16Backend;
     net.connectionState = 'connecting';
     net.assignedSeat = role === 'host' ? 'east' : '';
     net.lastAppliedSeq = 0;
@@ -11896,12 +11931,12 @@ function loadUiSettings() {
       cancelLocalOpeningForGuestConnect();
     }
     updateRoomText();
-    updateLobbyStatus(role === 'host' ? '正在連線 Supabase。房間建立完成後會自動進入牌桌並開局。' : '正在連線 Ably，連線完成後會要求房主分配座位。');
+    updateLobbyStatus(role === 'host' ? ('正在連線 ' + window.tw16BackendName(tw16Backend) + '。房間建立完成後會自動進入牌桌並開局。') : ('正在連線 ' + window.tw16BackendName(tw16Backend) + '，連線完成後會要求房主分配座位。'));
 
     function failConnection(text) {
       if (net.connectGeneration !== connectGeneration) return;
-      addLog(text || '連線失敗');
-      updateLobbyStatus(text || '連線失敗。請檢查 API KEY / 網路後重新連線。');
+      addLog(text || (window.tw16BackendName(tw16Backend) + '連線失敗'));
+      updateLobbyStatus(text || (tw16Backend === 'supabase' ? 'Supabase連線失敗。請檢查網路後重新連線。' : 'Ably連線失敗。請檢查 API KEY / 網路後重新連線。'));
       try { if (net.ably) net.ably.close(); } catch (e) {}
       net.connected = false;
       net.connecting = false;
@@ -11925,8 +11960,8 @@ function loadUiSettings() {
       net.connectionState = 'connected';
       net.lastSnapshotAt = role === 'guest' ? 0 : (net.lastSnapshotAt || Date.now());
       updateRoomText();
-      if (!wasConnected) addLog(role === 'host' ? 'Ably房主已建立房間' : 'Ably來賓已連上，等待房主分配座位');
-      updateLobbyStatus(role === 'host' ? '房主已連上 Ably，正在自動進入牌桌開局。' : '來賓已連上 Ably，正在要求房主分配座位…');
+      if (!wasConnected) addLog(window.tw16BackendName(tw16Backend) + (role === 'host' ? '房主已建立房間' : '來賓已連上，等待房主分配座位'));
+      updateLobbyStatus(role === 'host' ? ('房主已連上 ' + window.tw16BackendName(tw16Backend) + '，正在自動進入牌桌開局。') : ('來賓已連上 ' + window.tw16BackendName(tw16Backend) + '，正在要求房主分配座位…'));
       startNetworkPulse();
       if (role === 'host') {
         publishNetworkPlayers(wasConnected ? 'host-reconnected' : 'host-connect');
@@ -11950,7 +11985,7 @@ function loadUiSettings() {
     }
 
     try {
-      net.ably = new Ably.Realtime({ key: ablyApiKey, clientId: net.instanceId, echoMessages: true });
+      net.ably = new (window.tw16RealtimeClass(tw16Backend))({ key: ablyApiKey, clientId: net.instanceId, echoMessages: true });
       net.channel = net.ably.channels.get(networkRoomChannelName(net.room));
       net.syncChannel = net.ably.channels.get(networkRoomControlChannelName(net.room));
       net.broadcastChannel = net.ably.channels.get(networkRoomBroadcastChannelName(net.room));
@@ -12033,22 +12068,22 @@ function loadUiSettings() {
         try {
           net.channel.attach(err => {
             if (net.connectGeneration !== connectGeneration) return;
-            if (err) { failConnection('房間頻道附加失敗：' + (err && err.message ? err.message : err)); return; }
+            if (err) { failConnection('Ably房間頻道附加失敗：' + (err && err.message ? err.message : err)); return; }
             finishConnected();
           });
         } catch (e) {
-          failConnection('房間頻道附加失敗：' + (e && e.message ? e.message : e));
+          failConnection('Ably房間頻道附加失敗：' + (e && e.message ? e.message : e));
         }
       }
       subscribeRoomChannelAllEvents();
       if (net.ably && net.ably.connection) {
         net.ably.connection.on('connected', attachRoomChannelThenFinish);
-        net.ably.connection.on('failed', change => failConnection('連線失敗' + (change && change.reason && change.reason.message ? '：' + change.reason.message : '')));
+        net.ably.connection.on('failed', change => failConnection('Ably連線失敗' + (change && change.reason && change.reason.message ? '：' + change.reason.message : '')));
         net.ably.connection.on('suspended', () => {
           if (net.connectGeneration !== connectGeneration) return;
           net.connectionState = 'suspended';
-          addLog('連線暫停，正在等待恢復');
-          updateLobbyStatus('連線暫停，正在等待恢復…');
+          addLog('Ably連線暫停，正在等待恢復');
+          updateLobbyStatus('Ably連線暫停，正在等待恢復…');
           // 若牌局進行中，自動儲存並重新向伺服器取得新 key 後重連
           if (hasStartedNetworkHand(state) && !net._ablyReconnecting) {
             net._ablyReconnecting = true;
@@ -12075,7 +12110,7 @@ function loadUiSettings() {
         net.ably.connection.on('disconnected', () => {
           if (net.connectGeneration !== connectGeneration) return;
           net.connectionState = 'disconnected';
-          if (net.connected) addLog('暫時斷線，等待自動重連');
+          if (net.connected) addLog('Ably暫時斷線，等待自動重連');
         });
         if (net.ably.connection.state === 'connected') attachRoomChannelThenFinish();
       } else {
@@ -12083,7 +12118,7 @@ function loadUiSettings() {
       }
       return true;
     } catch (e) {
-      failConnection('連線失敗：' + (e && e.message ? e.message : e));
+      failConnection('Ably連線失敗：' + (e && e.message ? e.message : e));
       return false;
     }
   }
