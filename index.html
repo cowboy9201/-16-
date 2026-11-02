@@ -14612,10 +14612,10 @@ function loadUiSettings() {
     else if (extra.robKong) { items.push('搶槓胡'); }
     else { items.push('放槍胡'); }
     if (closed) { tai += 1; items.push('門清 +1'); }
-    if (closed && kind === 'self') { tai += 3; items.push('門清自摸 +3'); }
+    if (closed && kind === 'self') { tai += 1; items.push('門清自摸 +1'); }
     if (extra.robKong) { tai += 1; items.push('搶槓 +1'); }
     if (extra.kongFlower) { tai += 1; items.push('槓上開花 +1'); }
-    if (wallAtWin <= 16) {
+    if (wallAtWin <= currentMinLiveWallTiles()) {
       if (kind === 'self') { tai += 1; items.push('海底撈月 +1'); }
       else { tai += 1; items.push('河底撈魚 +1'); }
     }
@@ -14636,11 +14636,11 @@ function loadUiSettings() {
     if (flowers) { tai += flowers; items.push('花牌 +' + flowers); }
     const tw16K = tw16TaiKernel(winner, winTile, allCodes);
     if (tw16K < 0) return evaluateWinDetailsJS(winner, kind, fromSeat, winTile, info);
-    if (tw16K & 65536) { tai += 1; items.push(tileText('C') + '刻 +1'); }
-    if (tw16K & 131072) { tai += 1; items.push(tileText('F') + '刻 +1'); }
-    if (tw16K & 262144) { tai += 1; items.push(tileText('P') + '刻 +1'); }
-    if (tw16K & 524288) { tai += 1; items.push('門風刻 +' + 1); }
-    if (tw16K & 1048576) { tai += 1; items.push('圈風刻 +' + 1); }
+    if ((tw16K & 65536) && !(tw16K & 2048)) { tai += 1; items.push(tileText('C') + '刻 +1'); }
+    if ((tw16K & 131072) && !(tw16K & 2048)) { tai += 1; items.push(tileText('F') + '刻 +1'); }
+    if ((tw16K & 262144) && !(tw16K & 2048)) { tai += 1; items.push(tileText('P') + '刻 +1'); }
+    if ((tw16K & 524288) && !(tw16K & 8192)) { tai += 1; items.push('門風刻 +' + 1); }
+    if ((tw16K & 1048576) && !(tw16K & 8192)) { tai += 1; items.push('圈風刻 +' + 1); }
 
 
     if (tw16K & 1) { tai += 16; items.push('字一色 +16'); }
@@ -14824,10 +14824,10 @@ function loadUiSettings() {
     else if (extra.robKong) { items.push('搶槓胡'); }
     else { items.push('放槍胡'); }
     if (closed) { tai += 1; items.push('門清 +1'); }
-    if (closed && kind === 'self') { tai += 3; items.push('門清自摸 +3'); }
+    if (closed && kind === 'self') { tai += 1; items.push('門清自摸 +1'); }
     if (extra.robKong) { tai += 1; items.push('搶槓 +1'); }
     if (extra.kongFlower) { tai += 1; items.push('槓上開花 +1'); }
-    if (wallAtWin <= 16) {
+    if (wallAtWin <= currentMinLiveWallTiles()) {
       if (kind === 'self') { tai += 1; items.push('海底撈月 +1'); }
       else { tai += 1; items.push('河底撈魚 +1'); }
     }
@@ -14847,11 +14847,13 @@ function loadUiSettings() {
     const flowers = (state.flowers[winner] || []).length;
     if (flowers) { tai += flowers; items.push('花牌 +' + flowers); }
     const tripletsEarly = tripletCodeSet(winner, winTile);
-    ['C','F','P'].forEach(code => { if (tripletsEarly.has(code)) { tai += 1; items.push(tileText(code) + '刻 +1'); } });
+    const _bigDragon = ['C','F','P'].every(c => tripletsEarly.has(c));
+    const _bigWinds = ['E','S','W','N'].every(c => tripletsEarly.has(c));
+    ['C','F','P'].forEach(code => { if (!_bigDragon && tripletsEarly.has(code)) { tai += 1; items.push(tileText(code) + '刻 +1'); } });
     const seatWind = ['E','S','W','N'][SEATS.indexOf(winner)];
     const roundWind = ['E','S','W','N'][state.windRound % 4];
-    if (tripletsEarly.has(seatWind)) { tai += 1; items.push('門風刻 +' + 1); }
-    if (tripletsEarly.has(roundWind)) { tai += 1; items.push('圈風刻 +' + 1); }
+    if (!_bigWinds && tripletsEarly.has(seatWind)) { tai += 1; items.push('門風刻 +' + 1); }
+    if (!_bigWinds && tripletsEarly.has(roundWind)) { tai += 1; items.push('圈風刻 +' + 1); }
 
     const isTwoPlayerMode = (Number(state.tableMode) || 4) === 2;
     const winCounts = countCodes(allCodes);
@@ -14924,7 +14926,7 @@ function loadUiSettings() {
   }
 
   function isClosedHandLike(seat) {
-    return !(state.melds[seat] || []).length;
+    return (state.melds[seat] || []).every(m => Array.isArray(m) && m.length === 4 && m.some(t => t && t.concealedKongOwner));
   }
 
   function hasStraightDragon(codes) {
@@ -14994,7 +14996,9 @@ function loadUiSettings() {
       /* 零和：贏家獲得 = 在桌對手數 * 1個單位；每位在桌對手各付1個單位。
          4人模式對手數=3，與原規則(+3/-1)完全相同；2/3人模式自動依對手數調整，總和恆為0。 */
       const opponents = activeSeats().filter(s => s !== winner).length;
-      if (seat === winner) return { bases: opponents, taiUnits: scoreTai * opponents };
+      const dealerExtra = (winner !== state.dealer && activeSeats().includes(state.dealer)) ? dealerRepeatTaiValue() : 0;
+      if (seat === winner) return { bases: opponents, taiUnits: scoreTai * opponents + dealerExtra };
+      if (seat === state.dealer && seat !== winner) return { bases: -1, taiUnits: -(scoreTai + dealerExtra) };
       return { bases: -1, taiUnits: -scoreTai };
     }
     if (kind === 'ron') {
