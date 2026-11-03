@@ -4968,17 +4968,28 @@ html body .hand-bottom .hand-tile-row .tingWaitAssistGroupAllSeats[data-view-sea
   // 只接受 seat 對得上自己座位、handId 對得上目前這一局的封包，避免套用到舊局或別人的資料。
   async function tw16ApplyPrivateHand(data) {
     try {
-      if (!isOnlineGuest() || !data || data.handSeat !== net.assignedSeat) return;
+      if (!isOnlineGuest() || !data || data.handSeat !== net.assignedSeat || !data.enc) return;
       const key = net.hostAesKey || await tw16EnsureGuestHostAesKey();
-      if (!key || !data.enc) return;
-      const handList = await tw16AesDecryptJson(key, data.enc);
-      if (!Array.isArray(handList)) return;
-      if (Number(data.handId || 0) !== Number(state.handId || 0)) return;
-      state.hands[net.assignedSeat] = handList;
-      renderAll();
-    } catch (e) {
-      // 解密失敗就維持現狀，等下一則快照/私密手牌訊息重試，不拋錯中斷流程。
-    }
+      if (!key) return;
+      const pairs = await tw16AesDecryptJson(key, data.enc);
+      if (!Array.isArray(pairs)) return;
+      const hid = String(Number(data.handId || 0));
+      if (!net.revealByHand) net.revealByHand = {};
+      const map = net.revealByHand[hid] || (net.revealByHand[hid] = {});
+      pairs.forEach(pr => { if (Array.isArray(pr) && pr[0] && pr[1]) map[pr[0]] = pr[1]; });
+      Object.keys(net.revealByHand).forEach(k => { if (Number(k) < Number(hid) - 1) delete net.revealByHand[k]; });
+      if (Number(state.handId || 0) === Number(hid) && tw16FillOwnCodes(state, net.assignedSeat, map)) renderAll();
+    } catch (e) {}
+  }
+  // 以 id 補回本人座位暗牌的 code；回傳是否有補到。只改缺 code 的牌，永不覆蓋既有資料。
+  function tw16FillOwnCodes(st, seat, map) {
+    let changed = false;
+    const fill = t => { if (t && t.id && !t.code && map[t.id]) { t.code = map[t.id]; changed = true; } };
+    ((st.hands && st.hands[seat]) || []).forEach(fill);
+    ((st.melds && st.melds[seat]) || []).forEach(m => (Array.isArray(m) ? m : []).forEach(t => { if (t && t.concealedKongOwner) fill(t); }));
+    if (st.pending && st.pending.kind === 'selfwin' && st.pending.seat === seat) fill(st.pending.winTile);
+    if (st.openingDeal && st.openingDeal.hands) ((st.openingDeal.hands[seat]) || []).forEach(fill);
+    return changed;
   }
 
   // tw16_hand_privacy_ecdh_20260802: 針對每個已完成金鑰交換的座位，把該座位「真正」的
@@ -4986,19 +4997,32 @@ html body .hand-bottom .hand-tile-row .tingWaitAssistGroupAllSeats[data-view-sea
   // 這一步是非同步的，獨立於同步的 publishNetworkSnapshot 之外進行，不拖慢原本的狀態同步。
   // 沒有金鑰的座位（尚未完成交握、或該來賓瀏覽器不支援）直接跳過──此時
   // tw16RedactHandsForWire 也不會遮蔽它，維持舊行為，保證對局不會卡住。
-  async function tw16PublishPrivateHands(reason) {
-    if (!isOnlineHost() || !net.channel) return;
+  async function tw16PublishPrivateHands(reason, force) {
+    if (!isOnlineHost() || !net.channel || state.ended) return;
+    const handId = state.handId || 0;
+    if (!net.privHandSent) net.privHandSent = {};
     const seats = networkSeatOrder().filter(s => s !== 'east');
     for (const seat of seats) {
+      const p = net.players && net.players[seat];
+      if (!p || !p.pubKey) continue;
       const key = await tw16EnsureHostGuestAesKey(seat);
       if (!key) continue;
-      const handList = Array.isArray(state.hands[seat]) ? state.hands[seat] : [];
+      // 只送「id→牌碼」對照：手牌 + 該座位自己的暗槓牌。牌的 id 與牌碼綁定後不會變，
+      // 所以來賓端用 id 補 code，與快照先後順序無關（不會再有覆蓋舊資料的競態）。
+      const pairs = [];
+      (state.hands[seat] || []).forEach(t => { if (t && t.id && t.code) pairs.push([String(t.id), t.code]); });
+      ((state.melds && state.melds[seat]) || []).forEach(m => (Array.isArray(m) ? m : []).forEach(t => {
+        if (t && t.concealedKongOwner && t.id && t.code) pairs.push([String(t.id), t.code]);
+      }));
+      const sw = state.pending && state.pending.kind === 'selfwin' && state.pending.seat === seat ? state.pending.winTile : null;
+      if (sw && sw.id && sw.code) pairs.push([String(sw.id), sw.code]);
+      const fp = handId + '|' + (p.pubKey && p.pubKey.x || '') + '|' + pairs.map(x => x[0]).join(',');
+      if (!force && net.privHandSent[seat] === fp) continue;
       try {
-        const enc = await tw16AesEncryptJson(key, handList);
-        publishNetworkRoomMessage('privateHand', { handSeat: seat, handId: state.handId || 0, enc: enc }, reason || 'private-hand', { reliable: false });
-      } catch (e) {
-        // 加密/送出失敗就靜默略過，下次快照觸發時會再重試。
-      }
+        const enc = await tw16AesEncryptJson(key, pairs);
+        publishNetworkRoomMessage('privateHand', { handSeat: seat, handId: handId, enc: enc }, reason || 'private-hand', { reliable: false });
+        net.privHandSent[seat] = fp;
+      } catch (e) {}
     }
   }
 
@@ -5761,7 +5785,7 @@ html body .hand-bottom .hand-tile-row .tingWaitAssistGroupAllSeats[data-view-sea
     return {
       reason: reason || 'players',
       seq: net.seq,
-      players: clonePlain(net.players || {}),
+      players: tw16PublicPlayers(net.players),
       scoreChipSettings: currentScoreChipSettings(),
       handStarted: hasStartedNetworkHand(state),
       hostSessionId: net.instanceId,
@@ -5941,39 +5965,21 @@ html body .hand-bottom .hand-tile-row .tingWaitAssistGroupAllSeats[data-view-sea
   function byId(id) { return document.getElementById(id); }
 
   function tw16DecryptHandsInSnapshot(msg) {
-    if (!msg || !msg.state || !msg.handPacketKey) return msg;
-    const packetKey = msg.handPacketKey;
-    const masterKey = net.handMasterKey || '';
-    const fullKey = masterKey + packetKey;
-    if (!fullKey) return msg;
-
+    if (!msg || !msg.state || !net.assignedSeat) return msg;
     const stateObj = unpackNetworkState(msg.state);
-    if (stateObj && stateObj.hands) {
-      Object.keys(stateObj.hands).forEach(seat => {
-        if (seat !== net.assignedSeat) return;
-        const list = stateObj.hands[seat];
-        if (Array.isArray(list)) {
-          list.forEach(t => {
-            if (t.enc && !t.code) {
-              t.code = tw16SimpleDecrypt(t.enc, fullKey);
-            }
-          });
-        }
-      });
-      if (stateObj.openingDeal && stateObj.openingDeal.hands) {
-        Object.keys(stateObj.openingDeal.hands).forEach(seat => {
-          if (seat !== net.assignedSeat) return;
-          const list = stateObj.openingDeal.hands[seat];
-          if (Array.isArray(list)) {
-            list.forEach(t => {
-              if (t.enc && !t.code) {
-                t.code = tw16SimpleDecrypt(t.enc, fullKey);
-              }
-            });
-          }
-        });
-      }
-      msg.state = packNetworkState(stateObj);
+    if (!stateObj || stateObj.ended) return msg;
+    const map = (net.revealByHand && net.revealByHand[String(Number(stateObj.handId || 0))]) || {};
+    tw16FillOwnCodes(stateObj, net.assignedSeat, map);
+    msg.state = packNetworkState(stateObj);
+    // 新摸進的牌，揭示封包通常緊跟著快照到；若 1.5 秒後仍缺牌面就請房主補送。
+    const seat = net.assignedSeat;
+    const missing = ((stateObj.hands && stateObj.hands[seat]) || []).some(t => t && !t.code);
+    if (missing && !stateObj.ended) {
+      clearTimeout(net.revealWatchTimer);
+      net.revealWatchTimer = setTimeout(() => {
+        const miss = ((state.hands && state.hands[seat]) || []).some(t => t && !t.code);
+        if (miss && !state.ended) { try { requestNetworkSync('hand-reveal-missing'); } catch (e) {} }
+      }, 1500);
     }
     return msg;
   }
@@ -10310,14 +10316,72 @@ function loadUiSettings() {
   // 所以移除 code 完全不影響畫面。guest 端一律不會本機執行摸牌邏輯（driveSeat()
   // 開頭即 isOnlineGuest() 直接 return，人類手動摸牌也是送 intent 給房主代為執行），
   // 因此 wire 版本缺少未摸牌的 code 不會影響任何遊戲邏輯。
+  // tw16_hand_private_wire: 手牌只送給本人，其他座位只送張數。
+  // 規則：state.ended（已結算、全部攤牌）不遮蔽；否則每個座位的暗牌（hands、暗槓）都拿掉 code，
+  // 只留 id 等版面欄位（張數、摸牌標記照常）。本人牌面改由 tw16PublishPrivateHands() 用
+  // ECDH+AES-GCM 對該座位加密另送。唯一例外：真人來賓沒有公鑰（瀏覽器沒有 WebCrypto）時，
+  // 依 TW16_HAND_PRIVACY_FAIL_OPEN 決定是明碼放行（true，不卡對局）還是照樣遮蔽（false）。
+  const TW16_HAND_PRIVACY_FAIL_OPEN = true;
+  function tw16SeatWireClear(seat) {
+    if (state.ended) return true;
+    const p = net.players && net.players[seat];
+    if (!p || p.role !== 'guest' || p.human === false) return false;
+    if (p.pubKey) return false;
+    return TW16_HAND_PRIVACY_FAIL_OPEN;
+  }
+  function tw16StripTileCode(t) {
+    if (!t || typeof t !== 'object') return t;
+    const c = Object.assign({}, t);
+    delete c.code;
+    return c;
+  }
+  function tw16ConcealedIdSet() {
+    const set = new Set();
+    SEATS.forEach(function (seat) {
+      if (tw16SeatWireClear(seat)) return;
+      (state.hands[seat] || []).forEach(function (t) { if (t && t.id) set.add(String(t.id)); });
+      ((state.melds && state.melds[seat]) || []).forEach(function (m) {
+        (Array.isArray(m) ? m : []).forEach(function (t) { if (t && t.concealedKongOwner && t.id) set.add(String(t.id)); });
+      });
+    });
+    return set;
+  }
   function tw16RedactWallTilesForWire(list) {
     if (!Array.isArray(list)) return list;
+    const hidden = tw16ConcealedIdSet();
     return list.map(function (t) {
-      if (!t || typeof t !== 'object' || t.drawn === true) return t;
-      const clone = Object.assign({}, t);
-      delete clone.code;
-      return clone;
+      if (!t || typeof t !== 'object') return t;
+      if (t.drawn === true && !hidden.has(String(t.id))) return t;
+      return tw16StripTileCode(t);
     });
+  }
+  function tw16RedactMeldsForWire(melds) {
+    if (!melds || typeof melds !== 'object') return melds;
+    const out = {};
+    Object.keys(melds).forEach(function (seat) {
+      const groups = melds[seat];
+      if (!Array.isArray(groups) || tw16SeatWireClear(seat)) { out[seat] = groups; return; }
+      out[seat] = groups.map(function (m) {
+        return Array.isArray(m) ? m.map(function (t) { return t && t.concealedKongOwner ? tw16StripTileCode(t) : t; }) : m;
+      });
+    });
+    return out;
+  }
+  function tw16RedactPendingForWire(pending) {
+    if (!pending || typeof pending !== 'object') return pending;
+    if (pending.kind === 'selfwin' && pending.winTile && !tw16SeatWireClear(pending.seat)) {
+      return Object.assign({}, pending, { winTile: tw16StripTileCode(pending.winTile) });
+    }
+    return pending;
+  }
+  function tw16RedactAnimationForWire(anim) {
+    if (!anim || typeof anim !== 'object' || anim.type !== 'draw' || !anim.tile) return anim;
+    return Object.assign({}, anim, { tile: tw16StripTileCode(anim.tile) });
+  }
+  function tw16PublicPlayers(players) {
+    const out = clonePlain(players || {});
+    Object.keys(out).forEach(function (k) { if (out[k] && typeof out[k] === 'object') delete out[k].handMasterKey; });
+    return out;
   }
 
   // tw16_hand_privacy_ecdh_20260802: 廣播快照中的暗牌（state.hands）預設也不該讓
@@ -10330,27 +10394,10 @@ function loadUiSettings() {
   function tw16RedactHandsForWire(hands) {
     if (!hands || typeof hands !== 'object') return hands;
     const out = {};
-    const packetKey = net.handPacketKey || '';
     Object.keys(hands).forEach(function (seat) {
       const list = hands[seat];
-      if (!Array.isArray(list)) { out[seat] = list; return; }
-      const player = net.players && net.players[seat];
-      const masterKey = (player && player.handMasterKey) || '';
-      const fullKey = masterKey + packetKey;
-      const isHost = seat === 'east';
-      if (isHost || !fullKey) {
-        out[seat] = list;
-        return;
-      }
-      out[seat] = list.map(function (t) {
-        if (!t || typeof t !== 'object') return t;
-        const clone = Object.assign({}, t);
-        if (clone.code) {
-          clone.enc = tw16SimpleEncrypt(clone.code, fullKey);
-          delete clone.code;
-        }
-        return clone;
-      });
+      if (!Array.isArray(list) || tw16SeatWireClear(seat)) { out[seat] = list; return; }
+      out[seat] = list.map(tw16StripTileCode);
     });
     return out;
   }
@@ -10375,7 +10422,7 @@ function loadUiSettings() {
       viewSeat: state.viewSeat,
       turn: state.turn,
       phase: state.phase,
-      pending: state.pending,
+      pending: tw16RedactPendingForWire(state.pending),
       actionDeadlineAt: state.actionDeadlineAt,
       debugPauseBy: state.debugPauseBy,
       wall: tw16RedactWallTilesForWire(state.wall),
@@ -10387,8 +10434,8 @@ function loadUiSettings() {
       // 做私密手牌傳遞,但實測發現同步快照(遮蔽版)與非同步解密合併之間有競態,
       // 會讓來賓自己的手牌間歇性出現牌背/空白。目前先復原成原始明碼傳送,
       // 避免對局出錯;牌牆(wall/physicalWall)的隱私修復不受影響,仍然保留。
-      hands: state.hands,
-      melds: state.melds,
+      hands: tw16RedactHandsForWire(state.hands),
+      melds: tw16RedactMeldsForWire(state.melds),
       flowers: state.flowers,
       discards: state.discards,
       chips: state.chips,
@@ -10594,11 +10641,11 @@ function loadUiSettings() {
         turnId: payload.turnId,
         actionSeq: payload.actionSeq,
         hostClientId: payload.hostClientId,
-        players: clonePlain(payload.players || {}),
+        players: tw16PublicPlayers(payload.players),
         state: packNetworkState(payload.state || {}),
         handPacketKey: net.handPacketKey || '',
         settlement: payload.settlement || null,
-        animation: payload.animation || null,
+        animation: tw16RedactAnimationForWire(payload.animation || null),
         stateHash: stateHash,
         targetSessionId: targetOptions && targetOptions.targetSessionId || undefined,
         targetSeat: targetOptions && targetOptions.targetSeat || undefined
@@ -10607,7 +10654,7 @@ function loadUiSettings() {
       if (stateMessage && stateMessage.messageId) payload._messageId = stateMessage.messageId;
       writeLatestHostSnapshotToLocalStorage(payload, snapshotReason);
       recordNetworkEvent('state-out', '送出房主狀態 #' + payload.seq + '｜' + snapshotReason, { seq: payload.seq, reason: snapshotReason, turn: state.turn, phase: state.phase, handId: state.handId || 0, messageId: payload._messageId || '', mirrored: stateMessage ? shouldMirrorNetworkMessageToControl(stateMessage) : false });
-      // tw16_hand_privacy_ecdh_20260802_REVERTED: 已停用,見 buildLeanSnapshotState 內說明。
+      tw16PublishPrivateHands(snapshotReason, !!forceSend || !!(targetOptions && targetOptions.targetSessionId));
       return payload;
     } catch (e) {
       addLog('Ably狀態送出失敗');
@@ -11392,7 +11439,7 @@ function loadUiSettings() {
       phase: state.phase || '',
       actionId: state.lastActionId || 0,
       pendingActionId: pendingActionIdForNetwork(),
-      handMasterKey: (net.players && net.players[msg.seat] && net.players[msg.seat].handMasterKey) || ''
+      handMasterKey: ''
     }, reason || 'ack');
   }
 
@@ -12228,7 +12275,13 @@ function loadUiSettings() {
     if (tm === 4) {
       ['H1','H2','H3','H4','H5','H6','H7','H8'].forEach(code => wall.push(tile(code)));
     }
-    return shuffle(wall);
+    shuffle(wall);
+    /* tw16_opaque_tile_id: tile() 依「建牌順序」編號，洗牌前 t0-3=1萬、t4-7=2萬…，id 本身就等於牌碼，
+       光遮蔽 code 擋不住任何人用 id 反推。洗牌後依牌牆位置重新編號（沿用同一段序號，tileSerial 不變），
+       id 只剩位置資訊、與牌面無關。 */
+    const _idBase = tileSerial - wall.length;
+    wall.forEach((t, i) => { t.id = 't' + (_idBase + i); });
+    return wall;
   }
 
   // tw16_secure_random: 使用 crypto API 產生 [0, max) 範圍內均勻分布的隨機整數，
