@@ -7696,12 +7696,12 @@ html body .hand-bottom .hand-tile-row .tingWaitAssistGroupAllSeats[data-view-sea
     lobby.id = 'tw16Lobby';
     lobby.className = 'tw16-lobby';
     lobby.innerHTML = '<div class="tw16-lobby-card">'
-      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;"><div class="tw16-lobby-chip" id="tw16LobbyChipText" style="flex-shrink:0;margin-bottom:0;">Ably 連線 / 單機</div><span style="font-size:clamp(9px,2.5vw,12px);color:#cbd5e1;font-weight:700;white-space:nowrap;">（115.11.2 改版｜2026-11-02 20:10 台灣時間）</span></div>'
+      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;"><div class="tw16-lobby-chip" id="tw16LobbyChipText" style="flex-shrink:0;margin-bottom:0;">Ably 連線 / 單機</div><span style="font-size:clamp(9px,2.5vw,12px);color:#cbd5e1;font-weight:700;white-space:nowrap;">（115.11.3 改版｜2026-11-03 19:53 台灣時間）</span></div>'
       + '<div class="tw16-lobby-title" id="tw16LobbyTitleText">台灣麻將 連線 / 單機</div>'
       + '<div class="tw16-lobby-sub">★連線對戰：<br><span style="color:#ef4444">每人都要設同房名</span>，設好房名後<br>1人先按<span style="background:#1d4ed8;color:#fff;border-radius:3px;padding:0 3px;">建立房間</span><br>其餘人按<span style="background:#1d4ed8;color:#fff;border-radius:3px;padding:0 3px;">加入房間</span><br>★單人：按<span style="background:#15803d;color:#fff;border-radius:3px;padding:0 3px;">直接離線開始</span></div>'
       + '<div class="tw16-lobby-grid">'
       + '<div class="tw16-lobby-row tw16-lobby-inline-row"><label for="tw16LobbyName">玩家名稱</label><input class="tw16-lobby-input" id="tw16LobbyName" value="(請輸入)" onfocus="if(this.value===\'(請輸入)\')this.value=\'\'" onblur="if(!this.value.trim())this.value=\'(請輸入)\'"></div>'
-      + '<div class="tw16-lobby-row tw16-lobby-inline-row"><label for="tw16LobbyRoom">房名</label><input class="tw16-lobby-input" id="tw16LobbyRoom" value="(請輸入)" onfocus="if(this.value===\'(請輸入)\')this.value=\'\'" onblur="if(!this.value.trim())this.value=\'(請輸入)\'"></div>'
+      + '<div class="tw16-lobby-row tw16-lobby-inline-row"><label for="tw16LobbyRoom">房名</label><input class="tw16-lobby-input" id="tw16LobbyRoom" value="對我生財" onfocus="if(this.value===\'對我生財\')this.value=\'\'" onblur="if(!this.value.trim())this.value=\'對我生財\'"></div>'
       + '<div class="tw16-lobby-row tw16-lobby-inline-row"><label for="tw16LobbyBackend">連線伺服器</label><select class="tw16-lobby-input" id="tw16LobbyBackend"><option value="ably">Ably（需 API KEY）</option><option value="supabase">Supabase（免 KEY）</option></select></div>'
       + '<div class="tw16-lobby-row tw16-lobby-inline-row"><label for="tw16LobbyTableMode">人數模式</label><select class="tw16-lobby-input" id="tw16LobbyTableMode"><option value="4" selected>4人</option><option value="3">3人(無北家，禁吃牌)</option><option value="2">2人(僅東/西家)</option></select></div>'
       + '<div class="tw16-lobby-row" style="margin-top:-6px;"><span style="font-size:11px;color:#94a3b8;font-weight:700;">※人數模式僅「建立房間(房主)」與「直接離線開始」生效；加入房間(來賓)時將自動套用房主設定。</span></div>'
@@ -7916,7 +7916,9 @@ html body .hand-bottom .hand-tile-row .tingWaitAssistGroupAllSeats[data-view-sea
     setGameSurfaceVisible(false);
     const lobby = byId('tw16Lobby');
     if (lobby) lobby.hidden = false;
-    try { const savedName=localStorage.getItem('tw16_last_player_name'),savedRoom=localStorage.getItem('tw16_last_room_name'),nEl=byId('tw16LobbyName'),rEl=byId('tw16LobbyRoom'); if(nEl&&savedName)nEl.value=savedName; if(rEl&&savedRoom)rEl.value=savedRoom; } catch(e){}
+    try { const savedName=localStorage.getItem('tw16_last_player_name'),savedRoom=localStorage.getItem('tw16_last_room_name'),nEl=byId('tw16LobbyName'),rEl=byId('tw16LobbyRoom'); if(nEl&&savedName)nEl.value=savedName; } catch(e){}
+    /* 每次進大廳房名一律重設為預設值「對我生財」（不再還原上次房名） */
+    try { const rEl2=byId('tw16LobbyRoom'); if(rEl2) rEl2.value='對我生財'; } catch(e){}
     if (typeof window.tw16UpdateLobbyHostButtonState === 'function') window.tw16UpdateLobbyHostButtonState();
     const cb = byId('tw16ChatBoard'); if (cb) cb.style.display = 'none';
     const md = dom.tw16MiniDashboard || byId('tw16MiniDashboard'); if (md) md.style.setProperty('display','none','important');
@@ -11516,6 +11518,7 @@ function loadUiSettings() {
       clearGuestJoinRetry();
       const lobby = byId('tw16Lobby');
       if (lobby) lobby.hidden = false;
+      try { const rEl3 = byId('tw16LobbyRoom'); if (rEl3) rEl3.value = '對我生財'; } catch (e) {}
       updateLobbyStatus('房間已滿，無法入座。');
     }
     if (!msg.accepted && msg.reason) addLog('房主拒絕動作：' + msg.reason);
