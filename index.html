@@ -4980,6 +4980,7 @@ html body .hand-bottom .hand-tile-row .tingWaitAssistGroupAllSeats[data-view-sea
       const map = net.revealByHand[hid] || (net.revealByHand[hid] = {});
       pairs.forEach(pr => { if (Array.isArray(pr) && pr[0] && pr[1]) map[pr[0]] = pr[1]; });
       Object.keys(net.revealByHand).forEach(k => { if (Number(k) < Number(hid) - 1) delete net.revealByHand[k]; });
+      tw16FlushSnapQueue();
       if (Number(state.handId || 0) === Number(hid) && tw16FillOwnCodes(state, net.assignedSeat, map)) renderAll();
     } catch (e) {}
   }
@@ -5954,7 +5955,7 @@ html body .hand-bottom .hand-tile-row .tingWaitAssistGroupAllSeats[data-view-sea
     if (net.role === 'guest') {
       if (data.type === 'players') return applyNetworkPlayersPayload(data, source);
       if (data.type === 'privateHand') { tw16ApplyPrivateHand(data); return true; }
-      if (data.type === 'state' && data.state) return applySnapshotPayload(normalizeRoomStateToSnapshot(tw16DecryptHandsInSnapshot(data)));
+      if (data.type === 'state' && data.state) return tw16GuestHandleState(data);
       if (data.type === 'settlement') return applySettlementPayload(Object.assign({}, data, { kind: 'settlement', settlement: data.settlement || data.payload || null }));
       if (data.type === 'ack') return handleNetworkAck(Object.assign({}, data, { kind: 'ack' }));
       if (data.type === 'textBroadcast') { handleTextBroadcast(Object.assign({}, data, { kind: 'textBroadcast' })); return true; }
@@ -5967,6 +5968,44 @@ html body .hand-bottom .hand-tile-row .tingWaitAssistGroupAllSeats[data-view-sea
 
   function byId(id) { return document.getElementById(id); }
 
+  // tw16_hand_atomic_apply: 快照到達時若本人新摸進的牌還沒拿到牌面（揭示封包通常晚幾毫秒），
+  // 先排隊、等牌面齊了再「一次」套用，不先畫缺牌的版面再補畫，避免摸牌位置/手牌排列跳動。
+  // 最多等 900ms，逾時照原樣套用（之後由補牌面與 1.5 秒補送機制收尾）。依到達順序處理。
+  const TW16_SNAP_WAIT_MS = 900;
+  function tw16SnapMissingCount(data) {
+    if (!net.assignedSeat) return 0;
+    const st = unpackNetworkState(data.state);
+    if (!st || st.ended) return 0;
+    const map = (net.revealByHand && net.revealByHand[String(Number(st.handId || 0))]) || {};
+    tw16FillOwnCodes(st, net.assignedSeat, map);
+    let n = ((st.hands && st.hands[net.assignedSeat]) || []).filter(t => t && !t.code).length;
+    if (st.pending && st.pending.kind === 'selfwin' && st.pending.seat === net.assignedSeat && st.pending.winTile && !st.pending.winTile.code) n++;
+    return n;
+  }
+  function tw16GuestHandleState(data) {
+    if (!net.snapQueue) net.snapQueue = [];
+    net.snapQueue.push({ data: data, at: Date.now() });
+    tw16FlushSnapQueue();
+    return true;
+  }
+  function tw16FlushSnapQueue() {
+    const q = net.snapQueue;
+    if (!q || net.snapFlushing) return;
+    net.snapFlushing = true;
+    try {
+      while (q.length) {
+        const head = q[0];
+        const waited = Date.now() - head.at;
+        if (waited < TW16_SNAP_WAIT_MS && tw16SnapMissingCount(head.data) > 0) {
+          clearTimeout(net.snapQueueTimer);
+          net.snapQueueTimer = setTimeout(tw16FlushSnapQueue, Math.max(20, TW16_SNAP_WAIT_MS - waited + 5));
+          break;
+        }
+        q.shift();
+        try { applySnapshotPayload(normalizeRoomStateToSnapshot(tw16DecryptHandsInSnapshot(head.data))); } catch (e) { try { console.error(e); } catch (_) {} }
+      }
+    } finally { net.snapFlushing = false; }
+  }
   function tw16DecryptHandsInSnapshot(msg) {
     if (!msg || !msg.state || !net.assignedSeat) return msg;
     const stateObj = unpackNetworkState(msg.state);
