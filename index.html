@@ -4971,7 +4971,9 @@ html body .hand-bottom .hand-tile-row .tingWaitAssistGroupAllSeats[data-view-sea
       if (!isOnlineGuest() || !data || data.handSeat !== net.assignedSeat || !data.enc) return;
       const key = net.hostAesKey || await tw16EnsureGuestHostAesKey();
       if (!key) return;
-      const pairs = await tw16AesDecryptJson(key, data.enc);
+      const parts = String(data.enc).split('.');
+      if (parts.length !== 2) return;
+      const pairs = await tw16AesDecryptJson(key, { iv: parts[0], ct: parts[1] });
       if (!Array.isArray(pairs)) return;
       const hid = String(Number(data.handId || 0));
       if (!net.revealByHand) net.revealByHand = {};
@@ -5020,7 +5022,8 @@ html body .hand-bottom .hand-tile-row .tingWaitAssistGroupAllSeats[data-view-sea
       if (!force && net.privHandSent[seat] === fp) continue;
       try {
         const enc = await tw16AesEncryptJson(key, pairs);
-        publishNetworkRoomMessage('privateHand', { handSeat: seat, handId: handId, enc: enc }, reason || 'private-hand', { reliable: false });
+        /* 密文用單一字串 iv.ct 傳：封包簡碼表會把子欄位 ct 還原成 claimType，物件形式一律解不開 */
+        publishNetworkRoomMessage('privateHand', { handSeat: seat, handId: handId, enc: enc.iv + '.' + enc.ct }, reason || 'private-hand', { reliable: false });
         net.privHandSent[seat] = fp;
       } catch (e) {}
     }
