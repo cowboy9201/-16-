@@ -22775,8 +22775,53 @@ function showIntegrityReport(precomputed) {
       if (d) { if (on.length) d.setAttribute('data-speaking', on.join(' ')); else d.removeAttribute('data-speaking'); }
     } catch (e) {}
   }
+  /* tw-voice-stt v3：改成「播放時辨識」。用 audio.captureStream() 取得正在播放的音軌餵給 SpeechRecognition.start(track)，
+     完全不碰麥克風，所以不會跟錄音搶麥克風（安卓 Chrome 的限制）。收聽方、單機本地播放都適用。 */
+  function tw16SttFromPlayback(audio, seat) {
+    try {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR || !audio) return;
+      if (typeof audio.captureStream !== 'function' && typeof audio.mozCaptureStream !== 'function') { hintVoiceBroadcast('此瀏覽器無法對播放語音做文字辨識'); return; }
+      let started = false;
+      const begin = () => {
+        if (started) return;
+        try {
+          const st = (audio.captureStream || audio.mozCaptureStream).call(audio);
+          const tracks = st.getAudioTracks();
+          if (!tracks.length) return;
+          started = true;
+          const r = new SR();
+          r.lang = 'zh-TW'; r.continuous = true; r.interimResults = true;
+          let best = '', shown = '';
+          r.onresult = e => {
+            let f = '', i2 = '';
+            for (let i = 0; i < e.results.length; i++) {
+              const t = (e.results[i][0] && e.results[i][0].transcript) || '';
+              if (e.results[i].isFinal) f += t; else i2 += t;
+            }
+            const cur = (f + i2).replace(/\s+/g, ' ').trim();
+            if (cur) best = cur;
+            if (cur && cur !== shown) { shown = cur; try { showBroadcastFloatingText(seat || '', cur.slice(0, 80), Date.now() + 4000); } catch (e2) {} }
+          };
+          r.onerror = ev => {
+            const code = (ev && ev.error) || 'unknown';
+            if (code === 'no-speech' || code === 'aborted') return;
+            try { hintVoiceBroadcast('語音辨識失敗：' + code); } catch (e2) {}
+          };
+          r.onend = () => { if (best) { try { addChatBoardMessage(seat || '', '🎤 ' + best.slice(0, 80)); } catch (e2) {} } };
+          const stopR = () => { try { r.stop(); } catch (e2) {} };
+          audio.addEventListener('ended', stopR);
+          audio.addEventListener('pause', stopR);
+          try { r.start(tracks[0]); } catch (e3) { r.start(); }
+        } catch (e) { try { hintVoiceBroadcast('播放語音辨識無法啟動：' + (e && e.name || e)); } catch (e2) {} }
+      };
+      audio.addEventListener('playing', begin);
+    } catch (e) {}
+  }
+
   function tw16BindSpeakerFlash(audio, seat, ms) {
     try {
+      if (audio) tw16SttFromPlayback(audio, seat);
       if (!audio || !seat || SEATS.indexOf(seat) < 0) return;
       const stop = () => { try { delete tw16SpeakSeats[seat]; tw16SyncSpeakers(); } catch (e) {} };
       audio.addEventListener('playing', () => {
@@ -22804,6 +22849,79 @@ function showIntegrityReport(precomputed) {
     } catch (e) { return false; }
   }
 
+  /* tw-voice-stt（試作）：錄音同時用瀏覽器語音辨識產生文字，隨語音訊息送出，播放時顯示浮動文字＋聊天記錄板。
+     全部包 try/catch，辨識失敗/不支援時完全不影響原本錄音與播放。 */
+  const tw16Stt = { rec: null, acc: '', text: '', interim: '', active: false, want: false, restarts: 0, endP: null, endRes: null };
+  function tw16SttAbort() { tw16Stt.want = false; try { if (tw16Stt.rec) tw16Stt.rec.abort(); } catch (e) {} tw16Stt.rec = null; tw16Stt.active = false; }
+  function tw16SttBegin() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const r = new SR();
+    r.lang = 'zh-TW'; r.continuous = true; r.interimResults = true; r.maxAlternatives = 1;
+    r.onstart = () => { tw16Stt.active = true; };
+    r.onresult = e => {
+      let fin = '', itm = '';
+      for (let i = 0; i < e.results.length; i++) {
+        const t = (e.results[i][0] && e.results[i][0].transcript) || '';
+        if (e.results[i].isFinal) fin += t; else itm += t;
+      }
+      tw16Stt.text = fin; tw16Stt.interim = itm;
+    };
+    r.onerror = ev => {
+      const code = (ev && ev.error) || 'unknown';
+      if (code === 'no-speech' || code === 'aborted') return;
+      tw16Stt.lastError = code;
+      try { hintVoiceBroadcast('語音辨識失敗：' + code); } catch (e) {}
+      if (code === 'not-allowed' || code === 'service-not-allowed' || code === 'audio-capture' || code === 'language-not-supported') tw16Stt.want = false;
+    };
+    r.onend = () => {
+      tw16Stt.active = false;
+      tw16Stt.acc += tw16Stt.text + tw16Stt.interim; tw16Stt.text = ''; tw16Stt.interim = '';
+      /* Chrome 靜音一陣子會自動結束；錄音還在就自動重啟 */
+      if (tw16Stt.want && tw16Stt.restarts < 30) {
+        tw16Stt.restarts++;
+        try { tw16SttBegin(); return; } catch (e) {}
+      }
+      if (tw16Stt.endRes) tw16Stt.endRes();
+    };
+    tw16Stt.rec = r;
+    r.start();
+  }
+  /* 必須在使用者手勢的同步呼叫堆疊內呼叫（不可放在 await 之後） */
+  function tw16SttStart() {
+    try {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) { hintVoiceBroadcast('此瀏覽器不支援語音辨識（無文字）'); return; }
+      tw16SttAbort();
+      tw16Stt.acc = ''; tw16Stt.text = ''; tw16Stt.interim = ''; tw16Stt.restarts = 0; tw16Stt.lastError = '';
+      tw16Stt.want = true;
+      tw16Stt.endP = new Promise(res => { tw16Stt.endRes = res; });
+      tw16SttBegin();
+    } catch (e) {
+      tw16Stt.rec = null; tw16Stt.active = false; tw16Stt.want = false;
+      try { hintVoiceBroadcast('語音辨識無法啟動：' + (e && e.name || e)); } catch (e2) {}
+    }
+  }
+  function tw16SttStopRequest() { tw16Stt.want = false; try { if (tw16Stt.rec && tw16Stt.active) tw16Stt.rec.stop(); } catch (e) {} }
+  async function tw16SttCollect() {
+    try {
+      if (!tw16Stt.rec && !tw16Stt.acc) return '';
+      tw16SttStopRequest();
+      if (tw16Stt.active) await Promise.race([tw16Stt.endP, new Promise(r => setTimeout(r, 1200))]);
+      const t = (tw16Stt.acc + tw16Stt.text + tw16Stt.interim).replace(/\s+/g, ' ').trim();
+      tw16SttAbort();
+      tw16Stt.acc = '';
+      return t.slice(0, 80);
+    } catch (e) { return ''; }
+  }
+  function tw16ShowTranscript(seat, text, ms) {
+    try {
+      const t = String(text || '').trim();
+      if (!t) return;
+      showBroadcastFloatingText(seat || '', t, Date.now() + Math.max(5000, (Number(ms) || 0) + 2500));
+      addChatBoardMessage(seat || '', '🎤 ' + t);
+    } catch (e) {}
+  }
+
   function publishVoiceBroadcast(audioDataUrl, mimeType, durationMs, segOpts) {
     if (!isNetworked() || !net.channel) return false;
     const dataUrl = String(audioDataUrl || '').trim();
@@ -22815,6 +22933,7 @@ function showIntegrityReport(precomputed) {
       mimeType: String(mimeType || '').trim(), durationMs: Math.max(0, Math.round(Number(durationMs || 0))), audioDataUrl: dataUrl, createdAt: Date.now()
     };
     /* 僅在有分段資訊時才加入額外欄位，避免增大正常訊息體積 */
+    if (segOpts && segOpts.transcript) payload.transcript = String(segOpts.transcript).slice(0, 80);
     if (segOpts && segOpts.segId) {
       payload.segId    = segOpts.segId;
       payload.segIndex = segOpts.segIndex || 0;
@@ -22844,6 +22963,7 @@ function showIntegrityReport(precomputed) {
     const segId    = String(payload.segId || '').trim();
     const segTotal = Number(payload.segTotal) || 1;
     const segIndex = Number(payload.segIndex) || 0;
+    if (!segId || segTotal <= 1) tw16ShowTranscript(payload.seat, payload.transcript, payload.durationMs);
     /* 單段：直接播放 */
     /* 單段：若有壓縮標記需解壓，否則補回 data: 前綴直接播放 */
     if (!segId || segTotal <= 1) {
@@ -22871,11 +22991,13 @@ function showIntegrityReport(precomputed) {
     if (!voiceSegBuf[segId]) voiceSegBuf[segId] = { seat: payload.seat || '', segs: {}, total: segTotal, mimeType: payload.mimeType || 'audio/webm', durationMs: 0, at: Date.now() };
     voiceSegBuf[segId].segs[segIndex] = String(payload.audioDataUrl || '');
     voiceSegBuf[segId].compressed = !!(payload.compressed);
+    if (payload.transcript) voiceSegBuf[segId].transcript = String(payload.transcript);
     voiceSegBuf[segId].durationMs += Number(payload.durationMs) || 0;
     /* 收齊後解壓縮、合併、播放 */
     const buf = voiceSegBuf[segId];
     if (Object.keys(buf.segs).length >= buf.total) {
       delete voiceSegBuf[segId];
+      tw16ShowTranscript(buf.seat, buf.transcript, buf.durationMs);
       (async () => {
         try {
           /* 依序拼接所有 base64 片段 */
@@ -22921,6 +23043,7 @@ function showIntegrityReport(precomputed) {
     clearTimeout(voiceBroadcastAutoStopTimer);
     setVoiceBroadcastButtonState(btn, 'idle');
     updateVoiceToggleMenuButton();
+    const transcript = await tw16SttCollect();
     if (!blob || blob.size < VOICE_BROADCAST_MIN_BYTES || durationMs < 250) {
       hintVoiceBroadcast('廣播錄音太短，未送出');
       return false;
@@ -22928,6 +23051,7 @@ function showIntegrityReport(precomputed) {
     let dataUrl = '';
     try { dataUrl = await blobToDataUrl(blob); } catch (e) {}
     if (!dataUrl) { hintVoiceBroadcast('廣播錄音轉換失敗'); return false; }
+    tw16ShowTranscript(getLocalBroadcastSeat() || 'east', transcript, durationMs);
     /* 單機模式：本地播放（對講機效果）；連線模式：送出網路 */
     if (!isVoiceBroadcastOnline()) {
       try {
@@ -22965,7 +23089,7 @@ function showIntegrityReport(precomputed) {
     /* 壓縮後若仍在限制內，單段送出；否則分段 */
     const segId = net.clientId + '-' + Date.now().toString(36);
     if (fullB64.length <= SEG_MAX_B64) {
-      const ok = publishVoiceBroadcast(fullB64, mimeType, durationMs, { segId, segIndex: 0, segTotal: 1, compressed });
+      const ok = publishVoiceBroadcast(fullB64, mimeType, durationMs, { segId, segIndex: 0, segTotal: 1, compressed, transcript });
       hintVoiceBroadcast(ok ? '已送出廣播' : '廣播送出失敗，請確認已連線');
       return ok;
     }
@@ -22976,7 +23100,7 @@ function showIntegrityReport(precomputed) {
     for (let i = 0; i < segCount; i++) {
       const segB64 = fullB64.slice(i * segLen, (i+1) * segLen);
       const segMs = Math.round(durationMs / segCount);
-      const ok = publishVoiceBroadcast(segB64, mimeType, segMs, { segId, segIndex: i, segTotal: segCount, compressed });
+      const ok = publishVoiceBroadcast(segB64, mimeType, segMs, { segId, segIndex: i, segTotal: segCount, compressed, transcript });
       if (ok) sent++;
       if (i < segCount - 1) await new Promise(r => setTimeout(r, 600));
     }
@@ -23035,6 +23159,7 @@ function showIntegrityReport(precomputed) {
       voiceBroadcastStarting = false;
       voiceBroadcastStopRequested = false;
       clearTimeout(voiceBroadcastAutoStopTimer);
+      tw16SttAbort();
       stopVoiceBroadcastStream();
       setVoiceBroadcastButtonState(voiceBroadcastActiveButton, 'idle');
       updateVoiceToggleMenuButton();
@@ -23051,6 +23176,7 @@ function showIntegrityReport(precomputed) {
     }
     if (!voiceBroadcastRecording || !voiceBroadcastRecorder) return;
     voiceBroadcastStopRequested = false;
+    tw16SttStopRequest();
     try {
       if (voiceBroadcastRecorder.state !== 'inactive') voiceBroadcastRecorder.stop();
     } catch (e) {
