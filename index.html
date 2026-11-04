@@ -23889,6 +23889,43 @@ function showIntegrityReport(precomputed) {
     });
   }
 
+
+  /* tw-android-touch-layer: 觸控 HUD 排版。以 flex 流式排版取代逐顆絕對定位，
+     所有按鈕 >=48px 命中區、間距 8px、不互相覆蓋；列不夠寬時自動換行。 */
+  function tw16TouchHud(topbar, box) {
+    const touch = (window.matchMedia && window.matchMedia('(pointer:coarse)').matches) || box.width < 820;
+    if (!touch) return 0;
+    const S = (el, p) => { if (el) Object.keys(p).forEach(k => el.style.setProperty(k, p[k], 'important')); };
+    const clear = el => { if (!el) return; const off = el.hidden || el.style.display === 'none'; el.removeAttribute('style'); if (off) el.style.setProperty('display', 'none', 'important'); };
+    const menu = topbar.querySelector('.menu');
+    const sb = topbar.querySelector('.roundStatusBlock');
+    const rb = topbar.querySelector('.rightBtns');
+    const row = topbar.querySelector('.tw16-scorechip-row');
+    const wraps = Array.from(topbar.querySelectorAll('.tw16-btn-hint-wrap'));
+    const btns = Array.from(topbar.querySelectorAll('button'));
+    [menu, sb, rb, row].concat(wraps, btns).forEach(clear);
+    S(topbar, { position: 'fixed', display: 'flex', 'flex-wrap': 'wrap', 'align-items': 'center', 'align-content': 'flex-start', 'row-gap': '0px', 'column-gap': '6px', height: 'auto', overflow: 'visible', 'pointer-events': 'none' });
+    /* 所有 HUD 元件攤平成同一個 flex-wrap 流：寬螢幕單列、窄螢幕只多換必要的列，佔用面積最小 */
+    const st = dom.roundStatus || byId('roundStatus'), sc = dom.scoreChipLine || byId('scoreChipLine');
+    [st, sc].forEach(clear);
+    [menu, sb, row, rb].forEach(el => S(el, { display: 'contents' }));
+    wraps.forEach(w => S(w, { display: 'contents' }));
+    [st, sc].forEach(el => S(el, { position: 'static', display: 'block', flex: '0 1 auto', margin: '0', padding: '0', 'min-width': '0', 'white-space': 'nowrap', 'line-height': '1', 'align-self': 'center', 'pointer-events': 'none' }));
+    btns.forEach(b => {
+      if (b.hidden || b.style.display === 'none') return;
+      const icon = b.classList.contains('iconBtn');
+      S(b, { position: 'relative', top: 'auto', left: 'auto', right: 'auto', bottom: 'auto', transform: 'none', display: 'inline-flex', 'align-items': 'center', 'justify-content': 'center', flex: '0 0 auto', margin: '0', padding: icon ? '1px 3px' : '2px 5px', width: 'auto', height: 'auto', 'min-width': '0', 'min-height': '0', 'font-size': icon ? '20px' : '13px', 'line-height': '1.05', 'white-space': 'nowrap', 'border-radius': '8px', 'pointer-events': 'auto' });
+    });
+    let bottom = topbar.getBoundingClientRect().bottom;
+    const dash = dom.tw16MiniDashboard || byId('tw16MiniDashboard');
+    if (dash && dash.classList.contains('show')) {
+      S(dash, { top: px(bottom) });
+      const r = dash.getBoundingClientRect();
+      if (r.height > 0) bottom = Math.max(bottom, r.bottom);
+    }
+    return bottom;
+  }
+
   function positionTopWindowHudAdaptive() {
     const topbar = document.querySelector('.topbar');
     if (!topbar) return 0;
@@ -24188,7 +24225,8 @@ function showIntegrityReport(precomputed) {
     setHudStyle(topbar, { height: px(finalHeight) });
     if (menu) setHudStyle(menu, { height: px(finalHeight), width: px(Math.max(menuBtnW, 1)) });
     // tw16_system_clock_20260624: 時鐘跟隨 topbar flexbox，無需額外定位
-    return baseTop + finalHeight;
+    const touchBottom = tw16TouchHud(topbar, box);
+    return touchBottom ? Math.max(touchBottom, baseTop + 1) : baseTop + finalHeight;
   }
 
   function miniDashboardBottomForLayout(box, pad) {
@@ -38724,6 +38762,23 @@ html body .tw16-mini-dashboard-card.has-dealer-mark.has-repeat-stamp .tw16-mini-
 }
 </style>
 
+<style id="tw-android-touch-layer">
+/* Android 觸控層：命中區 >=48px、間距 8px、無重疊 */
+html body .tw16-btn-hint-top,html body .tw16-btn-hint-bottom{display:none!important}
+html body button,html body .btn,html body .actionBtn,html body .panelToolBtn{touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+html body .panelToolBtn{min-height:44px;min-width:44px;padding:0 8px;font-size:13px}
+html body .panelTools{gap:10px}
+html body .menuGrid{gap:6px}
+html body .menuGrid .btn{min-height:44px;padding:4px 6px;font-size:14px}
+html body .result .buttons{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+html body .result .buttons .btn{min-width:80px;min-height:44px;padding:0 10px;font-size:15px}
+html body .actionPanel.action-panel-visible,html body .actionPanel.ting-choice-active{flex-wrap:wrap;gap:6px;align-items:center;justify-content:center}
+html body .actionPanel .actionBtn{min-width:56px;min-height:46px;padding:0 8px;margin:0}
+html body .topbar button{min-width:0!important;min-height:0!important}
+html body .topbar .status,html body .topbar .scoreChipLine,html body .topbar .roundStatusBlock,html body .topbar .tw16-scorechip-row,html body .room,html body .tw16-system-clock{line-height:1!important;margin-top:0!important;margin-bottom:0!important;padding-top:0!important;padding-bottom:0!important}
+/* 隱形擴大命中區：外觀緊貼文字，點擊範圍每側多 3px；按鈕間距 6px，故不會互相重疊 */
+html body .topbar button::after{content:'';position:absolute;inset:0 -3px}
+</style>
 </body>
 </html>
 
