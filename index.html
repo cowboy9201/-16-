@@ -22613,9 +22613,7 @@ function showIntegrityReport(precomputed) {
 
   function emitGameVoiceEvent(text, key, meta = {}) {
     const event = appendGameVoiceEvent(text, key, meta);
-    const spoke = speakGameEvent(text, event && event.id ? event.id : key);
-    if (spoke && meta && meta.seat) tw16FlashSpeaker(meta.seat, estimateGameVoiceMs(sanitizeGameVoiceText(text)) + 300);
-    return spoke;
+    return speakGameEvent(text, event && event.id ? event.id : key);
   }
 
   function replaySnapshotGameVoiceEvents(events, reason, allowSpeak) {
@@ -22629,7 +22627,7 @@ function showIntegrityReport(precomputed) {
       if (handId && Number(state.handId || 0) && handId !== Number(state.handId || 0)) return;
       const isNew = rememberGameVoiceEventId(eventId);
       if (!isNew || !allowSpeak) return;
-      if (speakGameEvent(event.text || event.key || '', eventId)) { count += 1; if (event.seat) tw16FlashSpeaker(event.seat, estimateGameVoiceMs(String(event.text || '')) + 300); }
+      if (speakGameEvent(event.text || event.key || '', eventId)) count += 1;
     });
     if (count) recordNetworkEvent('game-voice-in', '來賓播報房主遊戲事件｜' + count + '則', { reason: reason || '', handId: state.handId || 0 });
     return count;
@@ -22719,29 +22717,6 @@ function showIntegrityReport(precomputed) {
     return true;
   }
 
-  /* tw-speaker-flash: 語音播放時，讓發話者的迷你儀表板卡片閃爍。
-     狀態記在 #tw16MiniDashboard 的 data-speaking（座位清單），由 CSS 依座位上色，
-     所以卡片被重新渲染也不會丟失閃爍。 */
-  const tw16SpeakSeats = {};
-  function tw16SyncSpeakers() {
-    const now = Date.now();
-    const on = [];
-    Object.keys(tw16SpeakSeats).forEach(k => { if (tw16SpeakSeats[k] > now) on.push(k); else delete tw16SpeakSeats[k]; });
-    const d = dom.tw16MiniDashboard || byId('tw16MiniDashboard');
-    if (d) { if (on.length) d.setAttribute('data-speaking', on.join(' ')); else d.removeAttribute('data-speaking'); }
-  }
-  function tw16FlashSpeaker(seat, ms) {
-    if (!seat || !SEATS.includes(seat)) return;
-    const hold = Math.max(800, Math.min(30000, Number(ms) || 1800));
-    const until = Date.now() + hold;
-    tw16SpeakSeats[seat] = Math.max(tw16SpeakSeats[seat] || 0, until);
-    tw16SyncSpeakers();
-    setTimeout(tw16SyncSpeakers, hold + 40);
-  }
-  function tw16StopSpeaker(seat) { if (seat) { delete tw16SpeakSeats[seat]; tw16SyncSpeakers(); } }
-  if (typeof window !== 'undefined') window.tw16FlashSpeaker = tw16FlashSpeaker;
-  if (typeof window !== 'undefined') window.tw16PlayIncomingVoice = function(pl) { return playIncomingVoice(pl); };
-
   function speakBroadcastText(seat, text) {
     try {
       if (!('speechSynthesis' in window) || !window.SpeechSynthesisUtterance) return false;
@@ -22752,8 +22727,6 @@ function showIntegrityReport(precomputed) {
       utter.pitch = 1;
       utter.volume = 1;
       window.speechSynthesis.speak(utter);
-      tw16FlashSpeaker(seat, Math.max(1800, String(text || '').length * 300));
-      utter.onend = () => tw16StopSpeaker(seat);
       return true;
     } catch (e) { return false; }
   }
@@ -22791,18 +22764,40 @@ function showIntegrityReport(precomputed) {
     return true;
   }
 
+  /* tw-speaker-flash（獨立、不影響語音流程）：語音訊息實際開始播放時，讓發話者的迷你儀表板閃爍，
+     播完/出錯/暫停即停。全部包在 try/catch 內，任何錯誤都不會影響語音播放本身。 */
+  const tw16SpeakSeats = {};
+  function tw16SyncSpeakers() {
+    try {
+      const now = Date.now(), on = [];
+      Object.keys(tw16SpeakSeats).forEach(k => { if (tw16SpeakSeats[k] > now) on.push(k); else delete tw16SpeakSeats[k]; });
+      const d = document.getElementById('tw16MiniDashboard');
+      if (d) { if (on.length) d.setAttribute('data-speaking', on.join(' ')); else d.removeAttribute('data-speaking'); }
+    } catch (e) {}
+  }
+  function tw16BindSpeakerFlash(audio, seat, ms) {
+    try {
+      if (!audio || !seat || SEATS.indexOf(seat) < 0) return;
+      const stop = () => { try { delete tw16SpeakSeats[seat]; tw16SyncSpeakers(); } catch (e) {} };
+      audio.addEventListener('playing', () => {
+        try {
+          const hold = (Number(ms) || 4000) + 1500;
+          tw16SpeakSeats[seat] = Date.now() + hold;
+          tw16SyncSpeakers();
+          setTimeout(tw16SyncSpeakers, hold + 40);
+        } catch (e) {}
+      });
+      ['ended', 'error', 'pause'].forEach(ev => audio.addEventListener(ev, stop));
+    } catch (e) {}
+  }
+
   function playIncomingVoice(payload) {
     const dataUrl = String(payload && (payload.audioDataUrl || payload.dataUrl) || '').trim();
     if (!dataUrl) return false;
     try {
       const audio = new Audio(dataUrl);
       audio.preload = 'auto';
-      const spk = payload && SEATS.includes(payload.seat) ? payload.seat : '';
-      if (spk) {
-        audio.addEventListener('playing', () => tw16FlashSpeaker(spk, (Number(payload.durationMs) || 4000) + 800));
-        audio.addEventListener('ended', () => tw16StopSpeaker(spk));
-        audio.addEventListener('error', () => tw16StopSpeaker(spk));
-      }
+      tw16BindSpeakerFlash(audio, payload && payload.seat, payload && payload.durationMs);
       const result = audio.play();
       if (result && typeof result.catch === 'function') result.catch(() => hintVoiceBroadcast('收到廣播，但瀏覽器阻擋自動播放，請點一下畫面'));
       return true;
@@ -22826,7 +22821,18 @@ function showIntegrityReport(precomputed) {
       payload.segTotal = segOpts.segTotal || 1;
       payload.compressed = !!(segOpts.compressed);
     }
-    try { return publishNetworkRoomMessage('voiceBroadcast', payload, 'voice-broadcast'); } catch (e) { return false; }
+    try {
+      const _ok = publishNetworkRoomMessage('voiceBroadcast', payload, 'voice-broadcast');
+      try {
+        if (_ok !== false && payload.seat && SEATS.indexOf(payload.seat) >= 0) {
+          const _hold = (Number(payload.durationMs) || 4000) + 500;
+          tw16SpeakSeats[payload.seat] = Date.now() + _hold;
+          tw16SyncSpeakers();
+          setTimeout(tw16SyncSpeakers, _hold + 40);
+        }
+      } catch (e2) {}
+      return _ok;
+    } catch (e) { return false; }
   }
 
   const voiceSegBuf = {}; /* 分段收集緩存 */
@@ -22927,10 +22933,7 @@ function showIntegrityReport(precomputed) {
       try {
         const audio = new Audio(dataUrl);
         audio.preload = 'auto';
-        const localSeat = getLocalBroadcastSeat();
-        audio.addEventListener('playing', () => tw16FlashSpeaker(localSeat, (Number(durationMs) || 4000) + 800));
-        audio.addEventListener('ended', () => tw16StopSpeaker(localSeat));
-        audio.addEventListener('error', () => tw16StopSpeaker(localSeat));
+        tw16BindSpeakerFlash(audio, getLocalBroadcastSeat(), durationMs);
         const r = audio.play();
         if (r && typeof r.catch === 'function') r.catch(() => hintVoiceBroadcast('播放廣播失敗，請點一下畫面再試'));
         hintVoiceBroadcast('廣播播放中（單機模式）');
@@ -38844,11 +38847,16 @@ html body .topbar button{min-width:0!important;min-height:0!important}
 html body .topbar .status,html body .topbar .scoreChipLine,html body .topbar .roundStatusBlock,html body .topbar .tw16-scorechip-row,html body .room,html body .tw16-system-clock{line-height:1!important;margin-top:0!important;margin-bottom:0!important;padding-top:0!important;padding-bottom:0!important}
 /* 隱形擴大命中區：外觀緊貼文字，點擊範圍每側多 3px；按鈕間距 6px，故不會互相重疊 */
 html body .topbar button::after{content:'';position:absolute;inset:0 -3px}
-html body #tw16MiniDashboard[data-speaking~="east"] .tw16-mini-dashboard-card[data-seat="east"],
-html body #tw16MiniDashboard[data-speaking~="south"] .tw16-mini-dashboard-card[data-seat="south"],
-html body #tw16MiniDashboard[data-speaking~="west"] .tw16-mini-dashboard-card[data-seat="west"],
-html body #tw16MiniDashboard[data-speaking~="north"] .tw16-mini-dashboard-card[data-seat="north"]{animation:tw-speak-flash .55s ease-in-out infinite alternate!important;z-index:2}
-@keyframes tw-speak-flash{from{box-shadow:0 0 0 2px #ffd400,0 0 12px 3px rgba(255,212,0,.9);background-color:rgba(255,212,0,.55)}to{box-shadow:0 0 0 1px rgba(255,212,0,.25);background-color:rgba(255,212,0,.08)}}
+html body #tw16MiniDashboard[data-speaking~="east"] .tw16-mini-dashboard-card[data-seat="east"]::after,
+html body #tw16MiniDashboard[data-speaking~="south"] .tw16-mini-dashboard-card[data-seat="south"]::after,
+html body #tw16MiniDashboard[data-speaking~="west"] .tw16-mini-dashboard-card[data-seat="west"]::after,
+html body #tw16MiniDashboard[data-speaking~="north"] .tw16-mini-dashboard-card[data-seat="north"]::after{
+  content:'';position:absolute;inset:-2px;border-radius:9px;pointer-events:none;z-index:9;
+  animation:tw-speak-flash .55s ease-in-out infinite alternate;
+}
+@keyframes tw-speak-flash{from{box-shadow:0 0 0 2px #ff2020,0 0 12px 3px rgba(255,32,32,.9);background-color:rgba(255,32,32,.55)}to{box-shadow:0 0 0 1px rgba(255,32,32,.25);background-color:rgba(255,32,32,.08)}}
+
+
 
 </style>
 </body>
