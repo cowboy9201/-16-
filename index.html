@@ -23894,7 +23894,8 @@ function showIntegrityReport(precomputed) {
      所有按鈕 >=48px 命中區、間距 8px、不互相覆蓋；列不夠寬時自動換行。 */
   function tw16TouchHud(topbar, box) {
     const touch = (window.matchMedia && window.matchMedia('(pointer:coarse)').matches) || box.width < 820;
-    if (!touch) return 0;
+    if (!touch) { topbar.removeAttribute('data-tw-touch'); return 0; }
+    topbar.setAttribute('data-tw-touch', '1');
     const S = (el, p) => { if (el) Object.keys(p).forEach(k => el.style.setProperty(k, p[k], 'important')); };
     const clear = el => { if (!el) return; const off = el.hidden || el.style.display === 'none'; el.removeAttribute('style'); if (off) el.style.setProperty('display', 'none', 'important'); };
     const menu = topbar.querySelector('.menu');
@@ -23917,6 +23918,9 @@ function showIntegrityReport(precomputed) {
       const icon = b.classList.contains('iconBtn');
       S(b, { position: 'relative', top: 'auto', left: 'auto', right: 'auto', bottom: 'auto', transform: 'none', display: 'inline-flex', 'align-items': 'center', 'justify-content': 'center', flex: '0 0 auto', margin: '0', padding: icon ? '1px 3px' : '2px 5px', width: 'auto', height: 'auto', 'min-width': '0', 'min-height': '0', 'font-size': icon ? '20px' : '13px', 'line-height': '1.05', 'white-space': 'nowrap', 'border-radius': '8px', 'pointer-events': 'auto' });
     });
+    /* 暫停鈕：寬度固定為最長文字（暫停倒計時）的寬度，切換成「已暫停」時不改變寬度，不會推動其他按鈕 */
+    const pz = topbar.querySelector('#tw16DebugPauseToggle');
+    if (pz) S(pz, { width: 'calc(5em + 10px)', 'box-sizing': 'border-box', 'justify-content': 'center', 'text-align': 'center', overflow: 'hidden' });
     /* 開新局、全螢幕：脫離排列流，固定在桌面最右上角並排 */
     const corner = ['fullBtn', 'newGameBtn'].map(id => topbar.querySelector('#' + id)).filter(b => b && !b.hidden && b.style.display !== 'none');
     let rightPx = 2;
@@ -25170,6 +25174,7 @@ function showIntegrityReport(precomputed) {
     const btn = dom.tw16DebugPauseToggle || byId('tw16DebugPauseToggle');
     const scoreLine = dom.scoreChipLine || byId('scoreChipLine');
     if (!btn || !scoreLine || !scoreLine.getBoundingClientRect) return;
+    if (btn.closest && btn.closest('.topbar[data-tw-touch="1"]')) return; /* 觸控版面由流式排版決定位置，不再另外定位 */
     const rect = scoreLine.getBoundingClientRect();
     if (!rect || (rect.width <= 0 && rect.height <= 0)) return;
     const box = viewportBox();
