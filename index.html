@@ -23903,6 +23903,7 @@ function showIntegrityReport(precomputed) {
     const row = topbar.querySelector('.tw16-scorechip-row');
     const wraps = Array.from(topbar.querySelectorAll('.tw16-btn-hint-wrap'));
     const btns = Array.from(topbar.querySelectorAll('button'));
+    Array.from(topbar.querySelectorAll('.tw-brk')).forEach(e => e.remove());
     [menu, sb, rb, row].concat(wraps, btns).forEach(clear);
     S(topbar, { position: 'fixed', display: 'flex', 'flex-wrap': 'wrap', 'align-items': 'center', 'align-content': 'flex-start', 'row-gap': '0px', 'column-gap': '6px', height: 'auto', overflow: 'visible', 'pointer-events': 'none' });
     /* 所有 HUD 元件攤平成同一個 flex-wrap 流：寬螢幕單列、窄螢幕只多換必要的列，佔用面積最小 */
@@ -23916,6 +23917,29 @@ function showIntegrityReport(precomputed) {
       const icon = b.classList.contains('iconBtn');
       S(b, { position: 'relative', top: 'auto', left: 'auto', right: 'auto', bottom: 'auto', transform: 'none', display: 'inline-flex', 'align-items': 'center', 'justify-content': 'center', flex: '0 0 auto', margin: '0', padding: icon ? '1px 3px' : '2px 5px', width: 'auto', height: 'auto', 'min-width': '0', 'min-height': '0', 'font-size': icon ? '20px' : '13px', 'line-height': '1.05', 'white-space': 'nowrap', 'border-radius': '8px', 'pointer-events': 'auto' });
     });
+    /* 開新局、全螢幕：脫離排列流，固定在桌面最右上角並排 */
+    const corner = ['fullBtn', 'newGameBtn'].map(id => topbar.querySelector('#' + id)).filter(b => b && !b.hidden && b.style.display !== 'none');
+    let rightPx = 2;
+    corner.forEach(b => {
+      S(b, { position: 'absolute', top: '0px', right: rightPx + 'px', left: 'auto', bottom: 'auto', margin: '0', height: '20px', padding: '0 3px', 'font-size': '16px', 'line-height': '1' });
+      rightPx += Math.ceil(b.getBoundingClientRect().width) + 6;
+    });
+    S(topbar, { 'padding-right': '0px', 'min-height': corner.length ? '20px' : '0px', 'box-sizing': 'border-box' });
+    /* 只在第一列保留右上角空間：第一列最右的項目若會壓到角落按鈕，就讓它換到下一列，其餘各列可用滿整個寬度 */
+    const flowItems = [st, sc].concat(btns.filter(b => corner.indexOf(b) < 0)).filter(el => el && !el.hidden && el.style.display !== 'none' && el.offsetWidth > 0);
+    flowItems.sort((x, y) => (x.compareDocumentPosition(y) & 4) ? -1 : 1);
+    const limit = topbar.getBoundingClientRect().right - rightPx;
+    for (let n = 0; n < 8; n++) {
+      const rects = flowItems.map(el => el.getBoundingClientRect());
+      const top1 = Math.min.apply(null, rects.map(r => r.top));
+      const first = flowItems.filter((el, i) => Math.abs(rects[i].top - top1) < 3);
+      const last = first[first.length - 1];
+      if (first.length < 2 || last.getBoundingClientRect().right <= limit) break;
+      const br = document.createElement('i');
+      br.className = 'tw-brk';
+      S(br, { display: 'block', flex: '0 0 100%', height: '0px', width: '100%', margin: '0', padding: '0', 'pointer-events': 'none' });
+      last.parentNode.insertBefore(br, last);
+    }
     let bottom = topbar.getBoundingClientRect().bottom;
     const dash = dom.tw16MiniDashboard || byId('tw16MiniDashboard');
     if (dash && dash.classList.contains('show')) {
