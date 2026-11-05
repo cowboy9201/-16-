@@ -850,10 +850,11 @@
 .tw16-lobby-key-summary-wrap.ok .tw16-lobby-key-summary-state{background:rgba(22,101,52,.78);color:#bbf7d0}@media(max-width:700px){.tw16-lobby-key-summary-state{min-width:68px;padding:0 7px;font-size:12px}.tw16-lobby-key-summary-input{font-size:14px}}.tw16-lobby-key-sheet-tools{display:grid;flex-wrap:wrap;gap:6px;grid-template-columns:repeat(3,minmax(0,1fr))}.tw16-lobby-key-sheet-tools .tw16-lobby-btn{flex:1 1 86px;min-height:34px;padding:6px 8px;font-size:11px;width:100%}.tw16-lobby-key-input{width:100%;min-width:240px;border:1px solid rgba(255,255,255,.10);border-radius:8px;background:rgba(8,12,20,.66);color:#fff;padding:7px 8px;font:12px/1.25 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .tw16-mini-dashboard{position:fixed;left:0;top:0;transform:none;z-index:119;width:auto;display:none;pointer-events:none;user-select:none;overflow:visible;}
 .tw16-mini-dashboard.show{display:block;}
-.tw16-chat-board{position:fixed;top:56px;right:0;z-index:119;width:80px;display:none;}
+.tw16-chat-board{position:fixed;top:118px;right:0;z-index:119;width:80px;display:none;pointer-events:none;}
 .tw16-chat-board.show{display:block;}
-.tw16-chat-board-close{display:block;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:3px;padding:1px 5px;font-size:11px;cursor:pointer;margin-bottom:2px;}
-#tw16ChatBoardList{list-style:none;margin:0;padding:0;height:120px;overflow-y:scroll;touch-action:pan-y;-webkit-overflow-scrolling:touch;}
+.tw16-chat-board-close{pointer-events:auto;display:block;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:3px;padding:1px 5px;font-size:11px;cursor:pointer;margin-bottom:2px;}
+#tw16ChatBoardList{list-style:none;margin:0;padding:0;height:84px;overflow:hidden;pointer-events:none;}
+.tw16-chat-board-item{transition:opacity .8s;}.tw16-chat-board-item.old{opacity:.4;}
 .tw16-chat-board-item{font-size:10px;font-weight:bold;line-height:1.5;word-break:break-all;padding:1px 2px;}
 .tw16-chat-board-name{color:#000;font-weight:bold;margin-right:2px;}
 .tw16-chat-board-text{color:#fff;text-shadow:0 1px 2px #000;}
@@ -17273,6 +17274,7 @@ function loadUiSettings() {
         const discardTile = tileByIdInSeatHand(seat, option.discardId) || { id: option.discardId, code: option.discardCode };
         const tileEl = createTileElement(discardTile, false);
         tileEl.dataset.tingDiscardId = String(option.discardId || '');
+        tileEl.dataset.tingDiscardCode = String(option.discardCode || discardTile.code || '');
         tileEl.title = '打出 ' + tileText(option.discardCode);
         discardTiles.appendChild(tileEl);
       });
@@ -20934,6 +20936,8 @@ dom.resultText.querySelectorAll('[data-menu]').forEach(btn => btn.addEventListen
       + '<button class="btn" data-menu="rules">規則說明</button>'
 
       + '<button class="btn" data-menu="stt-toggle">語音轉文字：' + (TW16_STT_LABEL[tw16SttMode()] || '國語') + '</button>'
+      + '<button class="btn" data-menu="stt-custom">自訂辨識詞（' + tw16SttCustomPairs().length + ' 組）</button>'
+      + '<button class="btn" data-menu="stt-cmd-toggle">語音指令：' + (tw16VoiceCmdOn() ? '開' : '關') + '</button>'
       + '<button class="btn" data-menu="voice-events-toggle">語音播報：' + (state.uiSettings.voiceEventEnabled ? '開' : '關') + '</button>'
       + '<button class="btn" data-menu="perspective3d-toggle">3D立體視角：' + (state.uiSettings.perspective3d ? '開' : '關') + '</button>'
       + '<button class="btn" data-menu="submenu-tiles">牌圖管理</button>'
@@ -20950,6 +20954,8 @@ dom.resultText.querySelectorAll('[data-menu]').forEach(btn => btn.addEventListen
     if (dom.resultPanel && action !== 'center-panel') { dom.resultPanel.classList.remove('menu-open'); dom.resultPanel.classList.remove('history-open'); dom.resultPanel.classList.remove('utility-open'); }
     if (action === 'main-menu') { openMainMenu(); return; }
     if (action === 'stt-toggle') { tw16SttCycle(); openMainMenu(); return; }
+    if (action === 'stt-custom') { tw16SttEditCustom(); openMainMenu(); return; }
+    if (action === 'stt-cmd-toggle') { const on = !tw16VoiceCmdOn(); tw16VoiceCmdSet(on); if (on) tw16CmdPrime(); else { tw16CmdPrev = false; tw16CmdStop(); } openMainMenu(); return; }
     if (action === 'exit-lobby') { exitToInterface329Lobby(); return; }
     if (action === 'submenu-save') {
       openMenuSubmenu('儲存牌局',
@@ -22439,7 +22445,11 @@ function showIntegrityReport(precomputed) {
     li.innerHTML = '<span class="tw16-chat-board-name">' + escapeHtml(name) + '</span><span class="tw16-chat-board-text">' + escapeHtml(text) + '</span>';
     list.appendChild(li);
     board.classList.add('show');
+    while (list.children.length > 30) list.removeChild(list.firstChild);
     list.scrollTop = list.scrollHeight;
+    setTimeout(() => { try { li.classList.add('old'); } catch (e) {} }, 8000);
+    clearTimeout(window.__tw16ChatIdle);
+    window.__tw16ChatIdle = setTimeout(() => { try { board.classList.remove('show'); } catch (e) {} }, 15000);
 
   }
   function stopGameVoiceForSettlement(reason) {
@@ -22780,52 +22790,123 @@ function showIntegrityReport(precomputed) {
     } catch (e) {}
   }
   /* tw-voice-stt：播放時辨識。用 audio.captureStream() 取得正在播放的音軌餵給 SpeechRecognition.start(track)，
-     不碰麥克風，不會跟錄音搶麥克風（安卓 Chrome 的限制）。辨識完：顯示、寫入聊天記錄，並回傳給發話方。 */
+     不碰麥克風。連線模式下由先搶到的一位收聽方辨識，邊辨識邊廣播給全桌（發話方、其他收聽方都會收到）。 */
   function tw16SttFromPlayback(audio, seat, meta) {
     try {
       const lang = tw16SttMode();
       if (lang === 'off' || !audio) return;
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SR || (typeof audio.captureStream !== 'function' && typeof audio.mozCaptureStream !== 'function')) { tw16SttWarn('unsupported'); return; }
-      let started = false;
-      const begin = () => {
-        if (started) return;
-        try {
-          const st = (audio.captureStream || audio.mozCaptureStream).call(audio);
-          const tracks = st.getAudioTracks();
-          if (!tracks.length) return;
-          started = true;
-          const r = new SR();
-          r.lang = lang; r.continuous = true; r.interimResults = true;
-          let best = '', shown = '';
-          r.onresult = e => {
-            let f = '', i2 = '';
-            for (let i = 0; i < e.results.length; i++) {
-              const t = (e.results[i][0] && e.results[i][0].transcript) || '';
-              if (e.results[i].isFinal) f += t; else i2 += t;
-            }
-            const cur = tw16SttFix(f + i2, lang);
-            if (cur) best = cur;
-            if (cur && cur !== shown) { shown = cur; try { showBroadcastFloatingText(seat || '', cur.slice(0, 80), Date.now() + 4000); } catch (e2) {} }
-          };
-          r.onerror = ev => {
-            const code = (ev && ev.error) || 'unknown';
-            if (code === 'no-speech' || code === 'aborted') return;
-            tw16SttWarn(code);
-          };
-          r.onend = () => {
-            const t = String(best || '').trim();
-            if (t.length < 2) return; /* 太短（雜音）不記錄 */
-            try { tw16SttChunks(t).forEach(c => addChatBoardMessage(seat || '', '🎤 ' + c)); } catch (e2) {}
-            tw16SttSendBack(Object.assign({ seat: seat || '' }, meta || {}), t);
-          };
-          const stopR = () => { try { r.stop(); } catch (e2) {} };
-          audio.addEventListener('ended', stopR);
-          audio.addEventListener('pause', stopR);
-          try { r.start(tracks[0]); } catch (e3) { r.start(); }
-        } catch (e) { tw16SttWarn('other'); }
+      const vid = meta && meta.vid ? String(meta.vid) : '';
+      const online = !!(vid && meta.clientId && isNetworked() && net.channel && String(meta.clientId) !== String(net.clientId));
+      /* 建立辨識器並開始（track：要辨識的音軌；hooks.onAudioStart：辨識器開始收音時通知；hooks.attachStop：何時停止） */
+      const launch = (track, hooks) => {
+        const r = new SR();
+        if (vid) tw16SttRecs[vid] = r;
+        r.lang = lang; r.continuous = true; r.interimResults = true;
+        let best = '', shown = '', lastSentAt = 0, lastSent = '';
+        r.onresult = e => {
+          let f = '', i2 = '';
+          for (let i = 0; i < e.results.length; i++) {
+            const t = (e.results[i][0] && e.results[i][0].transcript) || '';
+            if (e.results[i].isFinal) f += t; else i2 += t;
+          }
+          const cur = tw16SttFix(f + i2, lang);
+          if (!cur) return;
+          best = cur;
+          if (cur !== shown) { shown = cur; try { showBroadcastFloatingText(seat || '', cur.slice(0, 80), Date.now() + 4000); } catch (e2) {} }
+          const now = Date.now();
+          if (online && cur !== lastSent && now - lastSentAt > 1200) {
+            lastSentAt = now; lastSent = cur;
+            tw16SttPublish('text', meta, { spkSeat: seat || '', text: cur.slice(0, 240), final: false });
+          }
+        };
+        r.onerror = ev => {
+          const code = (ev && ev.error) || 'unknown';
+          if (code === 'no-speech' || code === 'aborted') return;
+          tw16SttWarn(code);
+        };
+        r.onaudiostart = () => { try { if (hooks && hooks.onAudioStart) hooks.onAudioStart(); } catch (e2) {} };
+        r.onend = () => {
+          if (vid) delete tw16SttRecs[vid];
+          try { if (hooks && hooks.onEnd) hooks.onEnd(); } catch (e2) {}
+          const t = String(best || '').trim();
+          if (!t) return;
+          if (online) tw16SttPublish('text', meta, { spkSeat: seat || '', text: t.slice(0, 240), final: true }); /* 單字（碰/胡/槓…）也要送出，語音指令才收得到 */
+          if (t.length >= 2) { try { tw16SttChunks(t).forEach(c => addChatBoardMessage(seat || '', '🎤 ' + c)); } catch (e2) {} }
+        };
+        if (hooks && hooks.attachStop) hooks.attachStop(r);
+        try { r.start(track); } catch (e3) { r.start(); }
+        return r;
       };
-      audio.addEventListener('playing', begin);
+      /* 後備：直接擷取正在播放的音軌（會漏掉開頭，短語音如「碰」容易辨識不到） */
+      const launchCapture = () => {
+        let started = false;
+        const begin = () => {
+          if (started) return;
+          try {
+            const st = (audio.captureStream || audio.mozCaptureStream).call(audio);
+            const tracks = st.getAudioTracks();
+            if (!tracks.length) return;
+            started = true;
+            launch(tracks[0], { attachStop: r => {
+              const stopR = () => { try { r.stop(); } catch (e2) {} };
+              audio.addEventListener('ended', stopR); audio.addEventListener('pause', stopR);
+            } });
+          } catch (e) { tw16SttWarn('other'); }
+        };
+        if (!audio.paused && audio.currentTime > 0) begin();
+        audio.addEventListener('playing', begin);
+      };
+      /* 主要做法：把錄音解碼後，在一條「靜音的虛擬音軌」上重新播放給辨識器。
+         辨識器先連線、等它開始收音，再送出語音（前面留空白），所以短語音（碰、胡）也不會被吃掉；使用者聽到的聲音不受影響。 */
+      const startRec = () => {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        const src = String(audio.src || '');
+        if (!AC || src.indexOf('data:') !== 0 || src.indexOf(',') < 0) { launchCapture(); return; }
+        (async () => {
+          let ctx = null;
+          try {
+            ctx = new AC();
+            try { await ctx.resume(); } catch (e0) {}
+            const bin = atob(src.slice(src.indexOf(',') + 1));
+            const bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            const buf = await ctx.decodeAudioData(bytes.buffer);
+            const dest = ctx.createMediaStreamDestination();
+            const track = dest.stream.getAudioTracks()[0];
+            if (!track) throw new Error('no track');
+            let began = false;
+            const go = () => {
+              if (began) return; began = true;
+              setTimeout(() => {
+                try {
+                  const bs = ctx.createBufferSource();
+                  bs.buffer = buf; bs.connect(dest);
+                  bs.onended = () => { setTimeout(() => { try { recRef && recRef.stop(); } catch (e1) {} }, 800); };
+                  bs.start();
+                } catch (e1) {}
+              }, 350);
+            };
+            let recRef = null;
+            recRef = launch(track, { onAudioStart: go, onEnd: () => { try { ctx.close(); } catch (e1) {} } });
+            setTimeout(go, 1500); /* 收不到 audiostart 事件時的保險 */
+          } catch (e) {
+            try { if (ctx) ctx.close(); } catch (e1) {}
+            launchCapture();
+          }
+        })();
+      };
+      if (!online) { startRec(); return; }
+      /* 搶辨識：房主 0ms，來賓隨機 150~450ms；先搶到的人辨識，其他人放棄（同時搶到則 clientId 小的優先） */
+      const delay = net.role === 'host' ? 0 : 150 + Math.random() * 300;
+      setTimeout(() => {
+        const cur = tw16SttClaim[vid];
+        if (cur && cur !== net.clientId) return;
+        tw16SttClaim[vid] = net.clientId;
+        tw16SttPublish('claim', meta, {});
+        startRec();
+      }, delay);
     } catch (e) {}
   }
 
@@ -22881,9 +22962,558 @@ function showIntegrityReport(precomputed) {
     [/[廳挺停]牌/g, '聽牌'], [/我[癡痴]/g, '我吃'], [/[青輕]一[色瑟]/g, '清一色'], [/清一瑟/g, '清一色'], [/湊一瑟/g, '湊一色'],
     [/海底[勞澇]月/g, '海底撈月'], [/[連蓮]莊/g, '連莊'], [/庄/g, '莊']
   ];
+  function tw16SttCustomRaw() { try { return localStorage.getItem('tw16SttCustom') || ''; } catch (e) { return ''; } }
+  function tw16SttCustomPairs() {
+    return tw16SttCustomRaw().split(/[;；\n]/).map(x => x.split('=')).filter(a => a.length === 2 && a[0].trim() && a[1].trim()).map(a => [a[0].trim(), a[1].trim()]);
+  }
+  function tw16SttEditCustom() {
+    try {
+      const v = window.prompt('自訂辨識詞：每組寫「誤辨詞=正確詞」，用；分隔，留空代表清除。\n例：朋了=碰了；呼了=胡了', tw16SttCustomRaw());
+      if (v !== null) localStorage.setItem('tw16SttCustom', String(v).trim());
+    } catch (e) {}
+  }
+  /* ===== 語音指令：出現吃/碰/槓/胡選項框時才開麥，框消失就關麥 =====
+     安全設計：只在「框出現的那一刻」開一次（邊緣觸發），不輪詢；框短暫重建不會重開（消失需持續 0.4 秒才關）；
+     出錯不無限重試（最多 3 次自動續聽，任何錯誤即放棄）；60 秒內失敗 3 次或被拒絕麥克風 → 自動關閉此功能。 */
+  function tw16VoiceCmdOn() { try { return localStorage.getItem('tw16VoiceCmd') === '1'; } catch (e) { return false; } }
+  /* 宣告聽牌後：語音指令暫停到本局結束（只看本機玩家座位，不動使用者的開關設定；下一局 declaredTing 重置後自動恢復） */
+  function tw16CmdTingSuspended() {
+    try {
+      if (!state || state.ended) return false;
+      const seat = localHumanSeat();
+      return !!(seat && state.declaredTing && state.declaredTing[seat]);
+    } catch (e) { return false; }
+  }
+  /* 聽牌後唯一要做的操作就是「胡」：只要胡/跳過選項框出現，語音指令照常運作（仍不開『打哪張』的麥） */
+  function tw16CmdWinPanelOpen() {
+    try {
+      const p = dom && dom.actionPanel;
+      return !!(p && p.classList.contains('action-panel-visible') && p.querySelector('.actionBtn[data-action="win"],.actionBtn.win-btn'));
+    } catch (e) { return false; }
+  }
+  function tw16VoiceCmdLive() { return tw16VoiceCmdOn() && (!tw16CmdTingSuspended() || tw16CmdWinPanelOpen()); }
+  let tw16CmdSuspNotified = null;
+  function tw16VoiceCmdSet(on) { try { localStorage.setItem('tw16VoiceCmd', on ? '1' : '0'); } catch (e) {} }
+  /* 語音指令統一用「按鈕編號」：由上而下 1、2、3…，編號顯示在按鈕左側 */
+  function tw16VoiceCmdMatch(text) {
+    let t = String(text || '').replace(/[\s，。！？、,.!?]/g, '').toLowerCase();
+    if (!t || t.length > 8) return '';
+    t = t.replace(/^(我要|我選|我想|選|按|請|幫我|第|好|欸|喔|啊|那|就)+/, '').replace(/(號按鈕|號鍵|號|個|按鈕|鍵|選項|了|啦|吧|喔|啊)+$/, '');
+    const map = { '1':1,'一':1,'壹':1,'幺':1,'么':1,'2':2,'二':2,'兩':2,'貳':2,'倆':2,'3':3,'三':3,'參':3,'4':4,'四':4,'肆':4,'5':5,'五':5,'伍':5,'6':6,'六':6,'陸':6,'7':7,'七':7,'柒':7,'8':8,'八':8,'捌':8,'9':9,'九':9,'玖':9,'10':10,'十':10 };
+    return map[t] ? '#' + map[t] : '';
+  }
+  /* 直接說按鈕名稱：「胡／胡了／自摸」→ 胡；「跳過／過／不胡」→ 跳過（含常見誤辨字） */
+  function tw16VoiceCmdWordMatch(text) {
+    const t = String(text || '').replace(/[\s，。！？、,.!?]/g, '').toLowerCase();
+    if (!t || t.length > 8) return '';
+    if (/^(我|就|給我|那我|好我)?(要)?[胡糊湖呼虎狐戶互鬍](了|啦|牌|囉|喔|啊|吧)?$/.test(t) || /^(我|就)?(要)?自[摸摩磨抹](了|啦|囉|喔|啊|吧)?$/.test(t) || /^(胡牌了?|可以胡|ron|hu)$/.test(t)) return 'win';
+    if (/^(我|就)?(要|先)?(跳過|跳|過|不胡|不要胡|不用胡|不用|不要|pass)(了|啦|囉|喔|啊|吧)?$/.test(t)) return 'skip';
+    return '';
+  }
+  /* 聽牌選擇面板：「取消／不聽／算了」= 按取消 */
+  function tw16VoiceCmdCancelMatch(text) {
+    const t = String(text || '').replace(/[\s，。！？、,.!?]/g, '');
+    return /^(我?(要|想)?(取消|不聽|不要聽|不用聽|不用|不要|算了|跳過|不聽牌|先不聽)(了|啦|吧)?)$/.test(t);
+  }
+  function tw16CmdNumberBtns() {
+    try {
+      const p = dom && dom.actionPanel;
+      if (!p) return [];
+      const btns = Array.from(p.querySelectorAll('.actionBtn,.tingChoiceRow'));
+      if (!(p.classList.contains('action-panel-visible') && tw16VoiceCmdLive())) { btns.forEach(b => b.removeAttribute('data-tw16-n')); return []; }
+      const vis = btns.filter(b => b.offsetParent !== null || b.getClientRects().length);
+      vis.sort((a, b) => { const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect(); return (Math.abs(ra.top - rb.top) > 4 ? ra.top - rb.top : ra.left - rb.left); });
+      vis.forEach((b, k) => b.setAttribute('data-tw16-n', String(k + 1)));
+      return vis;
+    } catch (e) { return []; }
+  }
+  /* ===== 吃碰槓後：等語音指定要打哪張牌 ===== */
+  let tw16CmdDiscardUntil = 0;
+  let tw16CmdSawDiscardable = false;
+  function tw16CmdDiscardMode() { return Date.now() < tw16CmdDiscardUntil; }
+  /* 語音指令開啟時：輪到自己（非托管）出牌的回合，也開麥聽牌名 */
+  let tw16CmdCooldownUntil = 0;
+  function tw16CmdMyDiscardTurn() {
+    try {
+      if (!tw16VoiceCmdLive() || tw16CmdTingSuspended() || Date.now() < tw16CmdCooldownUntil) return false;
+      if (!state || state.ended) return false;
+      const seat = localHumanSeat();
+      if (!seat || seat !== state.viewSeat) return false;
+      if (state.seatAutoPlay && state.seatAutoPlay[seat]) return false;
+      return !!canDiscard(seat);
+    } catch (e) { return false; }
+  }
+  function tw16CmdEndDiscardMode() {
+    tw16CmdDiscardUntil = 0; tw16CmdSawDiscardable = false;
+    try { tw16CmdPrev = false; tw16CmdStop(); } catch (e) {}
+  }
+  /* 使用者手動點/拖手牌 → 立刻結束語音等牌模式並關麥，手動操作完全不受語音影響 */
+  try {
+    ['pointerdown', 'touchstart', 'mousedown'].forEach(ev => document.addEventListener(ev, e => {
+      try {
+        if (!tw16CmdDiscardMode()) return;
+        const t = e.target && e.target.closest ? e.target.closest('.hand-bottom') : null;
+        if (t) tw16CmdEndDiscardMode();
+      } catch (e1) {}
+    }, true));
+  } catch (e) {}
+  function tw16VoiceTileMatch(text) {
+    let t = String(text || '').replace(/[\s，。！？、,.!?]/g, '');
+    if (!t || t.length > 10) return '';
+    t = t.replace(/^(我要打|我打|打出|打掉|打|出|丟|我出|請打)+/, '').replace(/(這張|那張|一張|張|牌|吧|啦|了|子)+$/, '');
+    /* 全形數字轉半形；「30000」「3W」這種辨識結果也視為「三萬」 */
+    t = t.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 65248));
+    t = t.replace(/(^|[^0-9])([1-9])0000(?![0-9])/g, '$1$2萬').replace(/([1-9])[wW]$/, '$1萬');
+    { const lm = t.toLowerCase().match(/^([1-9]|one|two|three|four|five|six|seven|eight|nine)(pin|ping|bing|bin|pink|ben|been|tong|tung|dong|ton|tone|thong|tongue|don|dung)$/);
+      if (lm) { const EN = { one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9 }; return 'p' + (EN[lm[1]] || lm[1]); } }
+    /* 「X個筒」「X號餅」「X顆筒」「第X筒」：把量詞/序數字吃掉再比對 */
+    t = t.replace(/^第/, '').replace(/([0-9一二兩三四五六七八九壹貳參肆伍陸柒捌玖衣依幺么爾耳兒山散傘杉死似午舞溜留妻期七巴爸酒久救舅])[個个顆颗號号隻只張]([筒同銅桶通童統统痛餅饼兵冰病屏瓶萬万晚灣索條条鎖縮])/, '$1$2');
+    const strict = { '1':1,'一':1,'壹':1,'2':2,'二':2,'兩':2,'貳':2,'3':3,'三':3,'參':3,'叁':3,'4':4,'四':4,'肆':4,'5':5,'五':5,'伍':5,'6':6,'六':6,'陸':6,'7':7,'七':7,'柒':7,'8':8,'八':8,'捌':8,'9':9,'九':9,'玖':9 };
+    /* 同音／近音的數字（只在整句就是「數字+花色」時才接受，避免閒聊誤觸） */
+    const loose = Object.assign({ '衣':1,'依':1,'幺':1,'么':1,'億':1,'以':1,'已':1,'椅':1,'醫':1,'乙':1,
+      '爾':2,'耳':2,'兒':2,'而':2, '山':3,'散':3,'傘':3,'杉':3, '死':4,'似':4,
+      '午':5,'舞':5,'無':5,'我':5,'物':5,'霧':5,'悟':5,'誤':5, '溜':6,'留':6,'路':6,
+      '妻':7,'期':7,'吉':7,'其':7,'奇':7,'齊':7, '巴':8,'爸':8, '酒':9,'久':9,'救':9,'就':9,'舅':9 }, strict);
+    /* 花色容錯：語音辨識常把「筒」聽成同/桶/通/童、「餅」聽成兵/冰/病，「萬」聽成晚/玩/灣/完/碗/慢，「索」聽成鎖/縮/所 */
+    const SUIT_M = '萬万晚玩灣彎完碗慢蠻滿蔓挽腕', SUIT_P = '筒同銅桶通童統统痛捅桐彤潼瞳佟僮侗峒恫茼仝動洞懂凍棟東餅饼兵冰病並拼丙柄炳秉平屏瓶蘋評頻品聘賓濱檳彬憑凭', SUIT_S = '索條条鎖瑣縮所梭嗦蘇素搜艘';
+    /* 寬鬆比對（數字+花色字，前後可夾雜其它字）：筒/餅放寬到所有近音字，只排除容易誤觸的日常詞（東、並、平、品、評、頻、動、洞、懂、素、搜） */
+    const CORE_SUITS = '萬万晚灣彎筒同銅桶通童統统痛捅桐彤潼瞳佟僮侗峒恫茼仝凍棟餅饼兵冰病拼丙柄炳秉屏瓶蘋聘賓濱檳彬憑凭索條条鎖瑣縮蘇';
+    const reFull = new RegExp('^([' + Object.keys(loose).join('') + '])\\s*([' + SUIT_M + SUIT_P + SUIT_S + '])(?:子)?$');
+    const reLoose = new RegExp('([' + Object.keys(strict).join('') + '])\\s*([' + CORE_SUITS + '])(?:子)?');
+    let m = t.match(reFull) || t.match(reLoose); /* 先整句比對，再容許前後多餘的字（如「我打五餅吧謝謝」） */
+    if (m) {
+      const n = loose[m[1]], k = m[2];
+      const suit = SUIT_M.indexOf(k) >= 0 ? 'm' : SUIT_P.indexOf(k) >= 0 ? 'p' : 's';
+      return suit + n;
+    }
+    if (/^(東風|東|冬風)$/.test(t)) return 'E';
+    if (/^(南風|南|男風)$/.test(t)) return 'S';
+    if (/^(西風|西|希風)$/.test(t)) return 'W';
+    if (/^(北風|北|背風)$/.test(t)) return 'N';
+    if (/^(紅中|紅|洪中|宏中|中)$/.test(t)) return 'C';
+    if (/^(發財|發|法財|發才|發菜)$/.test(t)) return 'F';
+    if (/^(白板|白|白版|白班)$/.test(t)) return 'P';
+    return '';
+  }
+  /* 筒／餅保底：辨識只聽到數字、花色字不明（或沒聽到）時，依手牌推斷。
+     只在「最終結果」使用。數字+不明字：萬／索字詞都沒出現，必定是筒 → 打該數字的筒；
+     只有數字：手牌中該數字只有一種花色才打。 */
+  function tw16VoiceTileFallback(text) {
+    try {
+      let t = String(text || '').replace(/[\s，。！？、,.!?]/g, '');
+      t = t.replace(/^(我要打|我打|打出|打掉|打|出|丟|我出|請打)+/, '').replace(/(這張|那張|一張|張|牌|吧|啦|了|子)+$/, '');
+      t = t.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 65248));
+      const num = { '1':1,'一':1,'壹':1,'2':2,'二':2,'兩':2,'貳':2,'3':3,'三':3,'參':3,'4':4,'四':4,'肆':4,'5':5,'五':5,'伍':5,'6':6,'六':6,'陸':6,'7':7,'七':7,'柒':7,'8':8,'八':8,'捌':8,'9':9,'九':9,'玖':9 };
+      const near = { '衣':1,'依':1,'億':1,'椅':1,'醫':1,'乙':1,'爾':2,'耳':2,'兒':2,'山':3,'散':3,'傘':3,'杉':3,'死':4,'午':5,'舞':5,'溜':6,'留':6,'妻':7,'期':7,'巴':8,'爸':8,'酒':9,'久':9,'救':9,'舅':9 };
+      Object.keys(near).forEach(k => { num[k] = near[k]; });
+      const m = t.match(/^([1-9一二兩三四五六七八九壹貳參肆伍陸柒捌玖衣依億椅醫乙爾耳兒山散傘杉死午舞溜留妻期巴爸酒久救舅])(.{0,2})$/);
+      if (!m) return '';
+      const n = num[m[1]], rest = m[2] || '';
+      if (/[萬万晚玩灣彎完碗慢蠻滿蔓挽腕索條条鎖瑣縮所梭嗦蘇素搜艘個号號次下點是的嗎啊喔嘛呢人天年月日歲百千塊元]/.test(rest)) return '';
+      const seat = localHumanSeat();
+      const hand = (state.hands[seat] || []).filter(x => x && x.code);
+      const has = c => hand.some(x => x.code === c);
+      if (rest) return has('p' + n) ? 'p' + n : '';
+      const found = ['m' + n, 'p' + n, 's' + n].filter(has);
+      return found.length === 1 ? found[0] : '';
+    } catch (e) { return ''; }
+  }
+  function tw16VoiceCmdDiscard(code) {
+    try {
+      const seat = localHumanSeat();
+      if (!seat || seat !== state.viewSeat || !canDiscard(seat)) return false;
+      const hand = (state.hands[seat] || []).filter(x => x && x.code === code);
+      if (!hand.length) { hintVoiceBroadcast('手上沒有「' + tileSpeechText(code) + '」'); return false; }
+      const tileObj = hand[hand.length - 1];
+      hintVoiceBroadcast('語音打出：' + tileSpeechText(code));
+      const node = document.querySelector('.hand-bottom [data-tile-id="' + String(tileObj.id).replace(/"/g, '') + '"]');
+      if (node) return triggerFaceUpHandTileDiscardAction(node, seat, tileObj, 'human');
+      return submitDiscard(seat, tileObj.id, 'human');
+    } catch (e) { return false; }
+  }
+  /* ===== tw16_voice_target_tile：吃／碰／槓可說「動作」「目標牌」或「動作＋目標牌」；「聽牌」可直接宣告 ===== */
+  function tw16VoiceClaimParse(text) {
+    let t = String(text || '').replace(/[\s，。！？、,.!?]/g, '');
+    if (!t || t.length > 12) return null;
+    t = t.replace(/^(我要|我想|我|幫我|請|給我|就|那|好|欸|喔|啊|要)+/, '');
+    const m = t.match(/^(暗|加|明)?(吃|喫|痴|癡|池|碰|朋|捧|彭|棚|砰|槓|杠|桿|干|剛|鋼|缸|港|崗|岡)(.*)$/);
+    if (m) {
+      const ch = m[2];
+      const kind = /[吃喫痴癡池]/.test(ch) ? 'chi' : /[碰朋捧彭棚砰]/.test(ch) ? 'pong' : 'kong';
+      const rest = String(m[3] || '').replace(/(了|啦|吧|喔|啊|囉)+$/, '');
+      if (!rest) return { kind, sub: kind === 'kong' ? (m[1] || '') : '', tile: '' };
+      const tile = tw16VoiceTileMatch(rest);
+      return tile ? { kind, sub: kind === 'kong' ? (m[1] || '') : '', tile } : null;
+    }
+    const tile = tw16VoiceTileMatch(t);
+    return tile ? { kind: '', sub: '', tile } : null;
+  }
+  /* 回傳 { n: 按鈕編號 } 代表可直接按；{ msg } 代表要提示使用者；{} 代表與動作面板無關 */
+  function tw16VoiceClaimResolve(text) {
+    const p = tw16VoiceClaimParse(text);
+    if (!p) return {};
+    const nb = tw16CmdNumberBtns();
+    const KF = { chi: ['chi'], pong: ['pong'], kong: ['kong', 'concealedKong', 'addKong'] };
+    const SUBT = { '暗': 'concealedKong', '加': 'addKong', '明': 'kong' };
+    const NAME = { chi: '吃', pong: '碰', kong: '槓' };
+    let cands = [];
+    nb.forEach((b, i) => {
+      const bk = (b.dataset && b.dataset.tw16Kind) || '';
+      if (!bk || bk === 'win') return;
+      if (p.kind) {
+        if (KF[p.kind].indexOf(bk) < 0) return;
+        if (p.sub && SUBT[p.sub] && bk !== SUBT[p.sub]) return;
+      } else if (b.dataset.tw16Src !== 'claim') return; /* 只說牌名時，只對「別人打出的牌」的吃碰槓有效，避免跟自己出牌衝突 */
+      cands.push({ n: i + 1, tile: b.dataset.tw16Tile || '' });
+    });
+    if (!cands.length) return p.kind ? { msg: '目前沒有「' + NAME[p.kind] + '」的選項' } : {};
+    if (p.tile) {
+      const hit = cands.filter(c => c.tile === p.tile);
+      if (!hit.length) return p.kind ? { msg: '目標牌不是「' + tileSpeechText(p.tile) + '」' } : {};
+      cands = hit;
+    }
+    if (cands.length === 1) return { n: cands[0].n };
+    return { msg: '有 ' + cands.length + ' 個符合的選項，請說編號' };
+  }
+  function tw16VoiceTingParse(text) {
+    let t = String(text || '').replace(/[\s，。！？、,.!?]/g, '');
+    if (!t || t.length > 14) return null;
+    t = t.replace(/^(我要|我想|我|幫我|請|給我|就|那|好|欸|喔|要|宣告|宣布)+/, '');
+    const TING = '(?:[聽聼]|[廳挺停](?=[牌拍排]))[牌拍排]?';
+    const TAIL = '(?:了|啦|吧|喔|啊|囉)*';
+    let part = null;
+    let m = t.match(new RegExp('^' + TING + TAIL + '(.*)$'));
+    if (m) part = m[1];
+    else { m = t.match(new RegExp('^(.*?)' + TING + TAIL + '$')); if (m) part = m[1]; }
+    if (part === null) return null;
+    if (!part) return { tile: '' };
+    if (!/^(打出|打|出|丟)/.test(part)) return null;
+    const tile = tw16VoiceTileMatch(part);
+    return tile ? { tile } : null;
+  }
+  /* 說「聽牌」：聽牌選擇面板開著就直接選；沒開（例如先前按過取消）且輪到自己出牌時會重新開啟。
+     只有一種聽牌組合就直接宣告；有多種請說編號，或說「聽牌打五萬」指定要打的牌。
+     宣告聽牌無法反悔，所以只在辨識結果定稿（isFinal）後才動作。 */
+  function tw16CmdTryTing(res) {
+    try {
+      if (tw16CmdTingSuspended()) return false;
+      const seat = localHumanSeat();
+      if (!seat) return false;
+      let p = null;
+      for (let k = 0; k < res.length && !p; k++) p = tw16VoiceTingParse((res[k] && res[k].transcript) || '');
+      if (!p) return false;
+      const opened = tw16CmdTingPanelOpen();
+      if (!opened) {
+        if (!state || state.ended || state.pending || seat !== state.viewSeat || !canDiscard(seat)) return false;
+        if (state.declaredTing && state.declaredTing[seat]) return false;
+      }
+      if (!res.isFinal) return true;
+      if (!opened) {
+        if (!getTingOptions(seat).length) { hintVoiceBroadcast('目前沒有可以聽牌的打法'); return true; }
+        tingChoiceDismissKey = '';
+        if (!openTingChoicePanel(seat)) return false;
+      }
+      const rows = tw16CmdNumberBtns().filter(b => b.classList.contains('tingChoiceRow'));
+      if (!rows.length) return true;
+      let hit = null, node = null;
+      if (p.tile) {
+        hit = rows.find(r => r.querySelector('[data-ting-discard-code="' + p.tile + '"]')) || null;
+        if (!hit) { hintVoiceBroadcast('沒有打「' + tileSpeechText(p.tile) + '」就能聽牌的選項'); return true; }
+        node = hit.querySelector('[data-ting-discard-code="' + p.tile + '"]');
+      } else if (rows.length === 1) {
+        hit = rows[0];
+      } else {
+        hintVoiceBroadcast('有 ' + rows.length + ' 種聽牌組合，請說編號，或說「聽牌打○○」');
+        return true;
+      }
+      hintVoiceBroadcast('語音指令：聽牌' + (p.tile ? '，打' + tileSpeechText(p.tile) : ''));
+      if (node && node.dataset && node.dataset.tingDiscardId) node.click(); else hit.click();
+      tw16CmdStop(); tw16CmdPrev = false;
+      return true;
+    } catch (e) { return false; }
+  }
+  function tw16VoiceCmdExec(want) {
+    try {
+      const panel = dom && dom.actionPanel;
+      if (!panel || !panel.classList.contains('action-panel-visible')) return '';
+      const n = parseInt(String(want).replace('#', ''), 10);
+      const btns = tw16CmdNumberBtns();
+      const b = btns[n - 1];
+      if (!b) { hintVoiceBroadcast('沒有第 ' + n + ' 個選項'); return ''; }
+      const isTing = b.classList.contains('tingChoiceRow');
+      const l = isTing ? '聽牌' : String((b.querySelector('.actionBtnLabel') || b).textContent || '').trim();
+      hintVoiceBroadcast('語音指令：第 ' + n + ' 個（' + l.replace(/AI建議/g, '') + '）');
+      b.click();
+      if (isTing) return 'ting';
+      return /吃|碰|槓|杠/.test(l) && !/胡|跳過/.test(l) ? 'claim' : 'other';
+    } catch (e) {}
+    return '';
+  }
+  let tw16CmdInterimTimer = 0;
+  let tw16CmdRec = null, tw16CmdActive = false, tw16CmdTries = 0, tw16CmdFails = [], tw16CmdTimer = 0, tw16CmdOffTimer = 0, tw16CmdPrev = false, tw16CmdWarned = false;
+  function tw16CmdPanelActive() {
+    const p = dom && dom.actionPanel;
+    if (tw16CmdSettleOpen()) return true;
+    return !!(p && p.classList.contains('action-panel-visible') && p.querySelector('.actionBtn,.tingChoiceRow'));
+  }
+  /* 結算窗（再來一局／關閉／上一頁）也支援語音：說編號或「再來一局、關閉、上一頁」 */
+  function tw16CmdSettleOpen() {
+    const rp = dom && dom.resultPanel;
+    return !!(rp && rp.classList.contains('show') && rp.classList.contains('settlement-open'));
+  }
+  function tw16CmdSettleBtns() {
+    try {
+      const rp = dom && dom.resultPanel;
+      const all = rp ? Array.from(rp.querySelectorAll('.buttons .btn')) : [];
+      if (!(tw16CmdSettleOpen() && tw16VoiceCmdLive())) { all.forEach(b => b.removeAttribute('data-tw16-n')); return []; }
+      const vis = all.filter(b => !b.disabled && (b.offsetParent !== null || b.getClientRects().length));
+      all.forEach(b => { if (vis.indexOf(b) < 0) b.removeAttribute('data-tw16-n'); });
+      vis.sort((a, b) => { const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect(); return (Math.abs(ra.top - rb.top) > 4 ? ra.top - rb.top : ra.left - rb.left); });
+      vis.forEach((b, k) => b.setAttribute('data-tw16-n', String(k + 1)));
+      return vis;
+    } catch (e) { return []; }
+  }
+  function tw16CmdSettleMatch(alts) {
+    const btns = tw16CmdSettleBtns();
+    if (!btns.length) return false;
+    let target = null;
+    for (let k = 0; k < alts.length && !target; k++) {
+      const raw = String(alts[k] || '');
+      const w = tw16VoiceCmdMatch(raw);
+      if (w) { target = btns[parseInt(w.slice(1), 10) - 1] || null; continue; }
+      const t = raw.replace(/[\s，。！？、,.!?]/g, '');
+      if (/再來一局|再來一把|再來|下一局|下一把|下一場|繼續|新局|開新局|再一局/.test(t)) target = dom.resultNewBtn;
+      else if (/上一頁|上一|返回|回去/.test(t)) target = dom.resultBackBtn || byId('resultBackBtn');
+      else if (/關閉|關掉|關窗|關起來|結束/.test(t)) target = dom.resultCloseBtn;
+      if (target && btns.indexOf(target) < 0) target = null;
+    }
+    if (!target) return false;
+    const l = String(target.textContent || '').replace(/\s*\d+$/, '').trim();
+    hintVoiceBroadcast('語音指令：' + l);
+    target.click();
+    return true;
+  }
+  function tw16CmdTingPanelOpen() {
+    const p = dom && dom.actionPanel;
+    return !!(p && p.classList.contains('ting-choice-active') && p.classList.contains('action-panel-visible') && p.querySelector('.tingChoiceRow'));
+  }
+  function tw16CmdBlockedByAudio() {
+    try { if (window.speechSynthesis && window.speechSynthesis.speaking) return true; } catch (e) {}
+    try { if (typeof currentGameVoiceEndsAt === 'number' && Date.now() < currentGameVoiceEndsAt + 120) return true; } catch (e) {}
+    try { const now = Date.now(); for (const k in tw16SpeakSeats) { if (tw16SpeakSeats[k] > now) return true; } } catch (e) {}
+    return false;
+  }
+  function tw16CmdStop() {
+    tw16CmdActive = false; clearTimeout(tw16CmdTimer); clearTimeout(tw16CmdInterimTimer);
+    const r = tw16CmdRec; tw16CmdRec = null;
+    if (r) { try { r.onend = null; r.onresult = null; r.onerror = null; r.abort(); } catch (e) {} }
+  }
+  function tw16CmdFail(msg, fatal) {
+    const now = Date.now();
+    tw16CmdFails.push(now);
+    tw16CmdFails = tw16CmdFails.filter(t => now - t < 60000);
+    tw16CmdActive = false;
+    if (fatal || tw16CmdFails.length >= 3) {
+      tw16VoiceCmdSet(false); tw16CmdStop();
+      try { hintVoiceBroadcast(msg + '，已自動關閉語音指令'); } catch (e) {}
+    } else if (!tw16CmdWarned) { tw16CmdWarned = true; try { hintVoiceBroadcast(msg); } catch (e) {} }
+  }
+  function tw16CmdOpen() {
+    try {
+      if (!tw16CmdActive || !tw16VoiceCmdLive() || tw16CmdRec) return;
+      if (voiceBroadcastRecording || voiceBroadcastStarting) { tw16CmdTimer = setTimeout(tw16CmdOpen, 400); return; } /* 錄語音廣播時讓出麥克風，避免打架 */
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) { tw16CmdFail('此瀏覽器不支援語音指令', true); return; }
+      const r = new SR();
+      r.lang = 'zh-TW'; r.continuous = true; r.interimResults = true; r.maxAlternatives = 5;
+      let errored = false;
+      r.onresult = e => {
+        try {
+          tw16CmdTries = 0;
+          if (tw16CmdBlockedByAudio()) return;
+          const res = e.results[e.results.length - 1];
+          if (!res) return;
+          /* 結算窗：說編號或「再來一局／關閉／上一頁」 */
+          if (tw16CmdSettleOpen()) {
+            const alts = [];
+            for (let k = 0; k < res.length; k++) alts.push((res[k] && res[k].transcript) || '');
+            if (tw16CmdSettleMatch(alts)) { tw16CmdStop(); tw16CmdPrev = false; }
+            return;
+          }
+          /* 說「聽牌」（可加「打○○」）：直接宣告聽牌 */
+          if (tw16CmdTryTing(res)) return;
+          /* 聽牌選擇面板：說編號＝選該聽牌組合；說「取消／不聽」＝關閉面板；其它（如牌名）往下當作出牌 */
+          if (tw16CmdTingPanelOpen()) {
+            let tWant = '', tCancel = false;
+            for (let k = 0; k < res.length; k++) {
+              const tr = (res[k] && res[k].transcript) || '';
+              if (!tWant) tWant = tw16VoiceCmdMatch(tr);
+              if (!tCancel && tw16VoiceCmdCancelMatch(tr)) tCancel = true;
+            }
+            if (tWant) {
+              if (tw16VoiceCmdExec(tWant)) { tw16CmdStop(); tw16CmdPrev = false; }
+              return;
+            }
+            if (tCancel) {
+              const cb = dom.actionPanel.querySelector('.tingChoiceClose');
+              if (cb) { hintVoiceBroadcast('語音指令：取消聽牌'); cb.click(); }
+              return;
+            }
+          }
+          /* 吃碰槓之後：聽「打哪張」 */
+          if (!tw16CmdTingSuspended() && (tw16CmdDiscardMode() || tw16CmdMyDiscardTurn()) && (!tw16CmdPanelActive() || tw16CmdTingPanelOpen())) {
+            let code = '';
+            for (let k = 0; k < res.length && !code; k++) code = tw16VoiceTileMatch((res[k] && res[k].transcript) || '');
+            if (!code && e.results.length > 1) { /* 「三」「筒」被拆成兩段時，併前一段一起比對 */
+              const prev = e.results[e.results.length - 2];
+              const pt = (prev && prev[0] && prev[0].transcript) || '';
+              for (let k = 0; k < res.length && !code; k++) code = tw16VoiceTileMatch(pt + ((res[k] && res[k].transcript) || ''));
+            }
+            if (!code && !res.isFinal) {
+              /* 中途結果：同一句話穩定 0.45 秒（辨識器還沒回最終結果）就先用保底判斷，不必等整句結束 */
+              clearTimeout(tw16CmdInterimTimer);
+              const snap = []; for (let k = 0; k < res.length; k++) snap.push((res[k] && res[k].transcript) || '');
+              const snapPrev = (e.results.length > 1 && e.results[e.results.length - 2] && e.results[e.results.length - 2][0]) ? e.results[e.results.length - 2][0].transcript : '';
+              tw16CmdInterimTimer = setTimeout(() => {
+                try {
+                  if (tw16CmdTingSuspended() || !(tw16CmdDiscardMode() || tw16CmdMyDiscardTurn())) return;
+                  let c2 = '';
+                  for (let k = 0; k < snap.length && !c2; k++) c2 = tw16VoiceTileFallback(snap[k]) || tw16VoiceTileFallback(snapPrev + snap[k]);
+                  if (c2 && tw16VoiceCmdDiscard(c2)) { tw16CmdCooldownUntil = Date.now() + 1500; tw16CmdEndDiscardMode(); }
+                } catch (e3) {}
+              }, 450);
+            }
+            if (!code && res.isFinal) {
+              clearTimeout(tw16CmdInterimTimer);
+              for (let k = 0; k < res.length && !code; k++) code = tw16VoiceTileFallback((res[k] && res[k].transcript) || '');
+              if (!code && e.results.length > 1) {
+                const prev2 = e.results[e.results.length - 2];
+                const pt2 = (prev2 && prev2[0] && prev2[0].transcript) || '';
+                for (let k = 0; k < res.length && !code; k++) code = tw16VoiceTileFallback(pt2 + ((res[k] && res[k].transcript) || ''));
+              }
+            }
+            if (!code) return;
+            if (tw16VoiceCmdDiscard(code)) { tw16CmdCooldownUntil = Date.now() + 1500; tw16CmdEndDiscardMode(); }
+            return;
+          }
+          if (!tw16CmdPanelActive()) return;
+          let want = '';
+          for (let k = 0; k < res.length && !want; k++) want = tw16VoiceCmdMatch((res[k] && res[k].transcript) || '');
+          if (!want) {
+            const nb = tw16CmdNumberBtns();
+            for (let k = 0; k < res.length && !want; k++) {
+              const w = tw16VoiceCmdWordMatch((res[k] && res[k].transcript) || '');
+              if (!w) continue;
+              const bi = nb.findIndex(b => w === 'win' ? b.matches('[data-action="win"],.win-btn') : b.classList.contains('actionSkipBtn'));
+              if (bi >= 0) want = '#' + (bi + 1);
+            }
+          }
+          if (!want) {
+            /* 吃／碰／槓：說「碰」「五萬」「碰五萬」「吃三萬」「槓東風」等 */
+            let cAmb = '';
+            for (let k = 0; k < res.length && !want; k++) {
+              const cr = tw16VoiceClaimResolve((res[k] && res[k].transcript) || '');
+              if (cr.n) want = '#' + cr.n; else if (cr.msg && !cAmb) cAmb = cr.msg;
+            }
+            if (!want && cAmb && res.isFinal) hintVoiceBroadcast(cAmb);
+          }
+          if (!want) return;
+          const kind = tw16VoiceCmdExec(want);
+          if (!kind) return;
+          if (kind === 'claim') { tw16CmdDiscardUntil = Date.now() + 25000; return; } /* 吃碰槓：不關麥，等語音說要打哪張 */
+          tw16CmdStop();
+          tw16CmdPrev = false;
+        } catch (e1) {}
+      };
+      r.onerror = ev => {
+        const code = (ev && ev.error) || 'unknown';
+        if (code === 'no-speech' || code === 'aborted') return;
+        errored = true;
+        if (code === 'not-allowed' || code === 'service-not-allowed') tw16CmdFail('瀏覽器未允許麥克風', true);
+        else if (code === 'audio-capture') tw16CmdFail('麥克風被佔用', false);
+        else if (code === 'network') tw16CmdFail('語音指令需要連網', false);
+        else tw16CmdFail('語音指令暫時無法使用', false);
+      };
+      r.onend = () => {
+        if (tw16CmdRec === r) tw16CmdRec = null;
+        /* 瀏覽器自己結束（靜音太久）且沒出錯、框還在 → 最多續聽 3 次 */
+        if (!errored && tw16CmdActive && (tw16CmdPanelActive() || tw16CmdWarmPhase()) && tw16VoiceCmdLive() && tw16CmdTries < 20) {
+          tw16CmdTries++; tw16CmdTimer = setTimeout(tw16CmdOpen, 400);
+        }
+      };
+      tw16CmdRec = r;
+      try { r.start(); } catch (e2) { tw16CmdRec = null; tw16CmdFail('無法開啟麥克風', false); }
+    } catch (e) { tw16CmdRec = null; }
+  }
+  function tw16CmdWarmPhase() {
+    return (tw16CmdDiscardMode() && !(state && state.ended) && !tw16CmdTingSuspended()) || tw16CmdMyDiscardTurn(); /* 吃碰槓後等『打哪張』，或輪到自己出牌時才續開 */
+  }
+  setInterval(() => {
+    try {
+      /* 宣告聽牌 → 立刻關麥並暫停語音指令到本局結束 */
+      if (tw16VoiceCmdOn() && tw16CmdTingSuspended()) {
+        const hid = state.handId || 0;
+        if (tw16CmdSuspNotified !== hid) {
+          tw16CmdSuspNotified = hid;
+          tw16CmdEndDiscardMode();
+          try { hintVoiceBroadcast('已聽牌，語音指令只在可「胡」時啟用'); } catch (e) {}
+        }
+      }
+      if (tw16CmdDiscardMode()) {
+        const seat = localHumanSeat();
+        if (canDiscard(seat)) tw16CmdSawDiscardable = true;
+        else if (tw16CmdSawDiscardable) { tw16CmdEndDiscardMode(); return; }
+      }
+      if (tw16CmdDiscardMode() || tw16CmdPrev || tw16VoiceCmdLive()) tw16CmdSync();
+    } catch (e) {}
+  }, 800);
+  function tw16CmdSync() {
+    try {
+      tw16CmdSettleBtns();
+      const act = tw16VoiceCmdLive() && (tw16CmdPanelActive() || tw16CmdWarmPhase());
+      if (act) {
+        clearTimeout(tw16CmdOffTimer); tw16CmdOffTimer = 0;
+        if (!tw16CmdPrev) { tw16CmdPrev = true; tw16CmdActive = true; tw16CmdTries = 0; tw16CmdOpen(); }
+      } else if (tw16CmdPrev && !tw16CmdOffTimer) {
+        tw16CmdOffTimer = setTimeout(() => {
+          tw16CmdOffTimer = 0;
+          if (!(tw16VoiceCmdLive() && (tw16CmdPanelActive() || tw16CmdWarmPhase()))) { tw16CmdPrev = false; tw16CmdStop(); }
+        }, 400);
+      }
+    } catch (e) {}
+  }
+  /* 在選單打開開關這個使用者操作當下，先喚起一次麥克風授權 */
+  function tw16CmdPrime() {
+    try {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) { hintVoiceBroadcast('此瀏覽器不支援語音指令'); return; }
+      tw16CmdWarned = false; tw16CmdFails = [];
+      const r = new SR();
+      r.onerror = () => {};
+      r.start();
+      setTimeout(() => { try { r.abort(); } catch (e) {} }, 600);
+    } catch (e) {}
+  }
+  (function tw16CmdInit() {
+    try {
+      const hook = () => {
+        const p = document.getElementById('actionPanel');
+        if (p && window.MutationObserver) new MutationObserver(() => { tw16CmdNumberBtns(); tw16CmdSync(); }).observe(p, { attributes: true, attributeFilter: ['class', 'style'], childList: true });
+      };
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', hook); else hook();
+      const st = document.createElement('style');
+      st.textContent = '.actionBtn[data-tw16-n]::after{content:attr(data-tw16-n)!important;position:absolute!important;left:-20px;top:50%;transform:translateY(-50%);width:20px;height:20px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:#ffd54a;color:#222;-webkit-text-fill-color:#222;font-size:14px;font-weight:900;line-height:1;box-shadow:0 0 0 1.5px rgba(0,0,0,.55);z-index:5;pointer-events:none}';
+      st.textContent += '#resultPanel.settlement-open .buttons .btn[data-tw16-n]{position:relative!important;overflow:visible!important}#resultPanel.settlement-open .buttons .btn[data-tw16-n]::after{content:attr(data-tw16-n)!important;position:absolute!important;left:-8px;top:-10px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:#ffd54a;color:#222;-webkit-text-fill-color:#222;font-size:16px;font-weight:900;line-height:1;box-shadow:0 0 0 1.5px rgba(0,0,0,.55);z-index:5;pointer-events:none}';
+      st.textContent += '.tingChoiceRow[data-tw16-n]{position:relative!important}.tingChoiceRow[data-tw16-n]::after{content:attr(data-tw16-n)!important;position:absolute!important;left:6px;top:6px;width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:#ffd54a;color:#222;-webkit-text-fill-color:#222;font-size:30px;font-weight:900;line-height:1;box-shadow:0 0 0 2px rgba(0,0,0,.55);z-index:5;pointer-events:none}';
+      document.head.appendChild(st);
+    } catch (e) {}
+  })();
   function tw16SttFix(text, lang) {
     let t = String(text || '').replace(/\s+/g, ' ').trim();
-    if (lang === 'zh-TW') { try { TW16_STT_FIXES.forEach(p => { t = t.replace(p[0], p[1]); }); } catch (e) {} }
+    if (lang === 'zh-TW') {
+      try { tw16SttCustomPairs().forEach(p => { t = t.split(p[0]).join(p[1]); }); } catch (e) {}
+      try { TW16_STT_FIXES.forEach(p => { t = t.replace(p[0], p[1]); }); } catch (e) {}
+    }
     return t;
   }
   const tw16SttWarned = {};
@@ -22917,32 +23547,48 @@ function showIntegrityReport(precomputed) {
       tw16SttChunks(t).forEach(c => addChatBoardMessage(seat || '', '🎤 ' + c));
     } catch (e) {}
   }
-  /* 收聽方辨識完 → 把文字回傳給發話方 */
-  function tw16SttSendBack(meta, text) {
+  /* 收聽方辨識：同一則語音只由一個收聽方辨識（先搶到的人，房主優先），結果即時廣播給全桌 */
+  const tw16SttClaim = {}, tw16SttRecs = {}, tw16SttSrc = {}, tw16SttDone = {};
+  function tw16SttPublish(op, meta, extra) {
     try {
-      if (!meta || !meta.clientId || !meta.vid) return;
-      if (!isNetworked() || !net.channel) return;
-      if (meta.clientId === net.clientId) return;
-      const payload = {
-        protocol: 'tw16-clean-ably-v1', kind: 'voiceTranscript', room: net.room,
+      if (!meta || !meta.vid || !isNetworked() || !net.channel) return;
+      const payload = Object.assign({
+        protocol: 'tw16-clean-ably-v1', kind: 'voiceTranscript', op, room: net.room,
         id: net.clientId + '-vt-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6),
         clientId: net.clientId, senderInstanceId: net.instanceId, senderRole: net.role, playerKey: net.playerKey, name: net.name,
-        vid: String(meta.vid), toClientId: String(meta.clientId), seat: meta.seat || '', text: String(text).slice(0, 240), createdAt: Date.now()
-      };
+        vid: String(meta.vid), spkClient: String(meta.clientId || ''), createdAt: Date.now()
+      }, extra || {});
       publishNetworkRoomMessage('voiceTranscript', payload, 'voice-transcript');
     } catch (e) {}
   }
-  const tw16SttBackSeen = {};
   function handleVoiceTranscript(payload) {
     try {
       if (!payload || payload.kind !== 'voiceTranscript') return false;
-      if (String(payload.toClientId || '') !== String(net.clientId || '')) return false;
       const vid = String(payload.vid || '');
-      if (!vid || tw16SttBackSeen[vid]) return false;
-      tw16SttBackSeen[vid] = Date.now();
-      Object.keys(tw16SttBackSeen).forEach(k => { if (Date.now() - tw16SttBackSeen[k] > 120000) delete tw16SttBackSeen[k]; });
-      /* 注意：payload.seat 會被網路層覆寫成「送出者（收聽方）」的座位，不能用；回傳給我的一定是我自己講的話，座位就是本機座位 */
-      tw16ShowTranscript(getLocalBroadcastSeat() || 'east', String(payload.text || ''), 0);
+      if (!vid || String(payload.clientId || '') === String(net.clientId || '')) return false;
+      if (payload.op === 'claim') {
+        const cur = tw16SttClaim[vid];
+        if (!cur || String(payload.clientId) < String(cur)) {
+          tw16SttClaim[vid] = String(payload.clientId);
+          if (cur === net.clientId) { try { if (tw16SttRecs[vid]) tw16SttRecs[vid].abort(); } catch (e) {} }
+        }
+        return true;
+      }
+      if (payload.op !== 'text') return false;
+      if (tw16SttDone[vid]) return false;
+      if (!tw16SttSrc[vid]) tw16SttSrc[vid] = String(payload.clientId);
+      if (tw16SttSrc[vid] !== String(payload.clientId)) return false;
+      const mine = String(payload.spkClient || '') === String(net.clientId || '');
+      /* 注意：訊息裡的 seat 會被網路層改寫，不可用；自己講的話用本機座位，其他人用 spkSeat */
+      const seat = mine ? (getLocalBroadcastSeat() || 'east') : (payload.spkSeat || '');
+      const text = String(payload.text || '').trim();
+      if (!text) return false;
+      try { showBroadcastFloatingText(seat, text.slice(0, 80), Date.now() + 4000); } catch (e) {}
+      if (payload.final) {
+        tw16SttDone[vid] = true;
+        if (text.length >= 2) tw16SttChunks(text).forEach(c => addChatBoardMessage(seat, '🎤 ' + c));
+        setTimeout(() => { delete tw16SttClaim[vid]; delete tw16SttSrc[vid]; delete tw16SttDone[vid]; delete tw16SttRecs[vid]; }, 180000);
+      }
       return true;
     } catch (e) { return false; }
   }
@@ -23140,7 +23786,7 @@ function showIntegrityReport(precomputed) {
       return false;
     }
     /* 單機模式允許錄音，錄完後本地播放；連線模式才送出網路 */
-    voiceBroadcastStarting = true;
+    voiceBroadcastStarting = true; try { tw16CmdPrev = false; tw16CmdStop(); } catch (e) {}
     try {
       voiceBroadcastStream = await ensureVoiceBroadcastStream();
       voiceBroadcastChunks = [];
@@ -25518,6 +26164,10 @@ function showIntegrityReport(precomputed) {
       options.forEach(option => {
         const tiles = claimOptionTilesForDisplay(option, pending);
         const optionBtn = createActionOptionButton(option.label, '', tiles, () => executeClaim(option, 'human'));
+        /* tw16_voice_target_tile: 語音指令用——記錄這顆按鈕的動作種類與目標牌 */
+        optionBtn.dataset.tw16Src = 'claim';
+        optionBtn.dataset.tw16Kind = String(option.type || '');
+        optionBtn.dataset.tw16Tile = String((pending && pending.tile && pending.tile.code) || '');
         if (aiAdviceTarget && aiAdviceTarget.kind === 'claim' && isSameClaimAdviceOption(aiAdviceTarget.option, option)) {
           dom.actionPanel.appendChild(createClaimAiAdviceLine(optionBtn, false, hasMultipleClaimChoices));
         } else {
@@ -25557,7 +26207,11 @@ function showIntegrityReport(precomputed) {
     if (!ownKongs.length) return;
     ownKongs.forEach(option => {
       const tiles = ownKongOptionTilesForDisplay(option, mySeat);
-      dom.actionPanel.appendChild(createActionOptionButton(option.label, '', tiles, () => executeOwnKong(option, 'human')));
+      const kongBtn = createActionOptionButton(option.label, '', tiles, () => executeOwnKong(option, 'human'));
+      kongBtn.dataset.tw16Src = 'ownkong';
+      kongBtn.dataset.tw16Kind = String(option.type || 'kong');
+      kongBtn.dataset.tw16Tile = String(option.code || '');
+      dom.actionPanel.appendChild(kongBtn);
     });
     syncActionPanelVisibility();
     if (ownKongs.length) positionActionPanelNearHand(mySeat);
