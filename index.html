@@ -4149,7 +4149,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
 
   
   // ========== MODULE: game core state ==========
-  const TW16_LOBBY_BUILD_LABEL = '（115.11.7 改版｜2026-11-07 22:04 台灣時間）';
+  const TW16_LOBBY_BUILD_LABEL = '（115.11.8 改版｜2026-11-08 01:53 台灣時間）';
   const SEATS = ['east', 'south', 'west', 'north'];
   /* tw16_tablemode: 桌面人數模式(4/3/2)輔助函式。
      2人：只啟用 east/west；3人：停用 north；4人(預設)：全啟用。
@@ -13007,7 +13007,7 @@ function loadUiSettings() {
       const nSel = (state.exchange.localSelected && state.exchange.localSelected.length) || 0;
       const sec = Math.max(0, Math.ceil((state.exchange.deadlineMs - Date.now()) / 1000));
       setOpeningPrompt('選3張牌換掉 ' + nSel + '/3 · ' + sec + 's');
-      ensureExchangeConfirmBtn(nSel === 3);
+      ensureExchangeConfirmBtn(true);
       if (!window.__tw16GuestExchangeUiOn) {
         window.__tw16GuestExchangeUiOn = true;
         (function guestExchangeTick() {
@@ -13025,7 +13025,7 @@ function loadUiSettings() {
           const left = Math.max(0, Math.ceil(((state.exchange.deadlineMs || 0) - Date.now()) / 1000));
           const n = (state.exchange.localSelected && state.exchange.localSelected.length) || 0;
           setOpeningPrompt('選3張牌換掉 ' + n + '/3 · ' + left + 's');
-          ensureExchangeConfirmBtn(n === 3);
+          ensureExchangeConfirmBtn(true);
           if (left <= 0) {
             window.__tw16GuestExchangeUiOn = false;
             return;
@@ -13148,25 +13148,50 @@ function loadUiSettings() {
     }
     const n = state.exchange.localSelected.length;
     setOpeningPrompt('選3張牌換掉 ' + n + '/3' + (state.exchange && state.exchange.deadlineMs ? (' · ' + Math.max(0, Math.ceil((state.exchange.deadlineMs - Date.now()) / 1000)) + 's') : ''));
-    ensureExchangeConfirmBtn(n === 3);
+    ensureExchangeConfirmBtn(true);
     renderAll();
+    return true;
+  }
+
+  function suggestOpeningExchange() {
+    if (!isOpeningExchangeActive()) return false;
+    const seat = localHumanSeat();
+    if (!canLocalHumanOperateSeat(seat) && !(isOnlineGuest() && net.assignedSeat === seat)) return false;
+    if (state.exchange.picks && state.exchange.picks[seat] && state.exchange.picks[seat].length === 3) return false;
+    const ids = pickAiExchangeTileIds(seat, 3).map(String);
+    if (!ids.length) return false;
+    state.exchange.localSelected = ids.slice(0, 3);
+    const n = state.exchange.localSelected.length;
+    const sec = state.exchange.deadlineMs ? Math.max(0, Math.ceil((state.exchange.deadlineMs - Date.now()) / 1000)) : '';
+    setOpeningPrompt('選3張牌換掉 ' + n + '/3' + (sec !== '' ? (' · ' + sec + 's') : '') + '（已套用建議）');
+    ensureExchangeConfirmBtn(true);
+    renderAll();
+    try { hintVoiceBroadcast('已建議三張，請確認換牌'); } catch (e) {}
     return true;
   }
 
   function ensureExchangeConfirmBtn(show) {
     let wrap = document.getElementById('tw16ExchangeConfirmWrap');
-    let btn = document.getElementById('tw16ExchangeConfirmBtn');
     if (!show) {
       if (wrap && wrap.parentNode) wrap.parentNode.removeChild(wrap);
-      else if (btn && btn.parentNode) btn.parentNode.removeChild(btn);
       return;
     }
     if (!wrap) {
       wrap = document.createElement('div');
       wrap.id = 'tw16ExchangeConfirmWrap';
-      /* 用 flex 置中，避免 .btn:active 的 transform 把 translateX(-50%) 蓋掉而右移 */
-      wrap.style.cssText = 'position:fixed;left:0;right:0;bottom:18%;display:flex;justify-content:center;align-items:center;z-index:2147483000;pointer-events:none;';
-      btn = document.createElement('button');
+      wrap.style.cssText = 'position:fixed;left:0;right:0;bottom:18%;display:flex;justify-content:center;align-items:center;gap:12px;z-index:2147483000;pointer-events:none;';
+      const suggestBtn = document.createElement('button');
+      suggestBtn.id = 'tw16ExchangeSuggestBtn';
+      suggestBtn.type = 'button';
+      suggestBtn.textContent = '建議';
+      suggestBtn.className = 'btn';
+      suggestBtn.style.cssText = 'pointer-events:auto;padding:12px 20px;font-size:16px;font-weight:900;background:#0f766e;color:#fff;border:0;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.35);transform:none!important;';
+      suggestBtn.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        suggestOpeningExchange();
+      });
+      const btn = document.createElement('button');
       btn.id = 'tw16ExchangeConfirmBtn';
       btn.type = 'button';
       btn.textContent = '確認換牌';
@@ -13177,8 +13202,16 @@ function loadUiSettings() {
         ev.stopPropagation();
         confirmOpeningExchange();
       });
+      wrap.appendChild(suggestBtn);
       wrap.appendChild(btn);
       document.body.appendChild(wrap);
+    }
+    const conf = document.getElementById('tw16ExchangeConfirmBtn');
+    const n = (state.exchange && state.exchange.localSelected && state.exchange.localSelected.length) || 0;
+    if (conf) {
+      conf.disabled = n !== 3;
+      conf.style.opacity = n === 3 ? '1' : '0.45';
+      conf.style.pointerEvents = n === 3 ? 'auto' : 'none';
     }
   }
 
@@ -13256,7 +13289,7 @@ function loadUiSettings() {
       state.exchange.deadlineMs = Date.now() + EXCHANGE_LIMIT_MS;
       if (localNeedsUi) {
         setOpeningPrompt('選3張牌換掉 0/3 · 20s');
-        ensureExchangeConfirmBtn(false);
+        ensureExchangeConfirmBtn(true); /* 倒數一開始就顯示建議＋確認 */
       } else {
         setOpeningPrompt('選3張牌換掉（等待來賓）· 20s');
       }
@@ -13281,6 +13314,7 @@ function loadUiSettings() {
           if (localNeedsUi && !(state.exchange.picks[humanSeat] && state.exchange.picks[humanSeat].length === 3)) {
             const nSel = (state.exchange.localSelected && state.exchange.localSelected.length) || 0;
             setOpeningPrompt('選3張牌換掉 ' + nSel + '/3 · ' + sec + 's');
+            ensureExchangeConfirmBtn(true);
           } else {
             setOpeningPrompt('選3張牌換掉（等待來賓）· ' + sec + 's');
           }
