@@ -3979,6 +3979,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
   'use strict';
   // ★ 如果連不上，先檢查這兩行是否與 Supabase 後台完全一致
   var SUPABASE_URL = 'https://ghijywcreeidulaedoyy.supabase.co';
+  window.TW16_SUPABASE_URL = SUPABASE_URL;
   var SUPABASE_KEY = 'sb_publishable_CyI___u3zyviDgZUmZvwvA_KhPgVwcI';
 
   
@@ -4148,7 +4149,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
 
   
   // ========== MODULE: game core state ==========
-  const TW16_LOBBY_BUILD_LABEL = '（115.11.7 改版｜2026-11-07 11:37 台灣時間）';
+  const TW16_LOBBY_BUILD_LABEL = '（115.11.7 改版｜2026-11-07 22:04 台灣時間）';
   const SEATS = ['east', 'south', 'west', 'north'];
   /* tw16_tablemode: 桌面人數模式(4/3/2)輔助函式。
      2人：只啟用 east/west；3人：停用 north；4人(預設)：全啟用。
@@ -4191,7 +4192,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     claimPriority: { win: 100, kong: 30, pong: 20, chi: 10 },
     humanDecisionMs: 60000,
     snapshotDebounceMs: 24,
-    pulseMs: 2000,
+    pulseMs: 3000,
     minLiveWallTiles: 16,
     minLiveWallTilesByMode: { 4: 16, 3: 12, 2: 8 },
     scoreBaseChip: 100,
@@ -4495,10 +4496,10 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
   const NETWORK_HOST_GAME_AFTER_ACK_PAUSE_MS = 220;
   const NETWORK_HOST_LOW_PRIORITY_ACK_SKIP_LOG_MS = 1200;
   const NETWORK_INBOUND_QUEUE_MS = 30;
-  const NETWORK_STATE_MIN_INTERVAL_MS = 320;
-  const NETWORK_PULSE_MIN_INTERVAL_MS = 8000; /* egress_fix: 原1500，狀態沒變仍每1.5秒重送整桌快照 */
-  const NETWORK_GUEST_SYNC_STALE_MS = 10000; /* egress_fix: 原1200，比房主脈衝間隔短，導致來賓閒置時不斷要求整桌同步 */
-  const NETWORK_GUEST_SYNC_MIN_INTERVAL_MS = 1200;
+  const NETWORK_STATE_MIN_INTERVAL_MS = 450;
+  const NETWORK_PULSE_MIN_INTERVAL_MS = 12000; /* egress_fix: 原1500，狀態沒變仍每1.5秒重送整桌快照 */
+  const NETWORK_GUEST_SYNC_STALE_MS = 15000; /* egress_fix: 原1200，比房主脈衝間隔短，導致來賓閒置時不斷要求整桌同步 */
+  const NETWORK_GUEST_SYNC_MIN_INTERVAL_MS = 1800;
   const NETWORK_GUEST_SYNC_SEQ_GAP_THRESHOLD = 8; /* lag_fix_seq_gap: 原為 2，手機端稍慢就被判定需要同步並封鎖出牌 */
   const NETWORK_GUEST_SNAPSHOT_STALE_MS = 30000; // 30 秒內未收到host snapshot才視為失聯，避免3.6秒誤判導致來賓AI建議被永久關閉
   const NETWORK_GUEST_SYNC_BACKOFF_STEPS_MS = [650, 1000, 1500, 2200];
@@ -7584,9 +7585,9 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
         const chip = byId('tw16LobbyChipText'); if (chip) chip.textContent = name + ' 連線 / 單機';
         const title = byId('tw16LobbyTitleText'); if (title) title.textContent = '台灣麻將 連線 / 單機';
         if (b === 'supabase') {
-          updateLobbyStatus('使用 Supabase 伺服器：不需要 API KEY，輸入房名即可建立／加入房間。※同一桌所有人必須選同一個伺服器。');
+          updateLobbyStatus('使用 Supabase：免 API KEY，輸入房名即可。※同一桌須選同一伺服器。※免費專案閒置約一週會休眠，連線時會先自動喚醒（可能需數十秒）；若持續失敗請改選 Ably 備援。');
         } else if (announce) {
-          updateLobbyStatus('已改用 Ably 伺服器：建立／加入房間時會依原本方式取得 API KEY。※同一桌所有人必須選同一個伺服器。');
+          updateLobbyStatus('使用 Ably：需 API KEY。※同一桌須選同一伺服器。※訊息有免費額度上限，對局中已降低心跳／快照頻率以省流量。');
         }
       };
       if (sel) sel.addEventListener('change', () => { window.tw16SetBackend(sel.value); apply(true); });
@@ -11611,7 +11612,7 @@ function loadUiSettings() {
            僅在超過 8 秒未送過 state 時補一包，避免來賓誤判失聯。 */
         if (hasStartedNetworkHand(state)) {
           const _since = Date.now() - Number(net.lastStatePublishAt || 0);
-          if (_since >= 8000) publishNetworkSnapshot('pulse', false);
+          if (_since >= 12000) publishNetworkSnapshot('pulse', false);
         } else {
           publishNetworkPlayers('pulse');
         }
@@ -11633,7 +11634,7 @@ function loadUiSettings() {
           if (required || stale) driveGuestSnapshotSync(required ? 'pulse-forced' : 'pulse-stale');
         }
       }
-    }, 2000); /* egress: pulse 700→2000，例行流量約降 65% */
+    }, 3000); /* egress: pulse 3s */
   }
 
 
@@ -11647,7 +11648,7 @@ function loadUiSettings() {
     const guestSeatMissing = net.role === 'guest' ? !networkSeatOrder().includes(net.assignedSeat) : false;
     const guestSnapshotStale = net.role === 'guest' ? (!net.lastSnapshotAt || Date.now() - Number(net.lastSnapshotAt || 0) > NETWORK_GUEST_SYNC_STALE_MS) : false;
     const guestNeedsSync = net.role === 'guest' ? (guestSeatMissing || isGuestSyncRequired() || guestSnapshotStale) : false;
-    { const _hbNow = Date.now(); const _hbGap = guestNeedsSync ? 1500 : 4500; /* egress: 正常心跳 4.5s；需同步時 1.5s */
+    { const _hbNow = Date.now(); const _hbGap = guestNeedsSync ? 2000 : 6000; /* egress: 正常心跳 6s；需同步時 2s */
       if (_hbNow - Number(net._hbSentAt || 0) < _hbGap) return false;
       net._hbSentAt = _hbNow; }
     const payload = {
@@ -11807,12 +11808,62 @@ function loadUiSettings() {
   }
 
 
+
+  async function tw16WakeSupabaseProject() {
+    const url = (window.TW16_SUPABASE_URL || 'https://ghijywcreeidulaedoyy.supabase.co').replace(/\/$/, '');
+    const tips = '免費專案閒置約一週可能休眠；首次喚醒常需 10～60 秒。若一直失敗可改選 Ably 作備援。';
+    try { updateLobbyStatus('正在喚醒 Supabase…（' + tips + '）'); } catch (e) {}
+    try { addLog('Supabase 喚醒中'); } catch (e) {}
+    const tryFetch = async (u, opts) => {
+      const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timer = setTimeout(() => { try { ctrl && ctrl.abort(); } catch (e) {} }, 40000);
+      try {
+        return await fetch(u, Object.assign({ method: 'GET', mode: 'cors', cache: 'no-store' }, opts || {}, ctrl ? { signal: ctrl.signal } : {}));
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+    try {
+      let ok = false;
+      try {
+        const r = await tryFetch(url + '/auth/v1/health');
+        ok = !!(r && (r.ok || r.status === 401 || r.status === 404));
+      } catch (e1) {
+        try {
+          await tryFetch(url, { mode: 'no-cors' });
+          ok = true; /* no-cors 無法讀狀態，當已觸發喚醒 */
+        } catch (e2) { ok = false; }
+      }
+      if (ok) {
+        try { updateLobbyStatus('Supabase 已回應，繼續連線房間…'); addLog('Supabase 喚醒完成'); } catch (e) {}
+        return true;
+      }
+      try { updateLobbyStatus('Supabase 喚醒不確定，仍嘗試連線。' + tips); } catch (e) {}
+      return false;
+    } catch (e) {
+      try { updateLobbyStatus('Supabase 喚醒失敗，仍嘗試連線。' + tips); addLog('Supabase 喚醒失敗'); } catch (e2) {}
+      return false;
+    }
+  }
+
   function connectAbly(role, room, name, key) {
     if (!room) { addLog('請輸入房號'); updateLobbyStatus('請輸入房號。'); return false; }
     const tw16Backend = window.tw16GetBackend();
     if (tw16Backend === 'supabase' ? !window.TW16SupabaseRealtime : !window.Ably) { const _bn = window.tw16BackendName(tw16Backend); addLog(_bn + ' SDK 尚未載入'); updateLobbyStatus(_bn + ' SDK 尚未載入，請確認網路後重開。'); return false; }
     const ablyApiKey = tw16Backend === 'supabase' ? 'supabase-realtime' : saveStoredAblyApiKey(key || getStoredAblyApiKey());
     if (!ablyApiKey) { updateLobbyStatus('尚未找到可用 Ably API KEY，請先自動查詢或手動輸入。'); const keyInput = byId('tw16LobbyAblyKey'); if (keyInput) { keyInput.focus(); keyInput.select(); } return false; }
+    /* Supabase 免費專案可能休眠：連線前先喚醒，完成後再真正入房 */
+    if (tw16Backend === 'supabase' && !net._sbWakeDone) {
+      if (net._sbWakeInProgress) return false;
+      net._sbWakeInProgress = true;
+      const _role = role, _room = room, _name = name, _key = key;
+      Promise.resolve(tw16WakeSupabaseProject()).catch(function () { return false; }).then(function () {
+        net._sbWakeInProgress = false;
+        net._sbWakeDone = true;
+        try { connectAbly(_role, _room, _name, _key); } catch (e) { net._sbWakeDone = false; }
+      });
+      return false;
+    }
     disconnectAbly(false);
     const connectGeneration = (net.connectGeneration || 0) + 1;
     net.connectGeneration = connectGeneration;
@@ -11893,7 +11944,7 @@ function loadUiSettings() {
     function failConnection(text) {
       if (net.connectGeneration !== connectGeneration) return;
       addLog(text || (window.tw16BackendName(tw16Backend) + '連線失敗'));
-      updateLobbyStatus(text || (tw16Backend === 'supabase' ? 'Supabase連線失敗。請檢查網路後重新連線。' : 'Ably連線失敗。請檢查 API KEY / 網路後重新連線。'));
+      updateLobbyStatus(text || (tw16Backend === 'supabase' ? 'Supabase連線失敗。可能專案仍在休眠或網路不穩：請再試一次，或到 Supabase 控制台確認專案已啟動；也可改選 Ably 備援。' : 'Ably連線失敗。請檢查 API KEY／網路；若訊息額度用盡請等下個計費週期或升級方案。'));
       try { if (net.ably) net.ably.close(); } catch (e) {}
       net.connected = false;
       net.connecting = false;
@@ -12082,6 +12133,7 @@ function loadUiSettings() {
 
 
   function disconnectAbly(logMessage) {
+    try { net._sbWakeDone = false; net._sbWakeInProgress = false; } catch (e) {}
     clearGuestJoinRetry();
     clearGuestSyncTimer();
     clearGuestApiKeyRetry('disconnect');
