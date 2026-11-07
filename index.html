@@ -4148,7 +4148,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
 
   
   // ========== MODULE: game core state ==========
-  const TW16_LOBBY_BUILD_LABEL = '（115.11.6 改版｜2026-11-06 20:44 台灣時間）';
+  const TW16_LOBBY_BUILD_LABEL = '（115.11.7 改版｜2026-11-07 11:37 台灣時間）';
   const SEATS = ['east', 'south', 'west', 'north'];
   /* tw16_tablemode: 桌面人數模式(4/3/2)輔助函式。
      2人：只啟用 east/west；3人：停用 north；4人(預設)：全啟用。
@@ -4191,7 +4191,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     claimPriority: { win: 100, kong: 30, pong: 20, chi: 10 },
     humanDecisionMs: 60000,
     snapshotDebounceMs: 24,
-    pulseMs: 1200,
+    pulseMs: 2000,
     minLiveWallTiles: 16,
     minLiveWallTilesByMode: { 4: 16, 3: 12, 2: 8 },
     scoreBaseChip: 100,
@@ -4495,10 +4495,10 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
   const NETWORK_HOST_GAME_AFTER_ACK_PAUSE_MS = 220;
   const NETWORK_HOST_LOW_PRIORITY_ACK_SKIP_LOG_MS = 1200;
   const NETWORK_INBOUND_QUEUE_MS = 30;
-  const NETWORK_STATE_MIN_INTERVAL_MS = 180;
-  const NETWORK_PULSE_MIN_INTERVAL_MS = 4000; /* egress_fix: 原1500，狀態沒變仍每1.5秒重送整桌快照 */
-  const NETWORK_GUEST_SYNC_STALE_MS = 6000; /* egress_fix: 原1200，比房主脈衝間隔短，導致來賓閒置時不斷要求整桌同步 */
-  const NETWORK_GUEST_SYNC_MIN_INTERVAL_MS = 650;
+  const NETWORK_STATE_MIN_INTERVAL_MS = 320;
+  const NETWORK_PULSE_MIN_INTERVAL_MS = 8000; /* egress_fix: 原1500，狀態沒變仍每1.5秒重送整桌快照 */
+  const NETWORK_GUEST_SYNC_STALE_MS = 10000; /* egress_fix: 原1200，比房主脈衝間隔短，導致來賓閒置時不斷要求整桌同步 */
+  const NETWORK_GUEST_SYNC_MIN_INTERVAL_MS = 1200;
   const NETWORK_GUEST_SYNC_SEQ_GAP_THRESHOLD = 8; /* lag_fix_seq_gap: 原為 2，手機端稍慢就被判定需要同步並封鎖出牌 */
   const NETWORK_GUEST_SNAPSHOT_STALE_MS = 30000; // 30 秒內未收到host snapshot才視為失聯，避免3.6秒誤判導致來賓AI建議被永久關閉
   const NETWORK_GUEST_SYNC_BACKOFF_STEPS_MS = [650, 1000, 1500, 2200];
@@ -5828,7 +5828,8 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
           break;
         }
         q.shift();
-        try { applySnapshotPayload(normalizeRoomStateToSnapshot(tw16DecryptHandsInSnapshot(head.data))); } catch (e) { try { console.error(e); } catch (_) {} }
+        try { applySnapshotPayload(normalizeRoomStateToSnapshot(tw16DecryptHandsInSnapshot(head.data)));
+          try { tw16GuestSyncExchangeUi(); } catch (_exUi) {} } catch (e) { try { console.error(e); } catch (_) {} }
       }
     } finally { net.snapFlushing = false; }
   }
@@ -10318,6 +10319,13 @@ function loadUiSettings() {
       declaredTing: state.declaredTing,
       activeDrawnTileIds: state.activeDrawnTileIds,
       voiceEvents: state.voiceEvents,
+      exchange: state.exchange ? {
+        active: !!state.exchange.active,
+        count: Number(state.exchange.count || 3),
+        deadlineMs: Number(state.exchange.deadlineMs || 0),
+        picks: state.exchange.picks || {},
+        localSelected: []
+      } : null,
       nextRoundPlan: state.nextRoundPlan,
       lastSettlement: state.lastSettlement,
       winHistory: normalizeWinHistoryList(Array.isArray(state.winHistory) ? state.winHistory.slice(-12) : []), /* lag_fix_winhistory_cap */
@@ -10334,7 +10342,7 @@ function loadUiSettings() {
   const NETWORK_STATE_KEY_PACK = {
     handId: 'h', windRound: 'wr', handNo: 'hn', dealerRepeat: 'dr', kongsThisHand: 'kh', dealer: 'd', viewSeat: 'v', turn: 't', phase: 'p', pending: 'pd', actionDeadlineAt: 'ad', debugPauseBy: 'dpb',
     wall: 'w', physicalWall: 'pw', openingDeal: 'od', fixedSeatLabelStyles: 'fs', labelPositionsLocked: 'lp', hands: 'hs', melds: 'm', flowers: 'f',
-    discards: 'ds', chips: 'c', scoreUnits: 'su', scoreChipSettings: 'sc', handVisualColors: 'vc', seatAutoPlay: 'ap', declaredTing: 'dt', activeDrawnTileIds: 'di', voiceEvents: 've', nextRoundPlan: 'nr', lastSettlement: 'ls', winHistory: 'wh', opponentMemory: 'om', lastActionId: 'la', ended: 'e', locked: 'lk', lockedAt: 'lt', tableMode: 'tm'
+    discards: 'ds', chips: 'c', scoreUnits: 'su', scoreChipSettings: 'sc', handVisualColors: 'vc', seatAutoPlay: 'ap', declaredTing: 'dt', activeDrawnTileIds: 'di', voiceEvents: 've', exchange: 'ex', nextRoundPlan: 'nr', lastSettlement: 'ls', winHistory: 'wh', opponentMemory: 'om', lastActionId: 'la', ended: 'e', locked: 'lk', lockedAt: 'lt', tableMode: 'tm'
   };
   const NETWORK_STATE_KEY_UNPACK = Object.keys(NETWORK_STATE_KEY_PACK).reduce((out, key) => { out[NETWORK_STATE_KEY_PACK[key]] = key; return out; }, {});
 
@@ -10840,7 +10848,13 @@ function loadUiSettings() {
     const _lagPrevHandId = state.handId;
     const _lagPrevWinHistory = Array.isArray(state.winHistory) ? state.winHistory : [];
     Object.keys(incoming).forEach(key => {
-      state[key] = incoming[key];
+      if (key === 'exchange' && state.exchange && incoming.exchange && isOnlineGuest()) {
+        const prevSel = state.exchange.localSelected || [];
+        state.exchange = incoming.exchange;
+        state.exchange.localSelected = prevSel;
+      } else {
+        state[key] = incoming[key];
+      }
     });
     /* lag_fix_winhistory_cap: 快照只含最近幾筆，合併回來賓自己已有的歷程（只在出現新筆時才合併，避免每個快照都全量處理） */
     try {
@@ -11510,6 +11524,19 @@ function loadUiSettings() {
       case 'ting':
         accepted = !!declareTing(seat, 'remote', msg.discardId || '');
         break;
+      case 'exchange': {
+        if (state.exchange && state.exchange.active) {
+          const ids = (msg.tileIds || msg.tiles || []).map(String).filter(Boolean);
+          if (ids.length === 3) {
+            if (!state.exchange.picks) state.exchange.picks = {};
+            state.exchange.picks[seat] = ids;
+            accepted = true;
+            addLog(SEAT_NAME[seat] + '已確認換三張');
+            publishNetworkSnapshot('exchange-pick-' + seat, true);
+          }
+        }
+        break;
+      }
       case 'autoplay':
         accepted = setSeatAutoplay(seat, !!msg.enabled, msg.enabled ? 'guest-local-toggle' : 'guest-local-activity');
         if (accepted) publishNetworkPlayers(msg.enabled ? 'guest-local-toggle' : 'guest-local-activity');
@@ -11580,8 +11607,14 @@ function loadUiSettings() {
         syncSeatAutoplayDefaults('pulse');
         ensureAutoDrivenTurn('pulse');
         publishNetworkHeartbeat();
-        if (hasStartedNetworkHand(state)) publishNetworkSnapshot('pulse', true);
-        else publishNetworkPlayers('pulse');
+        /* egress: 例行 pulse 不再 force 整包 snapshot；狀態有變仍由 action 路徑推送。
+           僅在超過 8 秒未送過 state 時補一包，避免來賓誤判失聯。 */
+        if (hasStartedNetworkHand(state)) {
+          const _since = Date.now() - Number(net.lastStatePublishAt || 0);
+          if (_since >= 8000) publishNetworkSnapshot('pulse', false);
+        } else {
+          publishNetworkPlayers('pulse');
+        }
       } else if (isOnlineGuest()) {
         publishNetworkHeartbeat();
         const seatMissing = !networkSeatOrder().includes(net.assignedSeat);
@@ -11600,7 +11633,7 @@ function loadUiSettings() {
           if (required || stale) driveGuestSnapshotSync(required ? 'pulse-forced' : 'pulse-stale');
         }
       }
-    }, 700);
+    }, 2000); /* egress: pulse 700→2000，例行流量約降 65% */
   }
 
 
@@ -11614,7 +11647,7 @@ function loadUiSettings() {
     const guestSeatMissing = net.role === 'guest' ? !networkSeatOrder().includes(net.assignedSeat) : false;
     const guestSnapshotStale = net.role === 'guest' ? (!net.lastSnapshotAt || Date.now() - Number(net.lastSnapshotAt || 0) > NETWORK_GUEST_SYNC_STALE_MS) : false;
     const guestNeedsSync = net.role === 'guest' ? (guestSeatMissing || isGuestSyncRequired() || guestSnapshotStale) : false;
-    { const _hbNow = Date.now(); const _hbGap = guestNeedsSync ? 1000 : 3000; /* egress_fix: 心跳原本每0.7秒一次 */
+    { const _hbNow = Date.now(); const _hbGap = guestNeedsSync ? 1500 : 4500; /* egress: 正常心跳 4.5s；需同步時 1.5s */
       if (_hbNow - Number(net._hbSentAt || 0) < _hbGap) return false;
       net._hbSentAt = _hbNow; }
     const payload = {
@@ -12898,6 +12931,59 @@ function loadUiSettings() {
     }
   }
 
+
+  function tw16GuestSyncExchangeUi() {
+    if (!isOnlineGuest()) return;
+    try {
+      if (!state.exchange || !state.exchange.active) {
+        window.__tw16GuestExchangeUiOn = false;
+        ensureExchangeConfirmBtn(false);
+        return;
+      }
+      const seat = net.assignedSeat || localHumanSeat();
+      if (!seat) return;
+      if (isSeatAutoForOpeningExchange(seat)) {
+        ensureExchangeConfirmBtn(false);
+        return;
+      }
+      if (state.exchange.picks && state.exchange.picks[seat] && state.exchange.picks[seat].length === 3) {
+        ensureExchangeConfirmBtn(false);
+        setOpeningPrompt('選3張牌換掉…（已送出）');
+        return;
+      }
+      if (!state.exchange.deadlineMs) state.exchange.deadlineMs = Date.now() + 20000;
+      const nSel = (state.exchange.localSelected && state.exchange.localSelected.length) || 0;
+      const sec = Math.max(0, Math.ceil((state.exchange.deadlineMs - Date.now()) / 1000));
+      setOpeningPrompt('選3張牌換掉 ' + nSel + '/3 · ' + sec + 's');
+      ensureExchangeConfirmBtn(nSel === 3);
+      if (!window.__tw16GuestExchangeUiOn) {
+        window.__tw16GuestExchangeUiOn = true;
+        (function guestExchangeTick() {
+          if (!isOnlineGuest() || !state.exchange || !state.exchange.active) {
+            window.__tw16GuestExchangeUiOn = false;
+            ensureExchangeConfirmBtn(false);
+            return;
+          }
+          const st = net.assignedSeat || localHumanSeat();
+          if (state.exchange.picks && state.exchange.picks[st] && state.exchange.picks[st].length === 3) {
+            window.__tw16GuestExchangeUiOn = false;
+            ensureExchangeConfirmBtn(false);
+            return;
+          }
+          const left = Math.max(0, Math.ceil(((state.exchange.deadlineMs || 0) - Date.now()) / 1000));
+          const n = (state.exchange.localSelected && state.exchange.localSelected.length) || 0;
+          setOpeningPrompt('選3張牌換掉 ' + n + '/3 · ' + left + 's');
+          ensureExchangeConfirmBtn(n === 3);
+          if (left <= 0) {
+            window.__tw16GuestExchangeUiOn = false;
+            return;
+          }
+          setTimeout(guestExchangeTick, 250);
+        })();
+      }
+    } catch (e) {}
+  }
+
   function isOpeningExchangeActive() {
     return !!(state.exchange && state.exchange.active && state.openingDeal && state.openingDeal.active);
   }
@@ -12995,7 +13081,7 @@ function loadUiSettings() {
   function toggleOpeningExchangeSelect(tileObj) {
     if (!isOpeningExchangeActive() || !tileObj) return false;
     const seat = localHumanSeat();
-    if (!canLocalHumanOperateSeat(seat)) return false;
+    if (!canLocalHumanOperateSeat(seat) && !(isOnlineGuest() && net.assignedSeat === seat)) return false;
     if (state.exchange.picks && state.exchange.picks[seat]) return true;
     if (!Array.isArray(state.exchange.localSelected)) state.exchange.localSelected = [];
     const id = String(tileObj.id);
@@ -13047,13 +13133,12 @@ function loadUiSettings() {
   function confirmOpeningExchange() {
     if (!isOpeningExchangeActive()) return false;
     const seat = localHumanSeat();
-    if (!canLocalHumanOperateSeat(seat)) return false;
-    const sel = (state.exchange.localSelected || []).slice();
+    if (!canLocalHumanOperateSeat(seat) && !(isOnlineGuest() && net.assignedSeat === seat)) return false;
+    const sel = (state.exchange.localSelected || []).slice().map(String);
     if (sel.length !== 3) {
       try { hintVoiceBroadcast('請先選滿3張'); } catch (e) {}
       return false;
     }
-    /* 確認都在手牌中 */
     const hand = state.hands[seat] || [];
     const ok = sel.every(id => hand.some(t => t && String(t.id) === String(id)));
     if (!ok) {
@@ -13062,6 +13147,21 @@ function loadUiSettings() {
       ensureExchangeConfirmBtn(false);
       renderAll();
       return false;
+    }
+    if (isOnlineGuest()) {
+      try {
+        publishNetworkIntent({ action: 'exchange', seat: seat, tileIds: sel, handId: state.handId });
+        setOpeningPrompt('選3張牌換掉…（已送出）');
+        ensureExchangeConfirmBtn(false);
+        state.exchange.localSelected = [];
+        if (!state.exchange.picks) state.exchange.picks = {};
+        state.exchange.picks[seat] = sel;
+        renderAll();
+        return true;
+      } catch (e) {
+        addLog('換三張送出失敗');
+        return false;
+      }
     }
     if (!state.exchange.picks) state.exchange.picks = {};
     state.exchange.picks[seat] = sel;
@@ -13082,47 +13182,68 @@ function loadUiSettings() {
     if (isOnlineHost()) publishOpeningStepSnapshot('opening-exchange-start');
 
     const humanSeat = localHumanSeat();
+    function seatNeedsManualExchange(seat) {
+      if (isSeatAutoForOpeningExchange(seat)) return false;
+      try {
+        if (typeof isSeatAssignedHuman === 'function' && isSeatAssignedHuman(seat)) return true;
+      } catch (e) {}
+      if (seat === humanSeat && canLocalHumanOperateSeat(seat)) return true;
+      return false;
+    }
     dealOrder.forEach(seat => {
-      /* 托管／連續／電腦位：直接自動選最不需要的 3 張 */
-      if (isSeatAutoForOpeningExchange(seat) || seat !== humanSeat || !canLocalHumanOperateSeat(seat)) {
+      if (!seatNeedsManualExchange(seat)) {
         state.exchange.picks[seat] = pickAiExchangeTileIds(seat, 3);
       }
     });
 
-    const needHuman = dealOrder.indexOf(humanSeat) >= 0
-      && canLocalHumanOperateSeat(humanSeat)
-      && !isSeatAutoForOpeningExchange(humanSeat)
-      && !(state.exchange.picks[humanSeat] && state.exchange.picks[humanSeat].length === 3);
+    const waitingSeats = dealOrder.filter(seatNeedsManualExchange);
+    const localNeedsUi = waitingSeats.indexOf(humanSeat) >= 0 && canLocalHumanOperateSeat(humanSeat);
 
-    if (needHuman) {
+    if (waitingSeats.length) {
       const EXCHANGE_LIMIT_MS = 20000;
       state.exchange.deadlineMs = Date.now() + EXCHANGE_LIMIT_MS;
-      setOpeningPrompt('選3張牌換掉 0/3 · 20s');
-      ensureExchangeConfirmBtn(false);
+      if (localNeedsUi) {
+        setOpeningPrompt('選3張牌換掉 0/3 · 20s');
+        ensureExchangeConfirmBtn(false);
+      } else {
+        setOpeningPrompt('選3張牌換掉（等待來賓）· 20s');
+      }
       renderAll();
+      if (isOnlineHost()) publishOpeningStepSnapshot('opening-exchange-wait');
       let lastShownSec = 20;
-      while (stillCurrent() && state.exchange.active && !(state.exchange.picks[humanSeat] && state.exchange.picks[humanSeat].length === 3)) {
-        if (isSeatAutoForOpeningExchange(humanSeat)) {
-          state.exchange.picks[humanSeat] = pickAiExchangeTileIds(humanSeat, 3);
-          addLog(SEAT_NAME[humanSeat] + '托管中，自動換三張');
-          ensureExchangeConfirmBtn(false);
-          break;
-        }
+      while (stillCurrent() && state.exchange.active) {
+        const pending = waitingSeats.filter(seat => !(state.exchange.picks[seat] && state.exchange.picks[seat].length === 3));
+        if (!pending.length) break;
+        /* 本地托管中途改自動 */
+        pending.slice().forEach(seat => {
+          if (isSeatAutoForOpeningExchange(seat)) {
+            state.exchange.picks[seat] = pickAiExchangeTileIds(seat, 3);
+            addLog(SEAT_NAME[seat] + '托管中，自動換三張');
+          }
+        });
         const leftMs = (state.exchange.deadlineMs || 0) - Date.now();
         if (leftMs <= 0) break;
         const sec = Math.max(0, Math.ceil(leftMs / 1000));
         if (sec !== lastShownSec) {
           lastShownSec = sec;
-          const nSel = (state.exchange.localSelected && state.exchange.localSelected.length) || 0;
-          setOpeningPrompt('選3張牌換掉 ' + nSel + '/3 · ' + sec + 's');
+          if (localNeedsUi && !(state.exchange.picks[humanSeat] && state.exchange.picks[humanSeat].length === 3)) {
+            const nSel = (state.exchange.localSelected && state.exchange.localSelected.length) || 0;
+            setOpeningPrompt('選3張牌換掉 ' + nSel + '/3 · ' + sec + 's');
+          } else {
+            setOpeningPrompt('選3張牌換掉（等待來賓）· ' + sec + 's');
+          }
+          if (isOnlineHost() && sec % 5 === 0) publishOpeningStepSnapshot('opening-exchange-tick');
         }
         await openingPause(200);
       }
-      if (!(state.exchange.picks[humanSeat] && state.exchange.picks[humanSeat].length === 3)) {
-        state.exchange.picks[humanSeat] = pickAiExchangeTileIds(humanSeat, 3);
-        addLog(SEAT_NAME[humanSeat] + '換三張逾時，自動選牌');
-      }
+      waitingSeats.forEach(seat => {
+        if (!(state.exchange.picks[seat] && state.exchange.picks[seat].length === 3)) {
+          state.exchange.picks[seat] = pickAiExchangeTileIds(seat, 3);
+          addLog(SEAT_NAME[seat] + '換三張逾時，自動選牌');
+        }
+      });
       state.exchange.deadlineMs = 0;
+      ensureExchangeConfirmBtn(false);
     } else {
       setOpeningPrompt('選3張牌換掉…');
       renderAll();
