@@ -859,7 +859,22 @@ background:rgba(3,8,18,.78);overscroll-behavior:contain;-webkit-overflow-scrolli
 .status{font-size:10px!important;padding:5px 6px!important;}
 .actionPanel.action-panel-visible,.actionPanel.ting-choice-active{right:10px!important;bottom:calc(224px + env(safe-area-inset-bottom))!important;}
 .result{bottom:clamp(288px,34vh,372px)!important;transform:translateX(-50%) scale(.78)!important;transform-origin:center bottom!important;max-height:46vh!important;padding-top:58px!important;}
-.tw16-lobby-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));}.tw16-lobby-actions .tw16-lobby-btn{width:100%;}.tw16-lobby-actions #tw16LobbyOffline{grid-column:span 2;}.tw16-lobby-key-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));}.tw16-lobby-key-actions .tw16-lobby-btn{width:100%;}
+.tw16-lobby-actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important;align-items:stretch!important;}
+.tw16-lobby-actions .tw16-lobby-btn,
+.tw16-lobby-actions #tw16LobbyConnect,
+.tw16-lobby-actions #tw16LobbyOffline{
+  width:100%!important;
+  min-width:0!important;
+  min-height:48px!important;
+  height:100%!important;
+  box-sizing:border-box!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  font-size:16px!important;
+  padding:10px 12px!important;
+  grid-column:auto!important;
+}.tw16-lobby-actions .tw16-lobby-btn{width:100%;}/* offline no longer full-width; equal side-by-side with connect */.tw16-lobby-key-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));}.tw16-lobby-key-actions .tw16-lobby-btn{width:100%;}
 .tw16-mini-dashboard{top:calc(env(safe-area-inset-top) + 76px);}
 }@media(orientation:landscape){.tw16-mini-dashboard{top:calc(env(safe-area-inset-top) + 46px);width:min(72vw,620px);}.actionPanel.action-panel-visible,.actionPanel.ting-choice-active{bottom:110px!important;}}
 
@@ -3674,6 +3689,30 @@ will-change:auto !important;
 }
 }
 </style>
+<style id="tw16-lobby-actions-equal">
+html body .tw16-lobby-actions{
+  display:grid!important;
+  grid-template-columns:1fr 1fr!important;
+  gap:10px!important;
+  align-items:stretch!important;
+  flex-wrap:nowrap!important;
+}
+html body .tw16-lobby-actions .tw16-lobby-btn,
+html body .tw16-lobby-actions #tw16LobbyConnect,
+html body .tw16-lobby-actions #tw16LobbyOffline{
+  width:100%!important;
+  min-width:0!important;
+  min-height:48px!important;
+  grid-column:span 1!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  box-sizing:border-box!important;
+  font-size:16px!important;
+  padding:10px 8px!important;
+  white-space:nowrap!important;
+}
+</style>
 <style id="tw16-exchange-style">
 html body .tile.tw16-exchange-selected,
 html body .hand-bottom .tile.tw16-exchange-selected,
@@ -4129,11 +4168,14 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
   };
 
   window.TW16SupabaseRealtime = Realtime;
+  /* 預設使用 Supabase；只有使用者在大廳明確選 Ably，或 Supabase 連不上自動備援（僅本次、不寫入儲存）時才用 Ably */
   window.tw16GetBackend = function () {
-    try { return localStorage.getItem('tw16Backend') === 'supabase' ? 'supabase' : 'ably'; } catch (e) { return 'ably'; }
+    if (window.__tw16BackendFallback === 'ably') return 'ably';
+    try { return localStorage.getItem('tw16Backend') === 'ably' ? 'ably' : 'supabase'; } catch (e) { return 'supabase'; }
   };
   window.tw16SetBackend = function (v) {
-    try { localStorage.setItem('tw16Backend', v === 'supabase' ? 'supabase' : 'ably'); } catch (e) {}
+    window.__tw16BackendFallback = '';
+    try { localStorage.setItem('tw16Backend', v === 'ably' ? 'ably' : 'supabase'); } catch (e) {}
   };
   window.tw16BackendName = function (b) { return (b || window.tw16GetBackend()) === 'supabase' ? 'Supabase' : 'Ably'; };
   window.tw16RealtimeClass = function (b) {
@@ -4149,7 +4191,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
 
   
   // ========== MODULE: game core state ==========
-  const TW16_LOBBY_BUILD_LABEL = '（115.11.8 改版｜2026-11-08 01:53 台灣時間）';
+  const TW16_LOBBY_BUILD_LABEL = '（115.11.8 改版｜2026-11-08 08:40 台灣時間）';
   const SEATS = ['east', 'south', 'west', 'north'];
   /* tw16_tablemode: 桌面人數模式(4/3/2)輔助函式。
      2人：只啟用 east/west；3人：停用 north；4人(預設)：全啟用。
@@ -4225,6 +4267,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
   }
   function tw16ClearDiscardTurnGuard() {
     tw16DiscardTurnGuardKey = '';
+    try { if (net) { net._guestDiscardInFlight = false; } } catch (e) {}
   }
   function tw16HasDiscardedThisTurn(seat) {
     const key = tw16BuildDiscardTurnGuardKey(seat);
@@ -4243,6 +4286,9 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
   let claimTimer = null;
   let autoNextTimer = null;
   let miniDashboardCountdownTimer = null;
+  /* 來賓端迷你儀表板倒計時：紅框換座位即可顯示，不必等房主 actionDeadlineAt 訊號 */
+  let guestUiDeadlineKey = '';
+  let guestUiDeadlineAt = 0;
   let settlementAutoContinueTimer = null;
   let settlementAutoContinueDeadlineAt = 0;
   let settlementAutoContinueActive = false;
@@ -4574,7 +4620,15 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
 
   function isActiveNetworkHumanPlayer(player, now) {
     if (!player) return false;
-    if (player.seat === 'east') return true;
+    /* 房主本機座位可非東風：不可再寫死 east，否則房主坐南/西/北會被當一般來賓逾時斷線 */
+    if (isOnlineHost()) {
+      const hostSeat = net.assignedSeat || state.viewSeat || 'east';
+      if (player.seat === hostSeat) return true;
+      const sid = networkPlayerSessionId(player);
+      if (sid && sid === net.instanceId) return true;
+      const cid = networkPlayerClientId(player);
+      if (cid && cid === net.clientId) return true;
+    }
     if (!isGuestPlayerRecord(player)) return false;
     if (!hasNetworkHumanIdentity(player)) return false;
     return !isPlayerStale(player, now || Date.now());
@@ -4592,7 +4646,8 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     player.role = 'guest';
     player.human = true;
     player.lastSeenAt = Date.now();
-    if (typeof player.autoplay !== 'boolean') player.autoplay = !!state.seatAutoPlay[seat];
+    /* 預設維持真人；不可從 state.seatAutoPlay 繼承（房主重登清空 players 後 sync 會把空位設成 true） */
+    if (typeof player.autoplay !== 'boolean') player.autoplay = false;
     net.players[seat] = player;
     recordNetworkEvent('guest-human-touch', SEAT_NAME[seat] + '收到來賓訊息，維持真人座位', { seat, reason: reason || '', sessionId: player.instanceId || '', clientId: player.clientId || '' });
     return seat;
@@ -5719,6 +5774,11 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     if (!data || data.protocol !== NETWORK_ROOM_PROTOCOL) return false;
     if (data.room && String(data.room) !== String(net.room)) return false;
     if (data.type === 'ack' && data.ackFor) return handleReliableNetworkAck(data, source);
+    /* 同房 hostClaim：探測期來賓也要互相收到，才能選出唯一房主、避免拆成兩桌 */
+    if (data.action === 'hostClaim' || (data.type === 'hello' && data.action === 'hostClaim')) {
+      try { tw16RecordHostClaim(data); } catch (e) {}
+      if (net._hostProbeActive) return true;
+    }
     const isOwnSameRole = !!(data.sessionId && data.sessionId === net.instanceId && data.role === net.role);
     if (isOwnSameRole) return false;
     if (net.role === 'guest' && !networkIncomingTargetsThisGuest(data)) return false;
@@ -5734,6 +5794,12 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
             // tw16_hand_privacy_ecdh_20260802: 公鑰擷取已統一交給上面的
             // touchGuestPlayerFromMessage() 處理（同時涵蓋 join/sync/heartbeat），
             // 這裡不用重複做一次。
+            /* 未斷線來賓重新入座（含房主重登後）：預設關閉托管；僅來賓明確要求托管才開 */
+            if (data.localAutoplay === true && data.stopTimeoutTakeover !== true) {
+              setSeatAutoplay(joinSeat, true, 'guest-local-toggle');
+            } else {
+              setSeatAutoplay(joinSeat, false, 'guest-initial-default');
+            }
             addLog((data.name || '來賓') + '入座 ' + SEAT_NAME[joinSeat]);
             publishNetworkAck(data, true, 'join-' + joinSeat);
           } else {
@@ -7526,17 +7592,16 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     lobby.innerHTML = '<div class="tw16-lobby-card">'
       + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;"><div class="tw16-lobby-chip" id="tw16LobbyChipText" style="flex-shrink:0;margin-bottom:0;">Ably 連線 / 單機</div><span style="font-size:clamp(9px,2.5vw,12px);color:#cbd5e1;font-weight:700;white-space:nowrap;">（115.11.6 改版｜2026-11-06 15:35 台灣時間）</span></div>'
       + '<div class="tw16-lobby-title" id="tw16LobbyTitleText">台灣麻將 連線 / 單機</div>'
-      + '<div class="tw16-lobby-sub">★連線對戰：<br><span style="color:#ef4444">每人都要設同房名</span>，設好房名後<br>1人先按<span style="background:#1d4ed8;color:#fff;border-radius:3px;padding:0 3px;">建立房間</span><br>其餘人按<span style="background:#1d4ed8;color:#fff;border-radius:3px;padding:0 3px;">加入房間</span><br>★單人：按<span style="background:#15803d;color:#fff;border-radius:3px;padding:0 3px;">直接離線開始</span></div>'
+      + '<div class="tw16-lobby-sub">★連線對戰：<br><span style="color:#ef4444">每人都要設同房名</span>，設好房名後<br>設好後按<span style="background:#1d4ed8;color:#fff;border-radius:3px;padding:0 3px;">連線對戰</span><br>最早進入該房名者為房主；房主離開後由下一位依進入順序接任<br>★單人：按<span style="background:#15803d;color:#fff;border-radius:3px;padding:0 3px;">直接離線開始</span></div>'
       + '<div class="tw16-lobby-grid">'
       + '<div class="tw16-lobby-row tw16-lobby-inline-row"><label for="tw16LobbyName">玩家名稱</label><input class="tw16-lobby-input" id="tw16LobbyName" value="(請輸入)" onfocus="if(this.value===\'(請輸入)\')this.value=\'\'" onblur="if(!this.value.trim())this.value=\'(請輸入)\'"></div>'
       + '<div class="tw16-lobby-row tw16-lobby-inline-row"><label for="tw16LobbyRoom">房名</label><input class="tw16-lobby-input" id="tw16LobbyRoom" value="對我生財" onfocus="if(this.value===\'對我生財\')this.value=\'\'" onblur="if(!this.value.trim())this.value=\'對我生財\'"></div>'
-      + '<div class="tw16-lobby-row tw16-lobby-inline-row"><label for="tw16LobbyBackend">連線伺服器</label><select class="tw16-lobby-input" id="tw16LobbyBackend"><option value="ably">Ably（需 API KEY）</option><option value="supabase">Supabase（免 KEY）</option></select></div>'
+      + '<div class="tw16-lobby-row tw16-lobby-inline-row"><label for="tw16LobbyBackend">連線伺服器</label><select class="tw16-lobby-input" id="tw16LobbyBackend"><option value="supabase">Supabase（免 KEY，預設）</option><option value="ably">Ably（需 API KEY，備援）</option></select></div>'
       + '<div class="tw16-lobby-row tw16-lobby-inline-row"><label for="tw16LobbyTableMode">人數模式</label><select class="tw16-lobby-input" id="tw16LobbyTableMode"><option value="4" selected>4人</option><option value="3">3人(無北家，禁吃牌)</option><option value="2">2人(僅東/西家)</option></select></div>'
-      + '<div class="tw16-lobby-row" style="margin-top:-6px;"><span style="font-size:11px;color:#94a3b8;font-weight:700;">※人數模式僅「建立房間(房主)」與「直接離線開始」生效；加入房間(來賓)時將自動套用房主設定。</span></div>'
+      + '<div class="tw16-lobby-row" style="margin-top:-6px;"><span style="font-size:11px;color:#94a3b8;font-weight:700;">※人數模式僅「最早進入的房主」與「直接離線開始」可設定；後來加入者會套用房主人數模式。</span></div>'
       + '</div>'
       + '<div class="tw16-lobby-actions">'
-      + '<button class="tw16-lobby-btn blue tw16-lobby-btn-role-break" id="tw16LobbyHost" type="button"><span class="tw16-lobby-btn-main">建立房間</span><span class="tw16-lobby-btn-role">(房主)</span></button>'
-      + '<button class="tw16-lobby-btn blue tw16-lobby-btn-role-break" id="tw16LobbyGuest" type="button"><span class="tw16-lobby-btn-main">加入房間</span><span class="tw16-lobby-btn-role">(來賓)</span></button>'
+      + '<button class="tw16-lobby-btn blue" id="tw16LobbyConnect" type="button"><span class="tw16-lobby-btn-main">連線對戰</span></button>'
       + '<button class="tw16-lobby-btn green" id="tw16LobbyOffline" type="button">直接離線開始</button>'
       + '</div>'
       + '<div class="tw16-lobby-status" id="tw16LobbyStatus">Api key：</div>'
@@ -7544,7 +7609,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
       + '<div class="tw16-lobby-row tw16-lobby-hidden-key-row"><label for="tw16LobbyAblyKey">目前使用的 Ably API KEY（自動填入／仍可手動修正）</label><input class="tw16-lobby-input" id="tw16LobbyAblyKey" list="tw16LobbyAblyKeyDatalist" autocomplete="off" spellcheck="false" value="' + escapeHtml(getStoredAblyApiKey()) + '"><datalist id="tw16LobbyAblyKeyDatalist"></datalist><div class="tw16-lobby-key-list" id="tw16LobbyAblyKeyCandidateList" hidden></div></div>'
       + '<div class="tw16-lobby-row tw16-lobby-hidden-key-row"><label for="tw16LobbyUsableAblyKey">伺服器測試可用的 Ably API KEY</label><input class="tw16-lobby-input" id="tw16LobbyUsableAblyKey" autocomplete="off" spellcheck="false" readonly value=""></div>'
       + '<div class="tw16-lobby-row tw16-lobby-hidden-key-row"><label for="tw16LobbyUsableAblyKeyCode">可用 KEY 對應的伺服器口令欄位</label><input class="tw16-lobby-input" id="tw16LobbyUsableAblyKeyCode" autocomplete="off" spellcheck="false" readonly value=""></div>'
-      + '<div class="tw16-lobby-remote-code-box" id="tw16LobbyRemoteCodeBox"><div class="tw16-lobby-remote-code-title">Ably API KEY 全自動查詢</div><div class="tw16-lobby-remote-code-status" id="tw16LobbyRemoteCodeStatus">房主建立房間或來賓加入房間首次需要使用 API KEY 時，會先一次取回伺服器表格可查到的所有 key，並把本地 KEY 列表更新成和伺服器一致，再本地逐組測試；來賓若無法入桌約 3 秒會自動換不同 Api key，從頭到尾只試一輪，仍進不了就停止並提示檢查房名。公共網址：' + escapeHtml(LOBBY_ABLY_KEY_REMOTE_BASE_URL) + '</div></div>'
+      + '<div class="tw16-lobby-remote-code-box" id="tw16LobbyRemoteCodeBox"><div class="tw16-lobby-remote-code-title">Ably API KEY 全自動查詢</div><div class="tw16-lobby-remote-code-status" id="tw16LobbyRemoteCodeStatus">連線對戰首次需要使用 API KEY 時，會先一次取回伺服器表格可查到的所有 key，並把本地 KEY 列表更新成和伺服器一致，再本地逐組測試；來賓若無法入桌約 3 秒會自動換不同 Api key，從頭到尾只試一輪，仍進不了就停止並提示檢查房名。公共網址：' + escapeHtml(LOBBY_ABLY_KEY_REMOTE_BASE_URL) + '</div></div>'
       + '<div class="tw16-lobby-key-actions"><button class="tw16-lobby-btn blue" id="tw16LobbyEditAblyKey" type="button">伺服器 KEY 列表</button><button class="tw16-lobby-btn blue" id="tw16LobbyLocalAblyKey" type="button">本地 KEY 列表</button><input id="tw16LobbyKeySheetLoadFile" type="file" accept="application/json,.json,text/plain,.txt,.csv" style="display:none!important"></div>'
       + '</div>';
     app.insertBefore(lobby, app.firstChild);
@@ -7556,14 +7621,15 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     const editAblyKeyBtn = byId('tw16LobbyEditAblyKey');
     const localAblyKeyBtn = byId('tw16LobbyLocalAblyKey');
     const keySheetLoadFile = byId('tw16LobbyKeySheetLoadFile');
-    const hostBtn = byId('tw16LobbyHost');
+    const hostBtn = byId('tw16LobbyConnect') || byId('tw16LobbyHost');
     const guestBtn = byId('tw16LobbyGuest');
     const roomInput = byId('tw16LobbyRoom');
     const updateHostButtonState = () => {
       const canCreateRoom = !!roomValue();
-      if (hostBtn) {
-        hostBtn.disabled = !canCreateRoom;
-        hostBtn.setAttribute('aria-disabled', canCreateRoom ? 'false' : 'true');
+      const connectBtn = byId('tw16LobbyConnect') || hostBtn;
+      if (connectBtn) {
+        connectBtn.disabled = !canCreateRoom;
+        connectBtn.setAttribute('aria-disabled', canCreateRoom ? 'false' : 'true');
       }
       if (guestBtn) {
         guestBtn.disabled = !canCreateRoom;
@@ -7574,7 +7640,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     const offlineBtn = byId('tw16LobbyOffline');
     renderLobbyAblyApiKeyCandidates(false);
     renderLobbyAblyKeyUseStatusBox();
-    setLobbyUsableAblyKeyDisplay('', '', '房主建立房間或來賓加入房間首次需要使用 API KEY 時，會先一次取回伺服器表格可查到的所有 key，並把本地 KEY 列表更新成和伺服器一致，再本地逐組測試；來賓若無法入桌約 3 秒會自動換不同 Api key，從頭到尾只試一輪，仍進不了就停止並提示檢查房名。', '');
+    setLobbyUsableAblyKeyDisplay('', '', '連線對戰首次需要使用 API KEY 時，會先一次取回伺服器表格可查到的所有 key，並把本地 KEY 列表更新成和伺服器一致，再本地逐組測試；來賓若無法入桌約 3 秒會自動換不同 Api key，從頭到尾只試一輪，仍進不了就停止並提示檢查房名。', '');
     (function tw16InitBackendSelector() {
       const sel = byId('tw16LobbyBackend');
       const apply = (announce) => {
@@ -7585,12 +7651,13 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
         const chip = byId('tw16LobbyChipText'); if (chip) chip.textContent = name + ' 連線 / 單機';
         const title = byId('tw16LobbyTitleText'); if (title) title.textContent = '台灣麻將 連線 / 單機';
         if (b === 'supabase') {
-          updateLobbyStatus('使用 Supabase：免 API KEY，輸入房名即可。※同一桌須選同一伺服器。※免費專案閒置約一週會休眠，連線時會先自動喚醒（可能需數十秒）；若持續失敗請改選 Ably 備援。');
+          updateLobbyStatus('使用 Supabase：免 API KEY，輸入房名即可。※同一桌須選同一伺服器。※免費專案閒置約一週會休眠，連線時會先自動喚醒（可能需數十秒）；連不上時會自動改用 Ably 備援。');
         } else if (announce) {
           updateLobbyStatus('使用 Ably：需 API KEY。※同一桌須選同一伺服器。※訊息有免費額度上限，對局中已降低心跳／快照頻率以省流量。');
         }
       };
       if (sel) sel.addEventListener('change', () => { window.tw16SetBackend(sel.value); apply(true); });
+      window.tw16RefreshBackendSelector = () => apply(false);
       apply(false);
     })();
     if (ablyKeyInput) {
@@ -7610,22 +7677,15 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
       });
     }
     if (hostBtn) hostBtn.addEventListener('click', async () => {
-      saveLastInputs();
-      applyLobbyTableModeSelection();
-      const room = roomValue();
-      const key = await ensureLobbyAutoUsableAblyApiKey(room, 'host');
-      if (!key) return;
-      const ok = connectAbly('host', room, nameValue(), key);
-      const el = status();
-      if (el && ok) el.textContent = '正在連線 ' + window.tw16BackendName() + '。房間建立完成後會自動進入牌桌並開局。';
+      /* 每次手動按連線，都先以 Supabase 為預設（備援到 Ably 只限單次連線嘗試） */
+      window.__tw16BackendFallback = '';
+      try { if (typeof window.tw16RefreshBackendSelector === 'function') window.tw16RefreshBackendSelector(); } catch (e) {}
+      try { await lobbyConnectBattle(); } catch (e) { try { updateLobbyStatus('連線對戰失敗：' + (e && e.message ? e.message : e)); addLog('連線對戰例外：' + (e && e.message ? e.message : e)); } catch (e2) {} }
     });
     if (guestBtn) guestBtn.addEventListener('click', async () => {
-      saveLastInputs();
-      const room = roomValue();
-      const key = await ensureLobbyAutoUsableAblyApiKey(room, 'guest');
-      if (!key) return;
-      beginGuestApiKeyEntrySession(room, nameValue(), key);
-      connectAbly('guest', room, nameValue(), key);
+      window.__tw16BackendFallback = '';
+      try { if (typeof window.tw16RefreshBackendSelector === 'function') window.tw16RefreshBackendSelector(); } catch (e) {}
+      try { await lobbyConnectBattle(); } catch (e) {}
     });
     if (offlineBtn) offlineBtn.addEventListener('click', () => {
       saveLastInputs();
@@ -7742,6 +7802,9 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
   }
 
   function showInterface329Lobby(reason) {
+    /* 每次回大廳都重新以 Supabase 為預設（上次自動備援到 Ably 只限當次） */
+    window.__tw16BackendFallback = '';
+    try { if (typeof window.tw16RefreshBackendSelector === 'function') window.tw16RefreshBackendSelector(); } catch (e) {}
     clearGameDataForLobby();
     setGameSurfaceVisible(false);
     const lobby = byId('tw16Lobby');
@@ -9089,7 +9152,9 @@ function loadUiSettings() {
 
   function currentAblyApiKeyPrefix() {
     const input = byId('tw16LobbyAblyKey');
-    const key = String((input && input.value) || getStoredAblyApiKey() || '').trim();
+    /* 已連線時顯示「實際連線使用」的 key，不讀輸入框（來賓探測期自動換 key 可能已把輸入框改成下一組） */
+    const activeKey = (net && (net.connected || net.connecting) && net.activeAblyApiKey) ? net.activeAblyApiKey : '';
+    const key = String(activeKey || (input && input.value) || getStoredAblyApiKey() || '').trim();
     return key ? key.slice(0, 6) : '';
   }
 
@@ -9549,10 +9614,11 @@ function loadUiSettings() {
       return true;
     }
     net.joinAttempts = Math.max(0, Number(net.joinAttempts) || 0) + 1;
+    const stickyPref = (typeof tw16LoadStickySeat === 'function') ? tw16LoadStickySeat(net.room, net.playerKey) : '';
     const sent = publishNetworkRoomMessage('hello', {
       action: 'join',
       joinReason: reason || 'join',
-      preferredSeat: networkSeatOrder().includes(state.viewSeat) ? state.viewSeat : '',
+      preferredSeat: stickyPref || (networkSeatOrder().includes(state.viewSeat) ? state.viewSeat : ''),
       lastAppliedSnapshotSeq: Number(net.lastAppliedSnapshotSeq || 0),
       localAutoplay: false,
       stopTimeoutTakeover: true,
@@ -9576,15 +9642,23 @@ function loadUiSettings() {
   function isSeatAssignedHuman(seat) {
     const p = net.players && net.players[seat];
     if (!p) return false;
-    if (seat === 'east') return true;
+    /* 房主本機座位（可能非東）視為真人 */
+    if (isOnlineHost()) {
+      const hostSeat = net.assignedSeat || state.viewSeat || 'east';
+      if (seat === hostSeat) return true;
+    }
     return isActiveNetworkHumanPlayer(p, Date.now());
   }
 
   function isSeatLocalHuman(seat) {
     if (!isNetworked()) return seat === state.viewSeat;
     if (isOnlineHost()) {
+      const hostSeat = net.assignedSeat || state.viewSeat || 'east';
+      if (seat !== hostSeat) return false;
       const p = net.players && net.players[seat];
-      return seat === 'east' && !!(p && networkPlayerSessionId(p) && networkPlayerSessionId(p) === net.instanceId);
+      if (!p) return true;
+      const sid = networkPlayerSessionId(p);
+      return !sid || sid === net.instanceId;
     }
     return seat === net.assignedSeat;
   }
@@ -9611,7 +9685,7 @@ function loadUiSettings() {
       if (seat === state.viewSeat) humanName = net.name || '';
     } else if (isSeatAssignedHuman(seat)) {
       const player = net.players && net.players[seat];
-      humanName = (player && player.name) || ((seat === state.viewSeat || seat === net.assignedSeat) ? net.name : '') || (seat === 'east' && isOnlineHost() ? net.name : '') || '玩家';
+      humanName = (player && player.name) || ((seat === state.viewSeat || seat === net.assignedSeat) ? net.name : '') || (isOnlineHost() && seat === (net.assignedSeat || state.viewSeat) ? net.name : '') || '玩家';
     }
     humanName = String(humanName || '').trim();
     if (humanName) return SEAT_NAME[seat] + '(' + humanName + ')';
@@ -9742,7 +9816,15 @@ function loadUiSettings() {
 
   function isPlayerStale(player, now) {
     if (!player) return false;
-    if (player.seat === 'east') return false;
+    /* 房主本機（可非東）永遠不視為斷線，避免被 cleanup 強制改托管 */
+    if (isOnlineHost()) {
+      const hostSeat = net.assignedSeat || state.viewSeat || 'east';
+      if (player.seat === hostSeat) return false;
+      const sid = networkPlayerSessionId(player);
+      if (sid && sid === net.instanceId) return false;
+      const cid = networkPlayerClientId(player);
+      if (cid && cid === net.clientId) return false;
+    }
     if (!isGuestPlayerRecord(player)) return false;
     if (!hasNetworkHumanIdentity(player)) return true;
     const lastSeenAt = networkPlayerLastSeen(player);
@@ -9832,19 +9914,30 @@ function loadUiSettings() {
   function syncSeatAutoplayDefaults(reason) {
     if (!isNetworked()) return;
     const players = net.players || {};
+    const hostSeat = isOnlineHost() ? (net.assignedSeat || state.viewSeat || 'east') : '';
+    const hostRejoinGrace = isOnlineHost() && Number(net.hostPlayersResetAt || 0) > 0 && (Date.now() - Number(net.hostPlayersResetAt || 0) < 30000);
     SEATS.forEach(seat => {
       const player = players[seat];
-      if (seat === 'east') {
+      /* 房主本機座位（可非東）保留其托管開關狀態，不可被預設成電腦代打 */
+      if (hostSeat && seat === hostSeat) {
         state.seatAutoPlay[seat] = typeof state.seatAutoPlay[seat] === 'boolean' ? !!state.seatAutoPlay[seat] : false;
+        if (player) player.autoplay = !!state.seatAutoPlay[seat];
         return;
       }
       if (player && isSeatAssignedHuman(seat)) {
         if (isOnlineHost()) {
-          state.seatAutoPlay[seat] = typeof state.seatAutoPlay[seat] === 'boolean' ? !!state.seatAutoPlay[seat] : false;
+          /* 已入座真人：保留其開關；若 player.autoplay 明確 false 則以真人為準 */
+          if (player.autoplay === false) state.seatAutoPlay[seat] = false;
+          else state.seatAutoPlay[seat] = typeof state.seatAutoPlay[seat] === 'boolean' ? !!state.seatAutoPlay[seat] : !!player.autoplay;
           player.autoplay = !!state.seatAutoPlay[seat];
         } else if (typeof state.seatAutoPlay[seat] !== 'boolean') {
           state.seatAutoPlay[seat] = typeof player.autoplay === 'boolean' ? !!player.autoplay : false;
         }
+        return;
+      }
+      /* 房主重登後 30 秒寬限：空位先不強制托管，等未斷線來賓重新入座 */
+      if (hostRejoinGrace) {
+        state.seatAutoPlay[seat] = false;
         return;
       }
       state.seatAutoPlay[seat] = true;
@@ -9855,7 +9948,8 @@ function loadUiSettings() {
     if (!SEATS.includes(seat)) return false;
     if (isOnlineHost()) {
       if (!isSeatAssignedHuman(seat)) return false;
-      if (seat === 'east') return isSeatLocalHuman(seat) && !state.seatAutoPlay[seat];
+      /* 房主本機座位可非東：以 isSeatLocalHuman 判斷，不可寫死 east */
+      if (isSeatLocalHuman(seat)) return !state.seatAutoPlay[seat];
       return isSeatRemoteHuman(seat) && !state.seatAutoPlay[seat];
     }
     if (isOnlineGuest()) return seat === net.assignedSeat && isSeatLocalHuman(seat) && !state.seatAutoPlay[seat];
@@ -9944,27 +10038,85 @@ function loadUiSettings() {
     return Math.max(0, Math.ceil((deadlineAt - Date.now()) / 1000));
   }
 
+  // 公開倒計時顯示用：任何未托管的真人座位都可顯示紅字秒數（來賓也看得到各家）
+  function seatShowsPublicDecisionCountdown(seat) {
+    if (!SEATS.includes(seat)) return false;
+    if (state.seatAutoPlay && state.seatAutoPlay[seat]) return false;
+    if (isNetworked()) return isSeatAssignedHuman(seat);
+    return seat === state.viewSeat || seatNeedsManualDecision(seat);
+  }
+
+  function publicPendingHumanSeats(pending) {
+    if (!pending) return [];
+    if (pending.kind === 'selfwin') return seatShowsPublicDecisionCountdown(pending.seat) ? [pending.seat] : [];
+    if (pending.kind !== 'claim' && pending.kind !== 'robkong') return [];
+    return Array.from(new Set(visiblePendingCandidates(pending).filter(c => c && seatShowsPublicDecisionCountdown(c.seat)).map(c => c.seat)));
+  }
+
+  function ensureGuestUiDecisionDeadline(key, hostDeadlineAt) {
+    if (!isOnlineGuest()) return Number(hostDeadlineAt) || 0;
+    const host = Number(hostDeadlineAt) || 0;
+    if (!key) {
+      guestUiDeadlineKey = '';
+      guestUiDeadlineAt = 0;
+      return 0;
+    }
+    if (guestUiDeadlineKey !== key || !guestUiDeadlineAt) {
+      guestUiDeadlineKey = key;
+      // 紅框／待決座位一換就立即起算，不必等房主 deadline 訊號
+      guestUiDeadlineAt = host || (Date.now() + (GAME_RULES.humanDecisionMs || 60000));
+    } else if (host && Math.abs(host - guestUiDeadlineAt) > 1500) {
+      // 房主時限到達後再對齊（避免本機時鐘與房主差太多）
+      guestUiDeadlineAt = host;
+    }
+    return guestUiDeadlineAt;
+  }
+
   function miniDashboardCountdownText(seat) {
     if (!SEATS.includes(seat)) return '';
-    if (isTileManagementPausingGame() && (seat === state.turn || (state.pending && pendingHumanSeats(state.pending).includes(seat)))) return '';
-    if (state.pending && pendingHumanSeats(state.pending).includes(seat)) {
-      const seconds = remainingDecisionSeconds(state.pending.deadlineAt);
-      return String(seconds);
+    const publicPending = state.pending ? publicPendingHumanSeats(state.pending) : [];
+    if (isTileManagementPausingGame() && (seat === state.turn || publicPending.includes(seat))) return '';
+    if (state.pending && publicPending.includes(seat)) {
+      const hostDl = state.pending.deadlineAt || 0;
+      const key = 'pending:' + String(state.pending.kind || '') + ':' + String(state.pending.actionId || state.pending.reason || '') + ':' + String(seat);
+      const deadline = isOnlineGuest()
+        ? ensureGuestUiDecisionDeadline(key, hostDl)
+        : hostDl;
+      if (!deadline) return '';
+      return String(remainingDecisionSeconds(deadline));
     }
-    if (seat === state.turn && state.phase === 'discard' && state.actionDeadlineAt && seatNeedsManualDecision(seat)) {
-      const seconds = remainingDecisionSeconds(state.actionDeadlineAt);
-      return String(seconds);
+    if (seat === state.turn && state.phase === 'discard' && seatShowsPublicDecisionCountdown(seat)) {
+      const hostDl = state.actionDeadlineAt || 0;
+      const key = 'turn:' + String(state.turn || '') + ':' + String(state.handId || '') + ':' + String(state.phase || '');
+      const deadline = isOnlineGuest()
+        ? ensureGuestUiDecisionDeadline(key, hostDl)
+        : hostDl;
+      if (!deadline) return '';
+      return String(remainingDecisionSeconds(deadline));
     }
     return '';
   }
 
   function seatLabelCountdownText(seat) {
     if (!SEATS.includes(seat)) return '';
-    if (state.pending && pendingHumanSeats(state.pending).includes(seat)) {
-      return '｜待決 ' + remainingDecisionSeconds(state.pending.deadlineAt) + '秒';
+    const publicPending = state.pending ? publicPendingHumanSeats(state.pending) : [];
+    if (state.pending && publicPending.includes(seat)) {
+      const hostDl = state.pending.deadlineAt || 0;
+      const key = 'pending:' + String(state.pending.kind || '') + ':' + String(state.pending.actionId || state.pending.reason || '') + ':' + String(seat);
+      const deadline = isOnlineGuest()
+        ? ensureGuestUiDecisionDeadline(key, hostDl)
+        : hostDl;
+      if (!deadline) return '';
+      return '｜待決 ' + remainingDecisionSeconds(deadline) + '秒';
     }
-    if (seat === state.turn && state.phase === 'discard' && state.actionDeadlineAt && seatNeedsManualDecision(seat)) {
-      return '｜' + remainingDecisionSeconds(state.actionDeadlineAt) + '秒';
+    if (seat === state.turn && state.phase === 'discard' && seatShowsPublicDecisionCountdown(seat)) {
+      const hostDl = state.actionDeadlineAt || 0;
+      const key = 'turn:' + String(state.turn || '') + ':' + String(state.handId || '') + ':' + String(state.phase || '');
+      const deadline = isOnlineGuest()
+        ? ensureGuestUiDecisionDeadline(key, hostDl)
+        : hostDl;
+      if (!deadline) return '';
+      return '｜' + remainingDecisionSeconds(deadline) + '秒';
     }
     return '';
   }
@@ -10460,7 +10612,7 @@ function loadUiSettings() {
     let opts = {};
     if (/opening-guest-ready-after-flower|opening-dealer-final|opening-complete|new-game/.test(r)) {
       opts = { reliable: true, ackResendMs: OPENING_ACK_RESEND_MS, ackMaxAttempts: OPENING_ACK_MAX_ATTEMPTS };
-    } else if (/guest-sync-state|guest-heartbeat-sync|manual-sync|snapshot-stale|guest-seat-sync|guest-forced-sync|host-latest|force-latest|sync-request/.test(r)) {
+    } else if (/guest-sync-state|guest-heartbeat-sync|manual-sync|snapshot-stale|guest-seat-sync|guest-forced-sync|host-latest|force-latest|sync-request|host-restore-autoplay/.test(r)) {
       opts = { reliable: true, ackResendMs: 700, ackMaxAttempts: 3 };
     } else if (/opening-dice|opening-wall|opening-deal|opening-flower/.test(r)) {
       opts = { reliable: false };
@@ -10821,12 +10973,14 @@ function loadUiSettings() {
     if (isOnlineGuest()) net.guestSyncBackoffStep = 0;
     net.lastSnapshotAt = Date.now();
     net.lastSyncAppliedAt = Date.now();
+    if (isOnlineGuest()) markSawHostSignal('snapshot');
     recordNetworkEvent('snapshot-in', '無條件套用房主快照 #' + (seq || '?') + '｜' + (msg.reason || ''), { seq, reason: msg.reason || '', hostChanged, turn: incoming && incoming.turn, phase: incoming && incoming.phase, handId: incoming && incoming.handId, animation: snapshotAnimation && snapshotAnimation.type });
 
     const localSeatBeforeApply = net.assignedSeat || state.viewSeat;
     const guestSeatBeforeSnapshot = isOnlineGuest() && networkSeatOrder().includes(localSeatBeforeApply) ? localSeatBeforeApply : '';
     const guestAutoplayBeforeSnapshot = guestSeatBeforeSnapshot && typeof state.seatAutoPlay[guestSeatBeforeSnapshot] === 'boolean' ? state.seatAutoPlay[guestSeatBeforeSnapshot] : null;
     const guestSnapshotMayApplyAutoplay = /turn-timeout-autoplay/.test(String(msg.reason || ''));
+    const guestSnapshotHostRestoreAutoplay = /host-restore-autoplay/.test(String(msg.reason || ''));
     if (net.role === 'guest') {
       openingRunToken += 1;
       if (autoNextTimer) {
@@ -10936,7 +11090,10 @@ function loadUiSettings() {
         clearGuestJoinRetry();
         clearGuestApiKeyRetry('snapshot-seat-assigned');
         const incomingGuestAuto = incoming.seatAutoPlay && typeof incoming.seatAutoPlay[assigned] === 'boolean' ? incoming.seatAutoPlay[assigned] : null;
-        if (guestInitialAutoplayOffWindowActive(assigned)) {
+        if (guestSnapshotHostRestoreAutoplay && incomingGuestAuto !== null) {
+          /* 房主還原牌局：強制採用記錄中的托管狀態 */
+          state.seatAutoPlay[assigned] = incomingGuestAuto;
+        } else if (guestInitialAutoplayOffWindowActive(assigned)) {
           state.seatAutoPlay[assigned] = false;
           notifyHostGuestInitialAutoplayOff('snapshot-initial-autoplay-off');
         } else if (incomingGuestAuto === true && (guestSnapshotMayApplyAutoplay || guestShouldAcceptHostAutoplayState(msg.reason || '', true))) {
@@ -11006,15 +11163,25 @@ function loadUiSettings() {
   function assignGuestSeat(clientId, name, playerKey, preferredSeat, instanceId) {
     net.players = net.players || {};
     cleanupStaleNetworkPlayers('force');
+    /* 固定座風：同房同玩家優先沿用上次座位 */
+    try {
+      const sticky = tw16LoadStickySeat(net.room, playerKey);
+      if (sticky && !guestSeatOccupiedByDifferentLivePlayer(sticky, clientId, playerKey, instanceId)) {
+        preferredSeat = sticky;
+      }
+    } catch (e) {}
     if (guestSeatOccupiedByDifferentLivePlayer(preferredSeat, clientId, playerKey, instanceId)) preferredSeat = '';
     let existing = findAssignedGuestSeatForPlayer(clientId, playerKey, preferredSeat, instanceId);
     if (!existing && networkSeatOrder().includes(preferredSeat) && guestSeatAvailableForNewAssignment(preferredSeat, Date.now())) existing = preferredSeat;
     if (existing) {
       if (guestSeatOccupiedByDifferentLivePlayer(existing, clientId, playerKey, instanceId)) return '';
       keepGuestPlayerRecordHuman(existing, { clientId, playerKey, name, senderInstanceId: instanceId, role: 'guest' }, 'assign-existing');
-      if (typeof net.players[existing].autoplay !== 'boolean') net.players[existing].autoplay = !!state.seatAutoPlay[existing];
-      if (typeof state.seatAutoPlay[existing] !== 'boolean') state.seatAutoPlay[existing] = !!net.players[existing].autoplay;
+      /* 房主斷線重登／players 被清空後重新認回來賓：未斷線來賓必須恢復真人控制，
+         不可沿用本機因空位 sync 而被設成 true 的托管狀態 */
+      if (net.players[existing]) net.players[existing].autoplay = false;
+      state.seatAutoPlay[existing] = false;
       removeDuplicateGuestPlayerRecords(existing, clientId, playerKey, 'assign-existing');
+      try { tw16SaveStickySeat(net.room, playerKey, existing); } catch (e) {}
       return existing;
     }
     const now = Date.now();
@@ -11024,6 +11191,7 @@ function loadUiSettings() {
     net.players[seat] = { clientId, playerKey: playerKey || '', instanceId: instanceId || '', name: name || '來賓', seat, role: 'guest', human: true, autoplay: false, lastSeenAt: Date.now(), handMasterKey: makeNetworkPayloadCode() };
     state.seatAutoPlay[seat] = false;
     removeDuplicateGuestPlayerRecords(seat, clientId, playerKey, 'assign-new');
+    try { tw16SaveStickySeat(net.room, playerKey, seat); } catch (e) {}
     return seat;
   }
 
@@ -11166,7 +11334,10 @@ function loadUiSettings() {
   }
 
   function clearGuestLocalDiscardPending(reason) {
-    if (!net.pendingLocalDiscard) return false;
+    if (!net.pendingLocalDiscard) {
+      net._guestDiscardInFlight = false;
+      return false;
+    }
     try {
       recordNetworkEvent('guest-local-discard-clear', '清除來賓本地即時出牌｜' + (reason || ''), {
         seat: net.pendingLocalDiscard.seat || '',
@@ -11175,6 +11346,7 @@ function loadUiSettings() {
       });
     } catch (_) {}
     net.pendingLocalDiscard = null;
+    net._guestDiscardInFlight = false;
     return true;
   }
 
@@ -11235,6 +11407,11 @@ function loadUiSettings() {
   function rollbackGuestLocalDiscardPending(reason, options = {}) {
     const pending = net.pendingLocalDiscard;
     if (!pending) return false;
+    try {
+      net._guestDiscardInFlight = false;
+      net._guestLastDiscardKey = '';
+      tw16ClearDiscardTurnGuard();
+    } catch (e) {}
     const keepSnapshotState = !!(options && options.keepSnapshotState);
     if (!keepSnapshotState) {
       state.hands[pending.seat] = clonePlain(pending.handBefore || []);
@@ -11473,10 +11650,21 @@ function loadUiSettings() {
       net.seenIntentIds.add(msg.intentId);
       if (net.seenIntentIds.size > 500) net.seenIntentIds = new Set(Array.from(net.seenIntentIds).slice(-240));
     }
+    if (msg.action === 'hostClaim') {
+      tw16RecordHostClaim(msg);
+      publishNetworkAck(msg, true, 'hostClaim');
+      return true;
+    }
     if (msg.action === 'join') {
-      const seat = assignGuestSeat(msg.clientId, msg.name || '來賓', msg.playerKey || '', '', msg.senderInstanceId || '');
+      const seat = assignGuestSeat(msg.clientId, msg.name || '來賓', msg.playerKey || '', msg.preferredSeat || '', msg.senderInstanceId || '');
       if (seat) {
+        if (msg.localAutoplay === true && msg.stopTimeoutTakeover !== true) {
+          setSeatAutoplay(seat, true, 'guest-local-toggle');
+        } else {
+          setSeatAutoplay(seat, false, 'guest-initial-default');
+        }
         addLog((msg.name || '來賓') + '入座 ' + SEAT_NAME[seat]);
+        try { tw16SaveStickySeat(net.room, msg.playerKey || playerKey, seat); } catch (e) {}
         publishNetworkAck(msg, true, 'join-' + seat);
       } else {
         addLog('房間已滿，拒絕來賓');
@@ -11505,7 +11693,12 @@ function loadUiSettings() {
         accepted = !!executeDraw(seat, 'remote');
         break;
       case 'discard':
-        accepted = !!submitDiscard(seat, msg.tileId, 'remote');
+        if (tw16HasDiscardedThisTurn(seat) || (state.turn !== seat) || state.phase !== 'discard' || state.pending) {
+          accepted = false;
+          try { recordNetworkEvent('host-discard-dup-reject', '房主拒絕來賓重複/非法出牌', { seat, tileId: msg.tileId }); } catch (_) {}
+        } else {
+          accepted = !!submitDiscard(seat, msg.tileId, 'remote');
+        }
         break;
       case 'claim':
         accepted = !!executeClaim({ seat, type: msg.claimType, tiles: msg.tiles || [] }, 'remote');
@@ -11594,7 +11787,7 @@ function loadUiSettings() {
     const players = net.players || {};
     return SEATS.map(seat => {
       const p = players[seat];
-      const name = p && p.name ? p.name : (isSeatComputerControlled(seat) ? '電腦' : (seat === 'east' && isOnlineHost() ? net.name : '空位'));
+      const name = p && p.name ? p.name : (isSeatComputerControlled(seat) ? '電腦' : (isOnlineHost() && seat === (net.assignedSeat || state.viewSeat) ? net.name : '空位'));
       return SEAT_NAME[seat] + '：' + name;
     }).join('｜');
   }
@@ -11604,6 +11797,11 @@ function loadUiSettings() {
     net.heartbeatTimer = setInterval(() => {
       if (!isNetworked()) return;
       if (isOnlineHost()) {
+        /* 心跳刷新房主本機座位 lastSeenAt，避免非東風房主被誤判斷線 */
+        try {
+          const _hs = net.assignedSeat || state.viewSeat || '';
+          if (_hs && net.players && net.players[_hs]) net.players[_hs].lastSeenAt = Date.now();
+        } catch (e) {}
         cleanupStaleNetworkPlayers('pulse');
         syncSeatAutoplayDefaults('pulse');
         ensureAutoDrivenTurn('pulse');
@@ -11633,6 +11831,7 @@ function loadUiSettings() {
           }
           if (required || stale) driveGuestSnapshotSync(required ? 'pulse-forced' : 'pulse-stale');
         }
+        if (stale) { try { tw16MaybeHostSuccession('pulse-stale'); } catch (e) {} }
       }
     }, 3000); /* egress: pulse 3s */
   }
@@ -11653,6 +11852,7 @@ function loadUiSettings() {
       net._hbSentAt = _hbNow; }
     const payload = {
       autoplay: !!state.seatAutoPlay[net.assignedSeat || state.viewSeat],
+      enterAt: Number(net.enterAt || Date.now()),
       seq: net.seq,
       syncDemand: net.role === 'guest' ? guestNeedsSync : undefined,
       lastAppliedSnapshotSeq: net.role === 'guest' ? Number(net.lastAppliedSnapshotSeq || 0) : undefined,
@@ -11724,9 +11924,11 @@ function loadUiSettings() {
       if (guestNeedsHostState) handleNetworkSyncRequest(Object.assign({}, msg, { reason: 'guest-heartbeat-sync', seat: assigned || msg.seat || '' }));
     }
     if (isOnlineGuest()) {
+      markSawHostSignal('heartbeat');
       if (Number(msg.seq || 0) > 0) net.hostAdvertisedSeq = Math.max(Number(net.hostAdvertisedSeq || 0), Number(msg.seq || 0));
       if (msg.players) applyNetworkPlayersPayload(msg, 'heartbeat');
       if (hasStartedNetworkHand(state) && guestHostSeqGap() >= NETWORK_GUEST_SYNC_SEQ_GAP_THRESHOLD) requestNetworkSync('host-seq-gap');
+      try { if (msg.enterAt) tw16NotePlayerEnterAt(msg.seat, msg.enterAt, msg.clientId); } catch (e) {}
     }
     return true;
   }
@@ -11846,12 +12048,249 @@ function loadUiSettings() {
     }
   }
 
+
+
+  function tw16StickySeatKey(room, playerKey) {
+    return 'tw16StickySeat:' + String(room || '') + ':' + String(playerKey || '');
+  }
+  function tw16LoadStickySeat(room, playerKey) {
+    try {
+      const s = localStorage.getItem(tw16StickySeatKey(room, playerKey)) || '';
+      return (s === 'east' || s === 'south' || s === 'west' || s === 'north') ? s : '';
+    } catch (e) { return ''; }
+  }
+  function tw16SaveStickySeat(room, playerKey, seat) {
+    try {
+      if (!room || !playerKey || !seat) return;
+      if (seat === 'east' || seat === 'south' || seat === 'west' || seat === 'north') {
+        localStorage.setItem(tw16StickySeatKey(room, playerKey), seat);
+      }
+    } catch (e) {}
+  }
+  function tw16RecordHostClaim(msg) {
+    if (!msg) return;
+    const id = String(msg.clientId || msg.playerKey || msg.senderInstanceId || '');
+    if (!id) return;
+    if (!net._hostClaims) net._hostClaims = {};
+    const enterAt = Number(msg.enterAt || msg.claimAt || Date.now());
+    const prev = net._hostClaims[id];
+    if (!prev || enterAt < prev.enterAt) {
+      net._hostClaims[id] = { enterAt: enterAt, clientId: id, name: msg.name || '', playerKey: msg.playerKey || '' };
+    }
+  }
+  function tw16LowestHostClaimId() {
+    const claims = net._hostClaims || {};
+    let bestId = '';
+    let bestAt = Infinity;
+    Object.keys(claims).forEach(function (id) {
+      const c = claims[id];
+      const t = Number(c.enterAt) || Infinity;
+      if (t < bestAt || (t === bestAt && id < bestId)) {
+        bestAt = t;
+        bestId = id;
+      }
+    });
+    return bestId;
+  }
+  function tw16PublishHostClaim(reason) {
+    try {
+      if (!net.room || !net.channel) return;
+      const payload = {
+        action: 'hostClaim',
+        enterAt: Number(net.enterAt || Date.now()),
+        clientId: net.clientId,
+        playerKey: net.playerKey,
+        name: net.name || '',
+        instanceId: net.instanceId || ''
+      };
+      tw16RecordHostClaim(payload);
+      if (typeof publishNetworkRoomMessage === 'function') {
+        publishNetworkRoomMessage('hello', payload, reason || 'hostClaim');
+      }
+    } catch (e) {}
+  }
+
+  async function lobbyConnectBattle() {
+    try { if (typeof saveLastInputs === 'function') saveLastInputs(); } catch (e) {}
+    const roomEl = byId('tw16LobbyRoom');
+    const nameEl = byId('tw16LobbyName') || byId('tw16LobbyPlayerName');
+    const room = String((roomEl && roomEl.value) || '').trim();
+    const name = String((nameEl && nameEl.value) || '').trim() || '(請輸入)';
+    if (!room) { updateLobbyStatus('請輸入房號。'); return false; }
+    const myConnectToken = (net._lobbyConnectToken = (Number(net._lobbyConnectToken) || 0) + 1);
+    updateLobbyStatus('連線對戰：尋找同一房桌並判定房主…');
+    const key = await ensureLobbyAutoUsableAblyApiKey(room, 'auto');
+    if (net._lobbyConnectToken !== myConnectToken) return false;
+    if (!key) {
+      updateLobbyStatus('連線對戰失敗：無法取得可用連線金鑰。');
+      return false;
+    }
+
+    net._hostProbeActive = true;
+    net._sawHostSignal = false;
+    net._sawHostSignalAt = 0;
+    net._hostClaims = {};
+    net.enterAt = Date.now();
+    const myId = String(net.clientId || net.playerKey || ('tmp-' + net.enterAt));
+    try { if (typeof beginGuestApiKeyEntrySession === 'function') beginGuestApiKeyEntrySession(room, name, key); } catch (e) {}
+    connectAbly('guest', room, name, key);
+
+    /* 探測 4.5 秒：廣播 hostClaim，並聽房主快照／其他玩家的更早宣告 */
+    const PROBE_MS = 4500;
+    const started = Date.now();
+    let lastClaimAt = 0;
+    while (Date.now() - started < PROBE_MS) {
+      if (net._sawHostSignal) break;
+      if (Date.now() - lastClaimAt > 700) {
+        lastClaimAt = Date.now();
+        try { tw16PublishHostClaim('probe'); } catch (e) {}
+      }
+      await new Promise(function (r) { setTimeout(r, 200); });
+    }
+    if (net._lobbyConnectToken !== myConnectToken) return false;
+    net._hostProbeActive = false;
+
+    if (net._sawHostSignal && isOnlineGuest()) {
+      updateLobbyStatus('已加入同一房桌（來賓）。');
+      addLog('連線對戰：同一房桌，擔任來賓');
+      return true;
+    }
+
+    /* 無人當房主：進入時間最早者成為唯一房主 */
+    tw16RecordHostClaim({ clientId: myId, playerKey: net.playerKey, enterAt: net.enterAt, name: name });
+    const winner = tw16LowestHostClaimId() || myId;
+    const iAmWinner = winner === myId || winner === String(net.clientId || '') || winner === String(net.playerKey || '');
+    if (!iAmWinner) {
+      updateLobbyStatus('同房有更早進入者，等待其成為房主…');
+      net._hostProbeActive = true;
+      const waitMore = Date.now() + 5000;
+      while (Date.now() < waitMore) {
+        if (net._sawHostSignal) break;
+        try { tw16PublishHostClaim('wait-winner'); } catch (e) {}
+        await new Promise(function (r) { setTimeout(r, 300); });
+      }
+      if (net._lobbyConnectToken !== myConnectToken) return false;
+      net._hostProbeActive = false;
+      if (net._sawHostSignal && isOnlineGuest()) {
+        updateLobbyStatus('已加入同一房桌（來賓）。');
+        return true;
+      }
+      updateLobbyStatus('等待房主逾時，改由你接手房主（仍為同房名同一桌）。');
+    }
+
+    updateLobbyStatus('你是本房最早進入者，擔任房主（同房名同一桌）…');
+    addLog('連線對戰：擔任本房唯一房主');
+    try { clearGuestApiKeyRetry('become-host'); net.guestKeyRetryStopped = true; } catch (e) {}
+    try { disconnectAbly(false); } catch (e) {}
+    try { if (typeof applyLobbyTableModeSelection === 'function') applyLobbyTableModeSelection(); } catch (e) {}
+    net.enterAt = net.enterAt || Date.now();
+    net._preferStickySeat = tw16LoadStickySeat(room, net.playerKey || getStoredPlayerKey && getStoredPlayerKey());
+    const ok = connectAbly('host', room, name, key);
+    if (ok) updateLobbyStatus('已建立／接管本房桌（房主）。其他人以同房名連線會加入此桌。');
+    else updateLobbyStatus('連線對戰失敗：房主連線未成功。');
+    return !!ok;
+  }
+
+function markSawHostSignal(reason) {
+    net._sawHostSignal = true;
+    net._sawHostSignalAt = Date.now();
+  }
+
+  function tw16NotePlayerEnterAt(seat, enterAt, clientId) {
+    try {
+      if (!net.players) net.players = {};
+      if (!seat || !net.players[seat]) return;
+      const t = Number(enterAt) || 0;
+      if (t && (!net.players[seat].enterAt || t < net.players[seat].enterAt)) net.players[seat].enterAt = t;
+      if (clientId) net.players[seat].clientId = net.players[seat].clientId || clientId;
+    } catch (e) {}
+  }
+
+  function tw16AmINextHostCandidate() {
+    try {
+      const myEnter = Number(net.enterAt) || Date.now();
+      const myId = String(net.clientId || net.playerKey || '');
+      let bestEnter = myEnter;
+      let bestId = myId;
+      const now = Date.now();
+      Object.keys(net.players || {}).forEach(function (seat) {
+        const p = net.players[seat];
+        if (!p) return;
+        if (typeof isPlayerStale === 'function' && isPlayerStale(p, now)) return;
+        const pe = Number(p.enterAt) || Number(p.joinedAt) || now;
+        const pid = String(p.clientId || p.playerKey || seat);
+        if (pe < bestEnter || (pe === bestEnter && pid < bestId)) {
+          bestEnter = pe;
+          bestId = pid;
+        }
+      });
+      return bestId === myId;
+    } catch (e) { return false; }
+  }
+
+  async function tw16MaybeHostSuccession(reason) {
+    if (!isOnlineGuest()) return false;
+    if (net._hostSuccessionBusy) return false;
+    const hostGone = !net.lastHeartbeatAt || (Date.now() - Number(net.lastHeartbeatAt || 0) > 12000);
+    const snapGone = !net.lastSnapshotAt || (Date.now() - Number(net.lastSnapshotAt || 0) > 15000);
+    if (!(hostGone && snapGone)) return false;
+    if (!tw16AmINextHostCandidate()) {
+      try { updateLobbyStatus('房主已離開，等待較早進入的玩家接任房主…'); } catch (e) {}
+      return false;
+    }
+    net._hostSuccessionBusy = true;
+    try {
+      const room = net.room;
+      const name = net.name;
+      const key = window.tw16GetBackend() === 'supabase' ? 'supabase-realtime' : (typeof getStoredAblyApiKey === 'function' ? getStoredAblyApiKey() : '');
+      addLog('房主已離線，由你依進入順序接任房主｜' + (reason || ''));
+      updateLobbyStatus('房主已離開，你依進入順序接任房主…');
+      try { disconnectAbly(false); } catch (e) {}
+      await new Promise(function (r) { setTimeout(r, 400); });
+      applyLobbyTableModeSelection();
+      connectAbly('host', room, name, key);
+      return true;
+    } catch (e) {
+      addLog('接任房主失敗');
+      return false;
+    } finally {
+      net._hostSuccessionBusy = false;
+    }
+  }
+
+  /* Supabase 無法使用時自動改用 Ably 備援：僅限本次，下次進大廳仍預設 Supabase */
+  function tw16FallbackToAbly(reason) {
+    if (window.tw16GetBackend() !== 'supabase') return false;
+    if (!window.Ably) {
+      try { updateLobbyStatus('Supabase 無法使用（' + (reason || '') + '），且 Ably SDK 尚未載入，無法自動備援。請確認網路後重試。'); } catch (e) {}
+      return false;
+    }
+    window.__tw16BackendFallback = 'ably';
+    try { net._sbWakeDone = false; net._sbWakeInProgress = false; } catch (e) {}
+    try { if (typeof window.tw16RefreshBackendSelector === 'function') window.tw16RefreshBackendSelector(); } catch (e) {}
+    try { addLog('Supabase 無法使用（' + (reason || '') + '），自動改用 Ably'); } catch (e) {}
+    try { updateLobbyStatus('Supabase 無法使用（' + (reason || '連線失敗') + '），自動改用 Ably 備援，正在取得 API KEY 並重新連線…'); } catch (e) {}
+    try { disconnectAbly(false); } catch (e) {}
+    setTimeout(function () {
+      lobbyConnectBattle().catch(function (e) {
+        try { updateLobbyStatus('Ably 備援連線失敗：' + (e && e.message ? e.message : e)); } catch (e2) {}
+      });
+    }, 200);
+    return true;
+  }
+
   function connectAbly(role, room, name, key) {
     if (!room) { addLog('請輸入房號'); updateLobbyStatus('請輸入房號。'); return false; }
     const tw16Backend = window.tw16GetBackend();
+    if (tw16Backend === 'supabase' && !window.TW16SupabaseRealtime && tw16FallbackToAbly('SDK 未載入')) return false;
     if (tw16Backend === 'supabase' ? !window.TW16SupabaseRealtime : !window.Ably) { const _bn = window.tw16BackendName(tw16Backend); addLog(_bn + ' SDK 尚未載入'); updateLobbyStatus(_bn + ' SDK 尚未載入，請確認網路後重開。'); return false; }
     const ablyApiKey = tw16Backend === 'supabase' ? 'supabase-realtime' : saveStoredAblyApiKey(key || getStoredAblyApiKey());
     if (!ablyApiKey) { updateLobbyStatus('尚未找到可用 Ably API KEY，請先自動查詢或手動輸入。'); const keyInput = byId('tw16LobbyAblyKey'); if (keyInput) { keyInput.focus(); keyInput.select(); } return false; }
+    if (tw16Backend !== 'supabase') {
+      /* 實際連線用的 key：記下來供左上角顯示，並讓大廳輸入框與之一致 */
+      net.activeAblyApiKey = ablyApiKey;
+      try { const _ki = byId('tw16LobbyAblyKey'); if (_ki && _ki.value !== ablyApiKey) _ki.value = ablyApiKey; } catch (e) {}
+    }
     /* Supabase 免費專案可能休眠：連線前先喚醒，完成後再真正入房 */
     if (tw16Backend === 'supabase' && !net._sbWakeDone) {
       if (net._sbWakeInProgress) return false;
@@ -11868,6 +12307,7 @@ function loadUiSettings() {
     const connectGeneration = (net.connectGeneration || 0) + 1;
     net.connectGeneration = connectGeneration;
     net.role = role;
+    net.enterAt = Number(net.enterAt) || Date.now();
     net.room = String(room).trim();
     // tw16_channel_encrypt_20260803: 房主與來賓都用同一組房號當共用密語，一連線
     // 就開始非同步推導這把頻道加密金鑰，之後送出/收到的封包都會用它整包加解密。
@@ -11887,7 +12327,10 @@ function loadUiSettings() {
     net.connecting = true;
     net.backend = tw16Backend;
     net.connectionState = 'connecting';
-    net.assignedSeat = role === 'host' ? 'east' : '';
+    net.assignedSeat = role === 'host' ? (net._preferStickySeat || tw16LoadStickySeat(String(room || ''), net.playerKey) || 'east') : '';
+    if (role === 'host' && net.assignedSeat) {
+      try { tw16SaveStickySeat(String(room || ''), net.playerKey, net.assignedSeat); } catch (e) {}
+    }
     net.lastAppliedSeq = 0;
     net.lastAppliedSnapshotSeq = 0;
     net.lastAppliedSnapshotHash = '';
@@ -11918,6 +12361,8 @@ function loadUiSettings() {
     net.seenRoomMessageOrder = [];
     net.events = [];
     net.players = {};
+    /* 房主重登會清空 players；標記時間點，避免寬限內把未重新入座的來賓位強制托管 */
+    if (role === 'host') net.hostPlayersResetAt = Date.now();
     if (role === 'guest') {
       clearGuestApiKeyRetry('guest-connect-new-key');
       net.guestKeyRetryRoom = String(room || '').trim();
@@ -11930,9 +12375,12 @@ function loadUiSettings() {
     net.guestInitialAutoplayOffNotifiedSeats = {};
     net.guestInitialAutoplayOffAtBySeat = {};
     if (role === 'host') {
-      net.players.east = { clientId: net.clientId, playerKey: net.playerKey, instanceId: net.instanceId, name: net.name || '房主', seat: 'east', autoplay: false, lastSeenAt: Date.now() };
-      state.viewSeat = 'east';
-      state.seatAutoPlay.east = false;
+      const hostSeat = (net.assignedSeat === 'east' || net.assignedSeat === 'south' || net.assignedSeat === 'west' || net.assignedSeat === 'north') ? net.assignedSeat : 'east';
+      net.assignedSeat = hostSeat;
+      net.players[hostSeat] = { clientId: net.clientId, playerKey: net.playerKey, instanceId: net.instanceId, name: net.name || '房主', seat: hostSeat, autoplay: false, enterAt: Number(net.enterAt || Date.now()), lastSeenAt: Date.now() };
+      state.viewSeat = hostSeat;
+      state.seatAutoPlay[hostSeat] = false;
+      try { tw16SaveStickySeat(String(net.room || room || ''), net.playerKey, hostSeat); } catch (e) {}
     } else {
       state.viewSeat = networkSeatOrder().includes(state.viewSeat) ? state.viewSeat : (networkSeatOrder()[0] || 'east');
       applyGuestJoinDefaultSettings('guest-connect');
@@ -11940,6 +12388,15 @@ function loadUiSettings() {
     }
     updateRoomText();
     updateLobbyStatus(role === 'host' ? ('正在連線 ' + window.tw16BackendName(tw16Backend) + '。房間建立完成後會自動進入牌桌並開局。') : ('正在連線 ' + window.tw16BackendName(tw16Backend) + '，連線完成後會要求房主分配座位。'));
+
+    let everConnected = false;
+    if (tw16Backend === 'supabase') {
+      /* Supabase 逾時未連上也視為不可用，觸發 Ably 備援 */
+      setTimeout(function () {
+        if (net.connectGeneration !== connectGeneration || everConnected || !net.connecting) return;
+        failConnection('Supabase 連線逾時');
+      }, 25000);
+    }
 
     function failConnection(text) {
       if (net.connectGeneration !== connectGeneration) return;
@@ -11957,11 +12414,13 @@ function loadUiSettings() {
       net.connectionState = 'failed';
       updateRoomText();
       renderAll();
+      if (tw16Backend === 'supabase' && !everConnected && tw16FallbackToAbly(text || '連線失敗')) return;
       if (role === 'guest') scheduleGuestApiKeyRetry('connect-failed', 900);
     }
 
     function finishConnected() {
       if (net.connectGeneration !== connectGeneration) return;
+      everConnected = true;
       const wasConnected = !!net.connected;
       net.connected = true;
       net.connecting = false;
@@ -13269,10 +13728,12 @@ function loadUiSettings() {
     const humanSeat = localHumanSeat();
     function seatNeedsManualExchange(seat) {
       if (isSeatAutoForOpeningExchange(seat)) return false;
+      const localSeat = humanSeat || localHumanSeat();
+      if (seat === localSeat && isOnlineHost()) return true;
+      if (seat === localSeat && canLocalHumanOperateSeat(seat)) return true;
       try {
-        if (typeof isSeatAssignedHuman === 'function' && isSeatAssignedHuman(seat)) return true;
+        if (typeof isSeatAssignedHuman === 'function' && isSeatAssignedHuman(seat) && seat !== localSeat) return true;
       } catch (e) {}
-      if (seat === humanSeat && canLocalHumanOperateSeat(seat)) return true;
       return false;
     }
     dealOrder.forEach(seat => {
@@ -13282,7 +13743,7 @@ function loadUiSettings() {
     });
 
     const waitingSeats = dealOrder.filter(seatNeedsManualExchange);
-    const localNeedsUi = waitingSeats.indexOf(humanSeat) >= 0 && canLocalHumanOperateSeat(humanSeat);
+    const localNeedsUi = waitingSeats.indexOf(humanSeat) >= 0 && (isOnlineHost() || canLocalHumanOperateSeat(humanSeat));
 
     if (waitingSeats.length) {
       const EXCHANGE_LIMIT_MS = 20000;
@@ -13607,21 +14068,32 @@ function loadUiSettings() {
 
   function submitDiscard(seat, tileId, source, options = {}) {
     if (isOnlineGuest() && source !== 'remote' && seat === net.assignedSeat && !state.seatAutoPlay[seat]) {
-      // tw16_guest_local_optimistic_discard_20260707:
-      // 只改「點擊者自己」的視覺反應：來賓本地先把被點的牌拿掉，讓點擊立即有回饋；
-      // 房主仍保有原本完整的合法性檢查與權威狀態。若房主拒絕，就把來賓畫面回復；
-      // 若房主之後送來的 snapshot 還沒反映這次棄牌，來賓端會把這個 optimistic 狀態
-      // 疊回 snapshot 上，避免被中途 pulse/sync 快照「彈回舊手牌」造成二次閃爍。
-      // tw16_guest_local_discard_manual_only_20260708: 這個「先本地出牌再等房主確認」
-      // 的樂觀更新只能用在來賓「手動」點擊出牌。若該來賓座位目前正被電腦托管
-      // （state.seatAutoPlay[seat] 為 true，不論是來賓自己開的托管，還是房主在來賓
-      // 逾時後代管），一律回到原本「完全依房主快照出牌」的舊行為，否則托管觸發的
-      // 出牌一旦被本地樂觀狀態卡住（例如送出失敗或房主拒絕未正確回滾），就會永遠卡死。
-      if (hasPendingGuestLocalDiscard(seat)) return false;
+      // 來賓防連續重複出牌：同回合只允許送出一次 discard intent，避免牌數錯亂
+      if (hasPendingGuestLocalDiscard(seat) || net._guestDiscardInFlight) {
+        try { recordNetworkEvent('guest-discard-dup-block', '來賓重複出牌已阻擋（進行中）', { seat, tileId: String(tileId || '') }); } catch (_) {}
+        return false;
+      }
+      if (tw16HasDiscardedThisTurn(seat)) {
+        try { recordNetworkEvent('guest-discard-dup-block', '來賓同回合重複出牌已阻擋', { seat, tileId: String(tileId || '') }); } catch (_) {}
+        return false;
+      }
+      if (state.ended || state.locked || state.pending || state.phase !== 'discard' || state.turn !== seat) return false;
+      const _gHand = state.hands && state.hands[seat];
+      if (!Array.isArray(_gHand) || _gHand.length % 3 !== 2) return false;
+      if (!_gHand.some(t => t && String(t.id) === String(tileId))) return false;
+      const _dupKey = [String(state.handId || 0), String(seat), String(state.turn || ''), String(state.lastActionId || 0), String(tileId || '')].join('|');
+      if (net._guestLastDiscardKey && net._guestLastDiscardKey === _dupKey) return false;
+      net._guestDiscardInFlight = true;
+      net._guestLastDiscardKey = _dupKey;
+      try { tw16MarkDiscardTurnGuard(seat); } catch (_) {}
       const optimisticStarted = startGuestLocalDiscardPending(seat, tileId, source);
       const sent = publishNetworkIntent({ action: 'discard', tileId });
-      if (!sent) rollbackGuestLocalDiscardPending('intent-send-failed');
-      else if (!optimisticStarted) {
+      if (!sent) {
+        net._guestDiscardInFlight = false;
+        try { tw16ClearDiscardTurnGuard(); } catch (_) {}
+        net._guestLastDiscardKey = '';
+        rollbackGuestLocalDiscardPending('intent-send-failed');
+      } else if (!optimisticStarted) {
         try { recordNetworkEvent('guest-local-discard-skip', '來賓即時出牌未能先套用本地畫面，仍送出意圖', { seat, tileId }); } catch (_) {}
       }
       return sent;
@@ -19659,7 +20131,7 @@ function chooseExactDiscardTile(seat) {
     if (state.continuousRun.enabled && !isOnlineGuest()) return true;
     if (!isNetworked()) return !!state.seatAutoPlay[state.viewSeat];
     if (isOnlineHost()) {
-      return SEATS.some(seat => !!state.seatAutoPlay[seat] && (seat === 'east' || isSeatAssignedHuman(seat)));
+      return SEATS.some(seat => !!state.seatAutoPlay[seat] && isSeatAssignedHuman(seat));
     }
     if (isOnlineGuest()) {
       const guestSeat = networkSeatOrder().includes(net.assignedSeat) ? net.assignedSeat : (SEATS.includes(state.viewSeat) ? state.viewSeat : '');
@@ -21619,6 +22091,21 @@ if (action === 'submenu-tiles') {
     return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
   }
 
+  /* 存檔／還原：各座位「電腦托管」開關紀錄（僅布林值；缺資料時回傳 null，讓舊存檔沿用 state 內的值） */
+  function captureSeatAutoPlayRecord() {
+    const rec = {};
+    SEATS.forEach(seat => { rec[seat] = !!(state.seatAutoPlay && state.seatAutoPlay[seat]); });
+    return rec;
+  }
+
+  function sanitizeSeatAutoPlayRecord(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const rec = {};
+    let any = false;
+    SEATS.forEach(seat => { if (typeof raw[seat] === 'boolean') { rec[seat] = raw[seat]; any = true; } });
+    return any ? rec : null;
+  }
+
   function normalizeGameSavePoint(point, index) {
     if (!point || typeof point !== 'object') return null;
     const data = point.data && typeof point.data === 'object' ? point.data : point;
@@ -21629,7 +22116,12 @@ if (action === 'submenu-tiles') {
       id,
       label: String(point.label || point.timeLabel || formatGameSavePointTime(savedAt)),
       savedAt,
-      data: { state: data.state, tileSerial: Number(data.tileSerial) || 0 }
+      data: {
+        state: data.state,
+        tileSerial: Number(data.tileSerial) || 0,
+        /* 各座位托管否紀錄；舊存檔沒有此欄時，退而採用 state.seatAutoPlay */
+        seatAutoPlay: sanitizeSeatAutoPlayRecord(data.seatAutoPlay) || sanitizeSeatAutoPlayRecord(data.state.seatAutoPlay)
+      }
     };
   }
 
@@ -21699,7 +22191,7 @@ if (action === 'submenu-tiles') {
       id: 'save_' + savedAt + '_' + Math.random().toString(36).slice(2, 8),
       label,
       savedAt,
-      data: { state, tileSerial }
+      data: { state, tileSerial, seatAutoPlay: captureSeatAutoPlayRecord() }
     };
     const points = getGameSavePoints();
     const saved = writeGameSavePoints([point].concat(points));
@@ -21734,10 +22226,11 @@ if (action === 'submenu-tiles') {
     const flowers = s.flowers && typeof s.flowers === 'object' ? s.flowers : {};
     const melds = s.melds && typeof s.melds === 'object' ? s.melds : {};
     const chips = s.chips && typeof s.chips === 'object' ? s.chips : {};
+    const autoRec = sanitizeSeatAutoPlayRecord(point && point.data && point.data.seatAutoPlay) || sanitizeSeatAutoPlayRecord(s.seatAutoPlay) || {};
     const seatsHtml = SEATS.map(seat => {
       const lower = buildRestorePointTileStripHtml(flowers[seat] || []) + buildRestorePointMeldStripHtml(melds[seat] || []);
       return '<div class="saveRestoreSeatReveal">'
-        + '<div class="saveRestoreSeatHead"><span>' + escapeHtml(SEAT_NAME[seat]) + '</span><span>' + escapeHtml(String(Number(chips[seat]) || 0)) + ' 籌碼</span></div>'
+        + '<div class="saveRestoreSeatHead"><span>' + escapeHtml(SEAT_NAME[seat]) + '</span><span>' + escapeHtml(String(Number(chips[seat]) || 0)) + ' 籌碼' + (autoRec[seat] === true ? '｜托管' : '') + '</span></div>'
         + '<div class="saveRestoreTilesLine"><b>手牌</b>' + buildRestorePointTileStripHtml(hands[seat] || []) + '</div>'
         + '<div class="saveRestoreTilesLine"><b>花/副露</b>' + (lower || '<span class="saveRestoreEmpty">無</span>') + '</div>'
         + '</div>';
@@ -21755,13 +22248,15 @@ if (action === 'submenu-tiles') {
     const rows = points.map(point => {
       const viewSeat = restorePointInitialViewSeat(point);
       return '<div class="saveRestorePointRow" data-save-row-id="' + escapeHtml(point.id) + '">'
-        + '<div class="saveRestorePointInfo"><b>時間點 ' + escapeHtml(point.label) + '</b><span>' + escapeHtml(describeGameSavePoint(point)) + '</span>'
-        + buildRestorePointRevealHtml(point)
+        + '<div class="saveRestorePointInfo"><b>時間點 ' + escapeHtml(point.label) + '</b>'
         + '<div class="saveRestorePointActions">'
         + '<button class="btn" data-restore-id="' + escapeHtml(point.id) + '">還原</button>'
         + '<button class="btn" data-view-cycle-id="' + escapeHtml(point.id) + '" data-view-seat="' + escapeHtml(viewSeat) + '">視角：' + escapeHtml(SEAT_NAME[viewSeat] || viewSeat) + '</button>'
         + '<button class="btn red" data-delete-restore-id="' + escapeHtml(point.id) + '">刪除</button>'
-        + '</div></div></div>';
+        + '</div>'
+        + '<span>' + escapeHtml(describeGameSavePoint(point)) + '</span>'
+        + buildRestorePointRevealHtml(point)
+        + '</div></div>';
     }).join('');
     openUtilityPanel('還原牌局', '<div class="saveRestorePanel">'
       + '<div class="saveRestoreToolbar"><div class="saveRestoreHint">選擇要還原的時間點；每一筆下方可直接看四家的實體牌例。按「視角」可依序切換東家／南家／西家／北家，按「還原」時會用該視角進入牌局。</div></div>'
@@ -21802,6 +22297,18 @@ if (action === 'submenu-tiles') {
       Object.keys(state).forEach(k => { if (Object.prototype.hasOwnProperty.call(save.state, k)) state[k] = save.state[k]; });
       state.viewSeat = selectedViewSeat;
       if (!SEATS.includes(state.viewSeat)) state.viewSeat = 'east';
+      /* 依存檔紀錄回復各座位的電腦托管狀態（連線房主還原時，來賓座位也一併強制回復） */
+      const savedAutoRec = sanitizeSeatAutoPlayRecord(save.seatAutoPlay) || sanitizeSeatAutoPlayRecord(save.state.seatAutoPlay);
+      const restoredAuto = {};
+      SEATS.forEach(seat => {
+        if (savedAutoRec && typeof savedAutoRec[seat] === 'boolean') restoredAuto[seat] = savedAutoRec[seat];
+        else restoredAuto[seat] = typeof (state.seatAutoPlay && state.seatAutoPlay[seat]) === 'boolean' ? !!state.seatAutoPlay[seat] : seatAutoplayDefault(seat);
+      });
+      state.seatAutoPlay = restoredAuto;
+      SEATS.forEach(seat => {
+        const pl = net.players && net.players[seat];
+        if (pl && pl.clientId && isOnlineHost()) pl.autoplay = !!restoredAuto[seat];
+      });
       trimWinHistory();
       tileSerial = Number(save.tileSerial) || inferNextTileSerial();
       ensureContinuousRunObject();
@@ -21814,6 +22321,8 @@ if (action === 'submenu-tiles') {
       addLog('牌局已還原：' + point.label + '（視角：' + (SEAT_NAME[state.viewSeat] || state.viewSeat) + '）');
       closeUtilityPanel();
       renderAll();
+      /* 房主還原：立即送出快照，讓來賓端也套用各座位的托管紀錄 */
+      if (isOnlineHost()) { try { publishNetworkSnapshot('host-restore-autoplay', true); } catch (e) {} }
       scheduleDriveSeat('restore');
     } catch (e) {
       addLog('還原失敗：還原點格式錯誤');
@@ -25039,7 +25548,7 @@ function showIntegrityReport(precomputed) {
       seatLabelText(seat),
       String(state.chips[seat] ?? 0),
       state.declaredTing[seat] ? 'ting' : '',
-      (state.pending && pendingHumanSeats(state.pending).includes(seat)) ? 'deciding' : ''
+      (state.pending && publicPendingHumanSeats(state.pending).includes(seat)) ? 'deciding' : ''
     ].join('~')).join('|');
     if (miniDashboardRenderKey !== renderKey || grid.dataset.renderKey !== renderKey) {
       /* 保留已選取（+號）的座位 */
@@ -25052,7 +25561,7 @@ function showIntegrityReport(precomputed) {
       grid.replaceChildren();
       SEATS.forEach(seat => {
         const card = document.createElement('div');
-        const _deciding = !!(state.pending && pendingHumanSeats(state.pending).includes(seat));
+        const _deciding = !!(state.pending && publicPendingHumanSeats(state.pending).includes(seat));
         const _pausedBy = state.debugPauseBy === seat;
         card.className = 'tw16-mini-dashboard-card' + (seat === state.turn ? ' active' : '') + (!isSeatActiveInTable(seat) ? ' tw16-mini-dashboard-inactive' : '') + (_deciding ? ' deciding' : '') + (_pausedBy ? ' tw16-paused-by-card' : '');
         const name = document.createElement('div');
@@ -25595,7 +26104,8 @@ function showIntegrityReport(precomputed) {
 
   function localHumanSeat() {
     if (isOnlineGuest()) return net.assignedSeat || state.viewSeat;
-    if (isOnlineHost()) return 'east';
+    /* 房主座風可固定為非東（重登／接任），不可寫死 east */
+    if (isOnlineHost()) return net.assignedSeat || state.viewSeat || 'east';
     return state.viewSeat;
   }
 
