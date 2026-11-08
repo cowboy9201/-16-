@@ -9692,6 +9692,28 @@ function loadUiSettings() {
     return SEAT_NAME[seat] + (isSeatComputerControlled(seat) ? '(代管)' : '');
   }
 
+  /* 迷你儀表板座位名稱：電腦代管者顯示「托管」，真人開托管顯示「名字托管」；來賓端直接採用房主送來的名稱，確保與房主一致 */
+  function computeMiniSeatLabelText(seat) {
+    if (!SEATS.includes(seat)) return '';
+    const base = seatLabelText(seat);
+    if (isSeatComputerControlled(seat)) {
+      const rest = base.slice(SEAT_NAME[seat].length);
+      /* 無真人 → (托管)；真人開托管 → (名字托管) */
+      if (rest === '(代管)' || !rest) return SEAT_NAME[seat] + '(托管)';
+      return SEAT_NAME[seat] + rest.replace(/\)$/, '') + '托管)';
+    }
+    return base;
+  }
+  function buildMiniSeatNames() {
+    const out = {};
+    SEATS.forEach(seat => { out[seat] = computeMiniSeatLabelText(seat); });
+    return out;
+  }
+  function miniDashboardSeatLabelText(seat) {
+    if (isOnlineGuest() && state.miniSeatNames && typeof state.miniSeatNames[seat] === 'string') return state.miniSeatNames[seat];
+    return computeMiniSeatLabelText(seat);
+  }
+
   function applyLocalPlayerName(name, reason) {
     const nextName = String(name || '').trim() || '玩家';
     net.name = nextName;
@@ -10469,6 +10491,7 @@ function loadUiSettings() {
       scoreChipSettings: currentScoreChipSettings(),
       handVisualColors: state.handVisualColors,
       seatAutoPlay: state.seatAutoPlay,
+      miniSeatNames: buildMiniSeatNames(),
       declaredTing: state.declaredTing,
       activeDrawnTileIds: state.activeDrawnTileIds,
       voiceEvents: state.voiceEvents,
@@ -10495,7 +10518,7 @@ function loadUiSettings() {
   const NETWORK_STATE_KEY_PACK = {
     handId: 'h', windRound: 'wr', handNo: 'hn', dealerRepeat: 'dr', kongsThisHand: 'kh', dealer: 'd', viewSeat: 'v', turn: 't', phase: 'p', pending: 'pd', actionDeadlineAt: 'ad', debugPauseBy: 'dpb',
     wall: 'w', physicalWall: 'pw', openingDeal: 'od', fixedSeatLabelStyles: 'fs', labelPositionsLocked: 'lp', hands: 'hs', melds: 'm', flowers: 'f',
-    discards: 'ds', chips: 'c', scoreUnits: 'su', scoreChipSettings: 'sc', handVisualColors: 'vc', seatAutoPlay: 'ap', declaredTing: 'dt', activeDrawnTileIds: 'di', voiceEvents: 've', exchange: 'ex', nextRoundPlan: 'nr', lastSettlement: 'ls', winHistory: 'wh', opponentMemory: 'om', lastActionId: 'la', ended: 'e', locked: 'lk', lockedAt: 'lt', tableMode: 'tm'
+    discards: 'ds', chips: 'c', scoreUnits: 'su', scoreChipSettings: 'sc', handVisualColors: 'vc', seatAutoPlay: 'ap', miniSeatNames: 'msn', declaredTing: 'dt', activeDrawnTileIds: 'di', voiceEvents: 've', exchange: 'ex', nextRoundPlan: 'nr', lastSettlement: 'ls', winHistory: 'wh', opponentMemory: 'om', lastActionId: 'la', ended: 'e', locked: 'lk', lockedAt: 'lt', tableMode: 'tm'
   };
   const NETWORK_STATE_KEY_UNPACK = Object.keys(NETWORK_STATE_KEY_PACK).reduce((out, key) => { out[NETWORK_STATE_KEY_PACK[key]] = key; return out; }, {});
 
@@ -25545,7 +25568,7 @@ function showIntegrityReport(precomputed) {
       seat,
       seat === state.turn ? 'active' : '',
       dealerDashboardPrefixText(seat),
-      seatLabelText(seat),
+      miniDashboardSeatLabelText(seat),
       String(state.chips[seat] ?? 0),
       state.declaredTing[seat] ? 'ting' : '',
       (state.pending && publicPendingHumanSeats(state.pending).includes(seat)) ? 'deciding' : ''
@@ -25568,7 +25591,7 @@ function showIntegrityReport(precomputed) {
         name.className = 'tw16-mini-dashboard-seat';
         const dealerPrefix = (seat === state.dealer) ? '莊' : '';
         name.innerHTML = (dealerPrefix ? '<span class="tw16-mini-dashboard-dealer">' + escapeHtml(dealerPrefix) + '</span>' : '') + (function(){
-            const _full = seatLabelText(seat);
+            const _full = miniDashboardSeatLabelText(seat);
             const _full2 = String(_full || '');
             const _wind = SEAT_NAME[seat] ? SEAT_NAME[seat].charAt(0) : '';
             const _rest = (_wind && _full2.indexOf(SEAT_NAME[seat]) === 0) ? _full2.slice(SEAT_NAME[seat].length) : _full2;
