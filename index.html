@@ -4713,6 +4713,95 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
   const NETWORK_WIRE_COMPRESSION_MIN_SAVING_BYTES = 64;
   const NETWORK_WIRE_COMPRESSION_ALG = 'lzw16-json-v1';
 
+  function isAblyBackend() {
+    try { return (net && net.backend === 'ably') || (typeof window.tw16GetBackend === 'function' && window.tw16GetBackend() === 'ably'); } catch (e) { return false; }
+  }
+  /* Ably 免費額度／頻道限流較嚴：滿桌時拉長間隔，避免 snapshot 風暴卡頓 */
+  function networkHumanSeatCount() {
+    try {
+      let n = 0;
+      (typeof networkSeatOrder === 'function' ? networkSeatOrder() : ['east','south','west','north']).forEach(function (seat) {
+        const p = net.players && net.players[seat];
+        if (p && (p.role === 'host' || p.human || p.clientId || p.instanceId) && !(typeof isPlayerStale === 'function' && isPlayerStale(p, Date.now()))) n += 1;
+      });
+      return n;
+    } catch (e) { return 0; }
+  }
+  function networkSnapshotDebounceMs() {
+    if (!isAblyBackend()) return (GAME_RULES && GAME_RULES.snapshotDebounceMs) || 24;
+    const humans = networkHumanSeatCount();
+    if (humans >= 4) return 120;
+    if (humans >= 3) return 80;
+    return 48;
+  }
+  function networkStateMinIntervalMs() {
+    if (!isAblyBackend()) return NETWORK_STATE_MIN_INTERVAL_MS;
+    const humans = networkHumanSeatCount();
+    if (humans >= 4) return 900;
+    if (humans >= 3) return 700;
+    return 550;
+  }
+  function networkPulseMinIntervalMs() {
+    if (!isAblyBackend()) return NETWORK_PULSE_MIN_INTERVAL_MS;
+    const humans = networkHumanSeatCount();
+    if (humans >= 4) return 18000;
+    if (humans >= 3) return 15000;
+    return 12000;
+  }
+  function networkGuestSyncMinIntervalMs() {
+    if (!isAblyBackend()) return NETWORK_GUEST_SYNC_MIN_INTERVAL_MS;
+    const humans = networkHumanSeatCount();
+    if (humans >= 4) return 3200;
+    if (humans >= 3) return 2500;
+    return 2000;
+  }
+  function networkHeartbeatPlayersGapMs() {
+    if (!isAblyBackend()) return 3000;
+    const humans = networkHumanSeatCount();
+    if (humans >= 4) return 8000;
+    if (humans >= 3) return 5500;
+    return 4000;
+  }
+  function networkGuestSyncReplyCooldownMs(dataType) {
+    if (!isAblyBackend()) return (dataType === 'hello' || dataType === 'human') ? 700 : 2200;
+    const humans = networkHumanSeatCount();
+    if (dataType === 'hello' || dataType === 'human') return humans >= 4 ? 1600 : (humans >= 3 ? 1100 : 900);
+    return humans >= 4 ? 4000 : (humans >= 3 ? 3200 : 2500);
+  }
+  const TW16_RANDOM_PLAYER_NAMES = [
+    '小明','小華','小美','志明','雅婷','家豪','淑芬','俊傑','怡君','建宏',
+    '美玲','志偉','雅惠','冠宇','佳蓉','宗翰','欣怡','柏翰','詩涵','宇軒',
+    '沛蓉','子晴','宥廷','品妍','承恩','心怡','宥辰','宜庭','浩然','詩婷',
+    '阿強','阿偉','阿芳','阿珍','阿德','小龍','小鳳','大文','美華','文雄'
+  ];
+  function tw16IsBlankPlayerName(name) {
+    const v = String(name || '').trim();
+    return !v || v === '(請輸入)' || v === '請輸入' || v === '玩家' || v === '來賓';
+  }
+  function tw16PickRandomPlayerName(usedSet) {
+    const used = usedSet || new Set();
+    const pool = TW16_RANDOM_PLAYER_NAMES.filter(function (n) { return !used.has(n); });
+    const list = pool.length ? pool : TW16_RANDOM_PLAYER_NAMES;
+    const name = list[Math.floor(Math.random() * list.length)];
+    if (used.has(name)) return name + String(2 + Math.floor(Math.random() * 98));
+    return name;
+  }
+  function tw16CollectUsedPlayerNames() {
+    const used = new Set();
+    try {
+      const players = (net && net.players) || {};
+      Object.keys(players).forEach(function (seat) {
+        const n = players[seat] && players[seat].name;
+        if (n && !tw16IsBlankPlayerName(n)) used.add(String(n).trim());
+      });
+    } catch (e) {}
+    return used;
+  }
+  function tw16ResolvePlayerName(name) {
+    if (!tw16IsBlankPlayerName(name)) return String(name || '').trim();
+    return tw16PickRandomPlayerName(tw16CollectUsedPlayerNames());
+  }
+
   function networkRoomChannelName(room) {
     return 'tw16-room-' + String(room || '').trim();
   }
@@ -5983,7 +6072,8 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
         // hello 攜帶 action:'join' 時，直接在此處理入座，不依賴 intent 路徑
         if (data.type === 'hello' && data.action === 'join') {
           const joinPref = (data.preferredSeat === 'east' || data.preferredSeat === (typeof tw16HostOwnSeat === 'function' ? tw16HostOwnSeat() : 'east')) ? '' : (data.preferredSeat || '');
-          let joinSeat = assignGuestSeat(data.clientId, data.name || '來賓', data.playerKey || '', joinPref, data.senderInstanceId || data.sessionId || '');
+          const joinName = tw16IsBlankPlayerName(data.name) ? tw16PickRandomPlayerName(tw16CollectUsedPlayerNames()) : (data.name || '來賓');
+          let joinSeat = assignGuestSeat(data.clientId, joinName, data.playerKey || '', joinPref, data.senderInstanceId || data.sessionId || '');
           if (joinSeat === 'east' || (typeof tw16IsHostLockedSeat === 'function' && tw16IsHostLockedSeat(joinSeat))) joinSeat = '';
           if (joinSeat) {
             // tw16_hand_privacy_ecdh_20260802: 公鑰擷取已統一交給上面的
@@ -6002,12 +6092,16 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
             publishNetworkAck(data, false, 'room-full');
           }
           publishNetworkSnapshot('guest-join');
-          setTimeout(() => publishNetworkSnapshot('guest-join-confirm-1'), 260);
-          setTimeout(() => publishNetworkSnapshot('guest-join-confirm-2'), 900);
+          if (!isAblyBackend()) {
+            setTimeout(() => publishNetworkSnapshot('guest-join-confirm-1'), 260);
+            setTimeout(() => publishNetworkSnapshot('guest-join-confirm-2'), 900);
+          } else {
+            setTimeout(() => publishNetworkSnapshot('guest-join-confirm-1'), 500);
+          }
           return true;
         }
         const now = Date.now();
-        if (data.type !== 'heartbeat' || !net.lastHeartbeatPlayersAt || now - Number(net.lastHeartbeatPlayersAt || 0) > 3000) {
+        if (data.type !== 'heartbeat' || !net.lastHeartbeatPlayersAt || now - Number(net.lastHeartbeatPlayersAt || 0) > networkHeartbeatPlayersGapMs()) {
           net.lastHeartbeatPlayersAt = now;
           publishNetworkPlayers(data.type + '-players');
         }
@@ -6018,7 +6112,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
             /* lag_fix_storm: 落後的座位會每1~2秒要求同步，房主每次都對全桌廣播整包快照，
                讓其他座位也跟著變慢。同一來賓冷卻內只回一次（hello/human 冷卻較短）。 */
             const _cdKey = String(data.sessionId || data.senderInstanceId || data.clientId || assigned || '');
-            const _cdMs = (data.type === 'hello' || data.type === 'human') ? 700 : 2200;
+            const _cdMs = networkGuestSyncReplyCooldownMs(data.type);
             if (!net._guestSyncReplyAt) net._guestSyncReplyAt = {};
             const _cdNow = Date.now();
             if (!_cdKey || _cdNow - Number(net._guestSyncReplyAt[_cdKey] || 0) >= _cdMs) {
@@ -7896,7 +7990,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
       applyLobbyTableModeSelection();
       if (isNetworked()) disconnectAbly(false);
       assignOfflineRandomViewSeat('lobby-offline');
-      applyLocalPlayerName(nameValue(), 'lobby-offline');
+      applyLocalPlayerName(tw16ResolvePlayerName(nameValue()), 'lobby-offline');
       hideInterface329Lobby();
       newGame();
     });
@@ -10902,7 +10996,7 @@ function loadUiSettings() {
   function scheduleNetworkSnapshot(reason) {
     if (!isOnlineHost() || !net.channel) return;
     clearTimeout(net.snapshotTimer);
-    net.snapshotTimer = setTimeout(() => publishNetworkSnapshot(reason || 'state'), GAME_RULES.snapshotDebounceMs);
+    net.snapshotTimer = setTimeout(() => publishNetworkSnapshot(reason || 'state'), networkSnapshotDebounceMs());
   }
 
   function networkReliableOptionsForSnapshot(reason, targetOptions) {
@@ -10951,9 +11045,12 @@ function loadUiSettings() {
       const criticalSnapshot = /new-game|settlement|player-stale|opening|draw|discard|claim|kong|win|flower|intent|action|turn-timeout-autoplay|manual/i.test(snapshotReason);
       const forced = criticalSnapshot || (!!forceSend && !lowPrioritySnapshot);
       if (lowPrioritySnapshot) {
-        if (signature === net.lastSnapshotSignature && now - Number(net.lastStatePublishAt || 0) < NETWORK_PULSE_MIN_INTERVAL_MS) return null;
-        if (now - Number(net.lastStatePublishAt || 0) < NETWORK_STATE_MIN_INTERVAL_MS) return null;
+        if (signature === net.lastSnapshotSignature && now - Number(net.lastStatePublishAt || 0) < networkPulseMinIntervalMs()) return null;
+        if (now - Number(net.lastStatePublishAt || 0) < networkStateMinIntervalMs()) return null;
       } else if (!forced && signature === net.lastSnapshotSignature) {
+        if (isAblyBackend() && networkHumanSeatCount() >= 3 && now - Number(net.lastStatePublishAt || 0) < networkStateMinIntervalMs()) return null;
+        return null;
+      } else if (!forced && isAblyBackend() && networkHumanSeatCount() >= 4 && now - Number(net.lastStatePublishAt || 0) < 280) {
         return null;
       }
       net.lastSnapshotSignature = signature;
@@ -12102,7 +12199,10 @@ function loadUiSettings() {
     }
     if (msg.action === 'join') {
       const intentPref = (msg.preferredSeat === 'east') ? '' : (msg.preferredSeat || '');
-      let seat = assignGuestSeat(msg.clientId, msg.name || '來賓', msg.playerKey || '', intentPref, msg.senderInstanceId || '');
+      const intentName = (typeof tw16IsBlankPlayerName === 'function' && tw16IsBlankPlayerName(msg.name))
+        ? tw16PickRandomPlayerName(tw16CollectUsedPlayerNames())
+        : (msg.name || '來賓');
+      let seat = assignGuestSeat(msg.clientId, intentName, msg.playerKey || '', intentPref, msg.senderInstanceId || '');
       if (seat === 'east' || (typeof tw16IsHostLockedSeat === 'function' && tw16IsHostLockedSeat(seat))) seat = '';
       if (seat) {
         if (msg.localAutoplay === true && msg.stopTimeoutTakeover !== true) {
@@ -12118,8 +12218,12 @@ function loadUiSettings() {
         publishNetworkAck(msg, false, 'room-full');
       }
       publishNetworkSnapshot('guest-join');
-      setTimeout(() => publishNetworkSnapshot('guest-join-confirm-1'), 260);
-      setTimeout(() => publishNetworkSnapshot('guest-join-confirm-2'), 900);
+      if (!isAblyBackend()) {
+        setTimeout(() => publishNetworkSnapshot('guest-join-confirm-1'), 260);
+        setTimeout(() => publishNetworkSnapshot('guest-join-confirm-2'), 900);
+      } else {
+        setTimeout(() => publishNetworkSnapshot('guest-join-confirm-1'), 500);
+      }
       return true;
     }
     if (msg.action === 'syncRequest') {
@@ -12285,14 +12389,14 @@ function loadUiSettings() {
         const required = isGuestSyncRequired();
         const stale = !net.lastSnapshotAt || now - Number(net.lastSnapshotAt || 0) > NETWORK_GUEST_SYNC_STALE_MS;
         if (seatMissing || required || stale) {
-          if (now - Number(net.lastSyncRequestAt || 0) >= NETWORK_GUEST_SYNC_MIN_INTERVAL_MS) {
+          if (now - Number(net.lastSyncRequestAt || 0) >= networkGuestSyncMinIntervalMs()) {
             requestNetworkSync(required ? 'guest-forced-sync' : (stale ? 'snapshot-stale' : 'guest-seat-sync'));
           }
           if (required || stale) driveGuestSnapshotSync(required ? 'pulse-forced' : 'pulse-stale');
         }
         if (stale) { try { tw16MaybeHostSuccession('pulse-stale'); } catch (e) {} }
       }
-    }, 3000); /* egress: pulse 3s */
+    }, (isAblyBackend() && networkHumanSeatCount() >= 4) ? 4500 : 3000); /* Ably 滿桌拉長心跳，降低限流 */
   }
 
 
@@ -12574,7 +12678,12 @@ function loadUiSettings() {
     const roomEl = byId('tw16LobbyRoom');
     const nameEl = byId('tw16LobbyName') || byId('tw16LobbyPlayerName');
     const room = String((roomEl && roomEl.value) || '').trim();
-    const name = String((nameEl && nameEl.value) || '').trim() || '(請輸入)';
+    let name = String((nameEl && nameEl.value) || '').trim();
+    if (tw16IsBlankPlayerName(name)) {
+      name = tw16ResolvePlayerName('');
+      if (nameEl) nameEl.value = name;
+      try { localStorage.setItem('tw16_last_player_name', name); } catch (e) {}
+    }
     if (!room) { updateLobbyStatus('請輸入房號。'); return false; }
     const myConnectToken = (net._lobbyConnectToken = (Number(net._lobbyConnectToken) || 0) + 1);
     updateLobbyStatus('連線對戰：尋找同一房桌並判定房主…');
@@ -12771,7 +12880,12 @@ function markSawHostSignal(reason) {
     // tw16_channel_encrypt_20260803: 房主與來賓都用同一組房號當共用密語，一連線
     // 就開始非同步推導這把頻道加密金鑰，之後送出/收到的封包都會用它整包加解密。
     net.chanKeyPromise = tw16DeriveRoomChannelKey(net.room);
-    net.name = String(name || '').trim() || '(請輸入)';
+    net.name = tw16ResolvePlayerName(name);
+    try {
+      const _nEl = byId('tw16LobbyName');
+      if (_nEl && tw16IsBlankPlayerName(_nEl.value)) _nEl.value = net.name;
+      localStorage.setItem('tw16_last_player_name', net.name);
+    } catch (e) {}
     net.playerKey = getStoredPlayerKey();
     net.instanceId = createNetworkInstanceId();
     net.ecdhKeyPair = null;
