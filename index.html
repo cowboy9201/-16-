@@ -4059,6 +4059,10 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     this._channels = {};
     this._closed = false;
     this._wd = 0;
+    this._q = [];
+    this._qTimer = 0;
+    this._qLast = 0;
+    this._slowUntil = 0;
     this.channels = { get: function (name) { return self._getChannel(name); } };
     if (!window.supabase || !window.supabase.createClient) {
       setTimeout(function () { self.connection._set('failed', 'Supabase SDK 尚未載入'); }, 0);
@@ -4108,6 +4112,29 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     } catch (e) {}
   }
 
+  /* 送出佇列：每個客戶端最多約每 30ms 送 1 則（約 33 則/秒；被限流時降到約 8 則/秒）。
+     開局發牌、全桌同時回 ack 時會瞬間爆量，超過 Supabase 專案的每秒訊息上限就會
+     讓整桌同時卡住，這裡把爆量攤平。 */
+  Realtime.prototype._enqueue = function (job) {
+    var self = this;
+    this._q.push(job);
+    if (this._q.length > 400) this._q.shift();
+    if (this._qTimer) return;
+    var run = function () {
+      self._qTimer = 0;
+      if (self._closed) { self._q = []; return; }
+      var j = self._q.shift();
+      if (j) { self._qLast = Date.now(); try { j(); } catch (e) { console.error(e); } }
+      if (self._q.length) {
+        var gap = Date.now() < self._slowUntil ? 120 : 30;
+        self._qTimer = setTimeout(run, gap);
+      }
+    };
+    var gap0 = Date.now() < this._slowUntil ? 120 : 30;
+    var wait = Math.max(0, gap0 - (Date.now() - this._qLast));
+    this._qTimer = setTimeout(run, wait);
+  };
+
   Realtime.prototype._getChannel = function (name) {
     var self = this;
     if (this._channels[name]) return this._channels[name];
@@ -4141,6 +4168,18 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
             if (!l.ev || l.ev === msg.name) { try { l.cb(msg); } catch (e) { console.error(e); } }
           });
         });
+        try {
+          sbch.on('system', {}, function (p) {
+            if (self._closed || ch._sbch !== sbch) return;
+            var st = p && p.status;
+            if (st === 'error') {
+              var m = String((p && p.message) || '未知錯誤');
+              if (/rate|too many|limit|quota|exceed/i.test(m)) self._slowUntil = Date.now() + 5000;
+              try { console.warn('[supabase-shim] system error:', p); } catch (e) {}
+              try { window.dispatchEvent(new CustomEvent('tw16-rt-error', { detail: { message: m, channel: name } })); } catch (e) {}
+            }
+          });
+        } catch (e) {}
         sbch.subscribe(function (status, err) {
           if (self._closed || ch._sbch !== sbch) return;
           if (status === 'SUBSCRIBED') {
@@ -4182,12 +4221,19 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
           else console.warn('[supabase-shim] publish failed:', e && e.message ? e.message : e);
         };
         if (!ch._sbch) { fail(new Error('頻道尚未附加')); return Promise.resolve(); }
-        return Promise.resolve(ch._sbch.send({ type: 'broadcast', event: ev, payload: data }))
-          .then(function (res) {
-            if (res && res !== 'ok') fail(new Error('送出失敗：' + res));
-            else if (typeof cb === 'function') cb(null);
-          })
-          .catch(fail);
+        return new Promise(function (resolve) {
+          self._enqueue(function () {
+            var sb = ch._sbch;
+            if (!sb) { fail(new Error('頻道尚未附加')); resolve(); return; }
+            Promise.resolve(sb.send({ type: 'broadcast', event: ev, payload: data }))
+              .then(function (res) {
+                if (res && res !== 'ok') fail(new Error('送出失敗：' + res));
+                else if (typeof cb === 'function') cb(null);
+              })
+              .catch(fail)
+              .then(resolve);
+          });
+        });
       },
       // Supabase Broadcast 沒有歷史訊息；遊戲本身有「來賓向房主要快照」機制，這裡回傳空頁即可
       history: function (opts, cb) {
@@ -4204,6 +4250,9 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
   Realtime.prototype.close = function () {
     this._closed = true;
     try {
+      this._q = [];
+      if (this._qTimer) clearTimeout(this._qTimer);
+      this._qTimer = 0;
       if (this._wd) clearInterval(this._wd);
       this._wd = 0;
       if (this._wdVis) document.removeEventListener('visibilitychange', this._wdVis);
@@ -11949,6 +11998,18 @@ function loadUiSettings() {
       return SEAT_NAME[seat] + '：' + name;
     }).join('｜');
   }
+
+  /* Supabase 回報錯誤（例如超過每秒訊息上限）時寫進遊戲記錄，方便判斷卡住原因 */
+  window.addEventListener('tw16-rt-error', function (e) {
+    try {
+      const now = Date.now();
+      if (now - Number(net._lastRtErrLogAt || 0) < 4000) return;
+      net._lastRtErrLogAt = now;
+      const m = e && e.detail && e.detail.message ? e.detail.message : '';
+      addLog('Supabase 回報：' + m);
+      recordNetworkEvent('supabase-system-error', 'Supabase 回報錯誤｜' + m, { message: m });
+    } catch (err) {}
+  });
 
   function startNetworkPulse() {
     stopNetworkPulse();
