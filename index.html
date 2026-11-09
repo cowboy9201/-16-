@@ -4932,7 +4932,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
 
   /* ===== 座位存活探詢：入座前先問各座位有無瀏覽器在操控 ===== */
   function tw16SeatProbeTimeoutMs() {
-    return isAblyBackend() ? 1400 : 900;
+    return isAblyBackend() ? 1800 : 1200;
   }
   function tw16BeginSeatProbeJoin(joinMsg, source) {
     if (!isOnlineHost() || !joinMsg) return false;
@@ -5006,59 +5006,104 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     delete net._seatProbeJoins[probeId];
     const alive = job.alive || {};
     alive.east = alive.east || { by: 'host', at: Date.now() };
-    /* 無回應的座位：清掉殘留 players，視為可分配 */
+    const now = Date.now();
+    /* 近期仍有活動的座位視為佔用（即使探詢沒收到回應，也不搶真人位） */
+    const RECENT_MS = 20000;
+    const occupied = { east: true };
     ['south', 'west', 'north'].forEach(function (seat) {
-      if (alive[seat]) return;
+      if (alive[seat]) {
+        occupied[seat] = true;
+        const p = net.players && net.players[seat];
+        if (p) {
+          p.lastSeenAt = now;
+          p.human = true;
+        }
+        return;
+      }
       const p = net.players && net.players[seat];
-      if (!p) return;
-      /* 若殘留的是申請者自己的舊紀錄，清掉以便重登回原位 */
-      const isRequesterOld = (job.requesterKey && p.playerKey && String(p.playerKey) === job.requesterKey) ||
-        (job.requesterClient && p.clientId && String(p.clientId) === job.requesterClient);
-      if (!alive[seat]) {
+      if (!p) {
+        occupied[seat] = false;
+        return;
+      }
+      const isRequesterOld = (
+        (job.requesterKey && p.playerKey && String(p.playerKey) === String(job.requesterKey)) ||
+        (job.requesterInst && p.instanceId && String(p.instanceId) === String(job.requesterInst)) ||
+        (job.requesterClient && p.clientId && String(p.clientId) === String(job.requesterClient))
+      );
+      const lastSeen = Number(p.lastSeenAt || 0);
+      const recent = lastSeen > 0 && (now - lastSeen) < RECENT_MS;
+      /* 申請者自己的舊座位：可回收。其它真人若近期有活動：不可回收 */
+      if (!isRequesterOld && (recent || p.human === true) && hasNetworkHumanIdentity(p) && !isPlayerStale(p, now)) {
+        occupied[seat] = true;
+        p.lastSeenAt = Math.max(lastSeen, now - 1000);
+        return;
+      }
+      if (isRequesterOld) {
+        /* 清申請者舊窗殘留，讓他回到原位 */
         try {
           delete net.players[seat];
           state.seatAutoPlay[seat] = true;
-          if (net.seatReservations && isRequesterOld) {
-            /* 保留申請者的 reserved 以利回原位 */
-          } else if (net.seatReservations && net.seatReservations[seat] && !isRequesterOld) {
-            /* 無回應的他人座位：清保留 */
-            delete net.seatReservations[seat];
-          }
-          recordNetworkEvent('seat-probe-free', SEAT_NAME[seat] + '無瀏覽器回應，可分配', { seat: seat, probeId: probeId });
         } catch (e) {}
+        occupied[seat] = false;
+        return;
       }
-    });
-    /* 有回應的座位：標記活人 lastSeenAt，禁止分配 */
-    Object.keys(alive).forEach(function (seat) {
-      if (seat === 'east') return;
-      const p = net.players && net.players[seat];
-      if (p) {
-        p.lastSeenAt = Date.now();
-        p.human = true;
+      /* 無回應且不近期：才當空位 */
+      if (!recent && (isPlayerStale(p, now) || !hasNetworkHumanIdentity(p))) {
+        try {
+          delete net.players[seat];
+          state.seatAutoPlay[seat] = true;
+          if (net.seatReservations && net.seatReservations[seat]) delete net.seatReservations[seat];
+        } catch (e) {}
+        occupied[seat] = false;
+        recordNetworkEvent('seat-probe-free', SEAT_NAME[seat] + '無回應且已離線，可分配', { seat: seat, probeId: probeId });
+        return;
       }
+      /* 預設保守：當佔用，避免搶位 */
+      occupied[seat] = true;
     });
     tw16EnsureHostSeatRecord();
     const msg = job.msg;
-    let joinSeat = assignGuestSeat(msg.clientId, job.joinName, msg.playerKey || '', job.joinPref, msg.senderInstanceId || msg.sessionId || '');
-    if (joinSeat === 'east' || (typeof tw16IsHostLockedSeat === 'function' && tw16IsHostLockedSeat(joinSeat))) joinSeat = '';
-    /* 雙重保險：若算出的座位當下仍有 alive 回應，改找其他空位 */
-    if (joinSeat && alive[joinSeat] && !(job.requesterKey && alive[joinSeat].playerKey === job.requesterKey && !alive[joinSeat].instanceId)) {
-      /* 有其他人回應此座位 */
-      if (!(job.requesterKey && alive[joinSeat].playerKey === job.requesterKey)) {
-        const alt = ['south', 'west', 'north'].find(function (s) {
-          return s !== joinSeat && !alive[s] && guestSeatAvailableForNewAssignment(s, Date.now(), msg.playerKey || '');
-        });
-        joinSeat = alt || '';
+    const freeSeats = ['south', 'west', 'north'].filter(function (s) { return !occupied[s]; });
+    if (!freeSeats.length) {
+      addLog('房間已滿（各座位皆有真人操控），拒絕來賓');
+      publishNetworkAck(msg, false, 'room-full');
+      try { publishNetworkPlayers('room-full'); } catch (e) {}
+      return true;
+    }
+    /* 只在空位上分配；絕不改寫 occupied 座位上的其它真人 */
+    let pref = job.joinPref;
+    if (pref && occupied[pref]) pref = '';
+    if (pref && freeSeats.indexOf(pref) < 0) pref = '';
+    /* 申請者曾入座過的保留位（若仍空）優先 */
+    const reserved = (typeof tw16ReservedSeatOf === 'function') ? tw16ReservedSeatOf(msg.playerKey || '') : '';
+    if (reserved && !occupied[reserved] && freeSeats.indexOf(reserved) >= 0) pref = reserved;
+    let joinSeat = '';
+    if (pref && freeSeats.indexOf(pref) >= 0) {
+      joinSeat = assignGuestSeat(msg.clientId, job.joinName, msg.playerKey || '', pref, msg.senderInstanceId || msg.sessionId || '');
+    }
+    if (!joinSeat || occupied[joinSeat] || joinSeat === 'east') {
+      joinSeat = '';
+      for (let i = 0; i < freeSeats.length; i++) {
+        const s = freeSeats[i];
+        if (occupied[s]) continue;
+        const got = assignGuestSeat(msg.clientId, job.joinName, msg.playerKey || '', s, msg.senderInstanceId || msg.sessionId || '');
+        if (got && got !== 'east' && !occupied[got] && freeSeats.indexOf(got) >= 0) {
+          joinSeat = got;
+          break;
+        }
       }
     }
-    if (joinSeat && alive[joinSeat] && alive[joinSeat].playerKey && job.requesterKey && alive[joinSeat].playerKey !== job.requesterKey) {
-      joinSeat = ['south', 'west', 'north'].find(function (s) { return !alive[s] && s !== 'east'; }) || '';
-      if (joinSeat) {
-        joinSeat = assignGuestSeat(msg.clientId, job.joinName, msg.playerKey || '', joinSeat, msg.senderInstanceId || msg.sessionId || '') || joinSeat;
-        if (joinSeat === 'east') joinSeat = '';
+    if (joinSeat === 'east' || occupied[joinSeat]) joinSeat = '';
+    /* 最終寫入前再確認：不可覆蓋他人紀錄 */
+    if (joinSeat) {
+      const existing = net.players && net.players[joinSeat];
+      if (existing && hasNetworkHumanIdentity(existing) && !guestPlayerIdentityMatches(existing, msg.clientId, msg.playerKey, msg.senderInstanceId || msg.sessionId || '')) {
+        const otherRecent = Number(existing.lastSeenAt || 0) > 0 && (now - Number(existing.lastSeenAt || 0)) < RECENT_MS;
+        if (otherRecent || occupied[joinSeat]) {
+          joinSeat = '';
+        }
       }
     }
-    if (joinSeat === 'east') joinSeat = '';
     if (joinSeat) {
       if (msg.localAutoplay === true && msg.stopTimeoutTakeover !== true) {
         setSeatAutoplay(joinSeat, true, 'guest-local-toggle');
@@ -5070,7 +5115,11 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
         if (net.guestAesKeys) delete net.guestAesKeys[joinSeat];
         try { tw16EnsureHostGuestAesKey(joinSeat); } catch (e) {}
       }
-      addLog((job.joinName || msg.name || '來賓') + '入座 ' + SEAT_NAME[joinSeat] + '（已確認空位）');
+      /* 不可因新申請者去清掉其它座位的真人（只清同一人的重複） */
+      try {
+        removeDuplicateGuestPlayerRecords(joinSeat, msg.clientId, msg.playerKey, 'probe-join');
+      } catch (e) {}
+      addLog((job.joinName || msg.name || '來賓') + '入座 ' + SEAT_NAME[joinSeat] + '（空位）');
       publishNetworkAck(msg, true, 'join-' + joinSeat);
       publishNetworkSnapshot('guest-join');
       if (!isAblyBackend()) {
@@ -5080,7 +5129,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
         setTimeout(function () { publishNetworkSnapshot('guest-join-confirm-1'); }, 500);
       }
     } else {
-      addLog('房間已滿（各座位皆有瀏覽器回應），拒絕來賓');
+      addLog('房間已滿（無安全空位可分配），拒絕來賓');
       publishNetworkAck(msg, false, 'room-full');
       try { publishNetworkPlayers('room-full'); } catch (e) {}
     }
@@ -10312,6 +10361,13 @@ function loadUiSettings() {
       const sameClient = !!(!sameInstance && activeClient && otherClient && activeClient === otherClient);
       const samePlayerKey = !!(!sameInstance && !sameClient && activeKey && otherKey && activeKey === otherKey);
       if (!sameInstance && !sameClient && !samePlayerKey) return;
+      /* 不同 playerKey 的真人座位絕不可因分配被清掉（防止來賓被換風位） */
+      if (otherKey && activeKey && otherKey !== activeKey) return;
+      /* 其它座位若近期仍活躍且 instance 不同，不刪（可能是同 browser 多頁誤判） */
+      const otherSeen = Number(p.lastSeenAt || 0);
+      if (!sameInstance && otherSeen && (Date.now() - otherSeen) < 15000 && otherKey && activeKey && otherKey === activeKey && otherInstance && activeInstance && otherInstance !== activeInstance) {
+        /* 同一人舊窗：可清 */
+      }
       delete net.players[seat];
       state.seatAutoPlay[seat] = true;
       if (state.turn === seat && !state.ended) currentTurnChangedToComputer = true;
@@ -11855,7 +11911,15 @@ function loadUiSettings() {
     if (!seat || seat === 'east' || tw16IsHostLockedSeat(seat) || guestSeatOccupiedByDifferentLivePlayer(seat, clientId, playerKey, instanceId)) {
       seat = available.find(s => s !== 'east' && !tw16IsHostLockedSeat(s) && !guestSeatOccupiedByDifferentLivePlayer(s, clientId, playerKey, instanceId)) || '';
     }
-    if (!seat) return '';
+    if (!seat || seat === 'east' || tw16IsHostLockedSeat(seat)) return '';
+    /* 寫入前最後一道：座位上若已有不同真人，絕不覆蓋、不換位 */
+    const blocked = net.players && net.players[seat];
+    if (blocked && hasNetworkHumanIdentity(blocked) && !guestPlayerIdentityMatches(blocked, clientId, playerKey, instanceId)) {
+      if (!isPlayerStale(blocked, Date.now())) {
+        try { recordNetworkEvent('seat-assign-blocked', SEAT_NAME[seat] + '已有其它真人，取消分配', { seat: seat }); } catch (e) {}
+        return '';
+      }
+    }
     net.players[seat] = {
       clientId: clientId || '',
       playerKey: playerKey || '',
