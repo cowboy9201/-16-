@@ -10008,14 +10008,16 @@ function loadUiSettings() {
     const hostSeat = tw16HostOwnSeat();
     const requesterIsHost = tw16IsHostIdentity(clientId, instanceId);
     const identitySeat = networkSeatOrder().find(seat => {
-      if (hostSeat && seat === hostSeat && !requesterIsHost) return false;
+      /* 房主鎖定座位：非房主身分絕不可認成自己的座位 */
+      if (!requesterIsHost && (seat === hostSeat || (typeof tw16IsHostLockedSeat === 'function' && tw16IsHostLockedSeat(seat)))) return false;
       return guestPlayerIdentityMatches(players[seat], clientId, playerKey, instanceId);
     });
     if (identitySeat) return identitySeat;
     /* 來賓端只認房主 players 名單中身分相符的座位，不可自行套用偏好/本機座位（否則會誤坐房主或他人座位而無法操作） */
     if (isOnlineGuest()) return '';
-    if (hostSeat && preferredSeat === hostSeat && !requesterIsHost) return '';
+    if (!requesterIsHost && (preferredSeat === hostSeat || (typeof tw16IsHostLockedSeat === 'function' && tw16IsHostLockedSeat(preferredSeat)))) return '';
     if (networkSeatOrder().includes(preferredSeat)) {
+      if (typeof guestSeatAvailableForNewAssignment === 'function' && !guestSeatAvailableForNewAssignment(preferredSeat, now, playerKey)) return '';
       const preferredPlayer = players[preferredSeat];
       if (!preferredPlayer || isPlayerStale(preferredPlayer, now) || !hasNetworkHumanIdentity(preferredPlayer)) return preferredSeat;
       return '';
@@ -11414,10 +11416,20 @@ function loadUiSettings() {
     Object.keys(net.seatReservations).forEach(k => { if (net.seatReservations[k] === key && k !== seat) delete net.seatReservations[k]; });
     net.seatReservations[seat] = key;
   }
+  /* 房主座位鎖定：以 host 身分／本機座位為準，來賓絕對不可分到 */
+  function tw16IsHostLockedSeat(seat) {
+    if (!isOnlineHost() || !networkSeatOrder().includes(seat)) return false;
+    if (seat === tw16HostOwnSeat()) return true;
+    const p = net.players && net.players[seat];
+    if (!p) return false;
+    if (p.role === 'host') return true;
+    return tw16IsHostIdentity(p.clientId, p.instanceId);
+  }
+
   function guestSeatOccupiedByDifferentLivePlayer(seat, clientId, playerKey, instanceId) {
     if (!networkSeatOrder().includes(seat)) return false;
     if (isOnlineHost() && net.seatReservations && net.seatReservations[seat] && net.seatReservations[seat] !== String(playerKey || '')) return true;
-    if (isOnlineHost() && seat === tw16HostOwnSeat() && !tw16IsHostIdentity(clientId, instanceId)) return true;
+    if (tw16IsHostLockedSeat(seat) && !tw16IsHostIdentity(clientId, instanceId)) return true;
     const player = net.players && net.players[seat];
     if (!player || isPlayerStale(player, Date.now()) || !hasNetworkHumanIdentity(player)) return false;
     return !guestPlayerIdentityMatches(player, clientId, playerKey, instanceId);
@@ -11426,7 +11438,7 @@ function loadUiSettings() {
   function guestSeatAvailableForNewAssignment(seat, now, playerKey) {
     if (!networkSeatOrder().includes(seat)) return false;
     if (isOnlineHost() && net.seatReservations && net.seatReservations[seat] && net.seatReservations[seat] !== String(playerKey || '')) return false;
-    if (isOnlineHost() && seat === tw16HostOwnSeat()) return false;
+    if (tw16IsHostLockedSeat(seat)) return false;
     const player = net.players && net.players[seat];
     if (!player) return true;
     if (isPlayerStale(player, now || Date.now())) return true;
@@ -11436,20 +11448,38 @@ function loadUiSettings() {
   function assignGuestSeat(clientId, name, playerKey, preferredSeat, instanceId) {
     net.players = net.players || {};
     cleanupStaleNetworkPlayers('force');
-    /* 座位規則：① 房主固定東家 ② 玩家重登回到原座位（房主記憶保留） ③ 新玩家依 南→西→北 順序入座 */
+    /* 座位規則（房主完全掌控空位）：
+       ① 房主座位永遠鎖定，來賓不可分到
+       ② 玩家重登優先回到原座位（僅當該位仍空或本人）
+       ③ 新玩家依 南→西→北→東 在「真正無人」的座位入座
+       ④ 任何已被其他真人佔用的座位，絕不覆蓋 */
     const reservedSeat = tw16ReservedSeatOf(playerKey);
-    if (reservedSeat) preferredSeat = reservedSeat;
-    else try {
-      const sticky = tw16LoadStickySeat(net.room, playerKey);
-      if (sticky && !guestSeatOccupiedByDifferentLivePlayer(sticky, clientId, playerKey, instanceId)) {
-        preferredSeat = sticky;
+    if (reservedSeat && !guestSeatOccupiedByDifferentLivePlayer(reservedSeat, clientId, playerKey, instanceId) && guestSeatAvailableForNewAssignment(reservedSeat, Date.now(), playerKey)) {
+      preferredSeat = reservedSeat;
+    } else {
+      if (reservedSeat) {
+        /* 原保留位已被他人佔用：清掉保留，改分空位 */
+        try {
+          if (net.seatReservations && net.seatReservations[reservedSeat] === String(playerKey || '')) {
+            delete net.seatReservations[reservedSeat];
+          }
+        } catch (e) {}
       }
-    } catch (e) {}
-    if (guestSeatOccupiedByDifferentLivePlayer(preferredSeat, clientId, playerKey, instanceId)) preferredSeat = '';
+      try {
+        const sticky = tw16LoadStickySeat(net.room, playerKey);
+        if (sticky && !guestSeatOccupiedByDifferentLivePlayer(sticky, clientId, playerKey, instanceId) && guestSeatAvailableForNewAssignment(sticky, Date.now(), playerKey)) {
+          preferredSeat = sticky;
+        } else if (sticky) {
+          preferredSeat = '';
+        }
+      } catch (e) {}
+    }
+    if (guestSeatOccupiedByDifferentLivePlayer(preferredSeat, clientId, playerKey, instanceId) || tw16IsHostLockedSeat(preferredSeat)) preferredSeat = '';
     let existing = findAssignedGuestSeatForPlayer(clientId, playerKey, preferredSeat, instanceId);
+    if (existing && (guestSeatOccupiedByDifferentLivePlayer(existing, clientId, playerKey, instanceId) || tw16IsHostLockedSeat(existing))) existing = '';
     if (!existing && networkSeatOrder().includes(preferredSeat) && guestSeatAvailableForNewAssignment(preferredSeat, Date.now(), playerKey)) existing = preferredSeat;
     if (existing) {
-      if (guestSeatOccupiedByDifferentLivePlayer(existing, clientId, playerKey, instanceId)) return '';
+      if (guestSeatOccupiedByDifferentLivePlayer(existing, clientId, playerKey, instanceId) || tw16IsHostLockedSeat(existing)) return '';
       keepGuestPlayerRecordHuman(existing, { clientId, playerKey, name, senderInstanceId: instanceId, role: 'guest' }, 'assign-existing');
       /* 房主斷線重登／players 被清空後重新認回來賓：未斷線來賓必須恢復真人控制，
          不可沿用本機因空位 sync 而被設成 true 的托管狀態 */
@@ -11461,10 +11491,17 @@ function loadUiSettings() {
       return existing;
     }
     const now = Date.now();
-    const available = networkSeatOrder().filter(s => guestSeatAvailableForNewAssignment(s, now, playerKey));
-    if (!available.length) return '';
+    const available = networkSeatOrder().filter(s => guestSeatAvailableForNewAssignment(s, now, playerKey) && !tw16IsHostLockedSeat(s));
+    if (!available.length) {
+      try { recordNetworkEvent('seat-full', '無空位可分配給來賓', { clientId: clientId || '', playerKey: playerKey || '' }); } catch (e) {}
+      return '';
+    }
     const seatPriority = ['south', 'west', 'north', 'east'];
-    const seat = available.includes(preferredSeat) ? preferredSeat : (seatPriority.find(s => available.includes(s)) || available[0]);
+    let seat = available.includes(preferredSeat) ? preferredSeat : (seatPriority.find(s => available.includes(s)) || available[0]);
+    if (tw16IsHostLockedSeat(seat) || guestSeatOccupiedByDifferentLivePlayer(seat, clientId, playerKey, instanceId)) {
+      seat = seatPriority.find(s => available.includes(s) && !tw16IsHostLockedSeat(s)) || available.find(s => !tw16IsHostLockedSeat(s)) || '';
+    }
+    if (!seat) return '';
     net.players[seat] = { clientId, playerKey: playerKey || '', instanceId: instanceId || '', name: name || '來賓', seat, role: 'guest', human: true, autoplay: false, lastSeenAt: Date.now(), handMasterKey: makeNetworkPayloadCode() };
     state.seatAutoPlay[seat] = false;
     tw16ReserveSeat(seat, playerKey);
@@ -22016,7 +22053,27 @@ dom.resultText.querySelectorAll('[data-menu]').forEach(btn => btn.addEventListen
     if (action === 'main-menu') { openMainMenu(); return; }
     if (action === 'stt-toggle') { tw16SttCycle(); openMainMenu(); return; }
     if (action === 'stt-custom') { tw16SttEditCustom(); openMainMenu(); return; }
-    if (action === 'stt-cmd-toggle') { const on = !tw16VoiceCmdOn(); tw16VoiceCmdSet(on); if (on) tw16CmdPrime(); else { tw16CmdPrev = false; tw16CmdStop(); } openMainMenu(); return; }
+    if (action === 'stt-cmd-toggle') {
+      const on = !tw16VoiceCmdOn();
+      if (on) {
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SR) {
+          try { hintVoiceBroadcast('此瀏覽器不支援語音指令'); } catch (e) {}
+          try { addLog('語音指令無法開啟：瀏覽器不支援 SpeechRecognition'); } catch (e) {}
+          openMainMenu();
+          return;
+        }
+        tw16VoiceCmdSet(true);
+        try { tw16CmdPrime(); } catch (e) {}
+        try { hintVoiceBroadcast('語音指令已開啟'); } catch (e) {}
+      } else {
+        tw16VoiceCmdSet(false);
+        try { tw16CmdPrev = false; tw16CmdStop(); } catch (e) {}
+        try { hintVoiceBroadcast('語音指令已關閉'); } catch (e) {}
+      }
+      openMainMenu();
+      return;
+    }
     if (action === 'exit-lobby') { exitToInterface329Lobby(); return; }
     if (action === 'submenu-save') {
       openMenuSubmenu('儲存牌局',
@@ -24707,10 +24764,26 @@ function showIntegrityReport(precomputed) {
       if (!SR) { hintVoiceBroadcast('此瀏覽器不支援語音指令'); return; }
       tw16CmdWarned = false; tw16CmdFails = [];
       const r = new SR();
-      r.onerror = () => {};
+      r.lang = (typeof tw16SttMode === 'function' && tw16SttMode() === 'en') ? 'en-US' : 'zh-TW';
+      r.continuous = false;
+      r.interimResults = false;
+      r.onerror = function (ev) {
+        try {
+          const code = (ev && ev.error) ? String(ev.error) : '';
+          if (code === 'not-allowed' || code === 'service-not-allowed') {
+            hintVoiceBroadcast('請允許麥克風權限後再開啟語音指令');
+            tw16VoiceCmdSet(false);
+          } else if (code === 'network') {
+            hintVoiceBroadcast('語音指令需要連網');
+          }
+        } catch (e) {}
+      };
+      r.onstart = function () { try { r.abort(); } catch (e) {} };
       r.start();
-      setTimeout(() => { try { r.abort(); } catch (e) {} }, 600);
-    } catch (e) {}
+      setTimeout(() => { try { r.abort(); } catch (e) {} }, 800);
+    } catch (e) {
+      try { hintVoiceBroadcast('語音指令啟動失敗，請重試'); } catch (e2) {}
+    }
   }
   
   (function tw16SyncLobbyBuildLabel(){
