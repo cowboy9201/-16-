@@ -4786,6 +4786,11 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
 
   function keepGuestPlayerRecordHuman(seat, msg, reason) {
     if (!networkSeatOrder().includes(seat)) return '';
+    /* 東家／房主位：禁止以來賓身分寫入 */
+    if (seat === 'east' || (typeof tw16IsHostLockedSeat === 'function' && tw16IsHostLockedSeat(seat))) {
+      try { recordNetworkEvent('seat-hijack-blocked', SEAT_NAME[seat] + '為房主座位，拒絕來賓入座', { seat, reason: reason || '' }); } catch (e) {}
+      return '';
+    }
     net.players = net.players || {};
     /* 座位獨佔：座位已被另一位仍在線的真人（或房主）佔用時，不可覆蓋其身分 */
     if (msg && (msg.clientId || msg.playerKey || msg.senderInstanceId || msg.sessionId || msg.instanceId)
@@ -4813,9 +4818,17 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
   function touchGuestPlayerFromMessage(msg, reason) {
     if (!isOnlineHost() || !msg) return '';
     if ((msg.role && msg.role !== 'guest') || (msg.senderRole && msg.senderRole !== 'guest')) return '';
-    const preferredSeat = networkSeatOrder().includes(msg.seat) ? msg.seat : '';
+    /* 來賓訊息帶來的 seat／偏好若是東家或房主位，一律忽略 */
+    let preferredSeat = networkSeatOrder().includes(msg.seat) ? msg.seat : '';
+    if (preferredSeat === 'east' || (typeof tw16IsHostLockedSeat === 'function' && tw16IsHostLockedSeat(preferredSeat))) preferredSeat = '';
+    if (msg.preferredSeat && networkSeatOrder().includes(msg.preferredSeat) && msg.preferredSeat !== 'east'
+        && !(typeof tw16IsHostLockedSeat === 'function' && tw16IsHostLockedSeat(msg.preferredSeat))) {
+      preferredSeat = preferredSeat || msg.preferredSeat;
+    }
     let assigned = findAssignedGuestSeatForPlayer(msg.clientId, msg.playerKey, preferredSeat, msg.senderInstanceId || msg.sessionId || msg.instanceId || '');
+    if (assigned === 'east' || (typeof tw16IsHostLockedSeat === 'function' && tw16IsHostLockedSeat(assigned))) assigned = '';
     if (!assigned) assigned = assignGuestSeat(msg.clientId, msg.name || '來賓', msg.playerKey || '', preferredSeat, msg.senderInstanceId || msg.sessionId || msg.instanceId || '');
+    if (assigned === 'east' || (typeof tw16IsHostLockedSeat === 'function' && tw16IsHostLockedSeat(assigned))) assigned = '';
     if (assigned && !keepGuestPlayerRecordHuman(assigned, msg, reason || 'message')) assigned = '';
     if (assigned) {
       // tw16_hand_privacy_ecdh_20260802: 不只 join，sync/heartbeat 等各種來賓訊息
@@ -5968,7 +5981,9 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
         recordNetworkEvent('room-in', '收到來賓' + data.type + '｜' + (assigned ? SEAT_NAME[assigned] : '未入座'), { type: data.type, assigned, source: source || '', sessionId: data.sessionId || '', messageId: data.messageId || '' });
         // hello 攜帶 action:'join' 時，直接在此處理入座，不依賴 intent 路徑
         if (data.type === 'hello' && data.action === 'join') {
-          const joinSeat = assignGuestSeat(data.clientId, data.name || '來賓', data.playerKey || '', data.preferredSeat || '', data.senderInstanceId || data.sessionId || '');
+          const joinPref = (data.preferredSeat === 'east' || data.preferredSeat === (typeof tw16HostOwnSeat === 'function' ? tw16HostOwnSeat() : 'east')) ? '' : (data.preferredSeat || '');
+          let joinSeat = assignGuestSeat(data.clientId, data.name || '來賓', data.playerKey || '', joinPref, data.senderInstanceId || data.sessionId || '');
+          if (joinSeat === 'east' || (typeof tw16IsHostLockedSeat === 'function' && tw16IsHostLockedSeat(joinSeat))) joinSeat = '';
           if (joinSeat) {
             // tw16_hand_privacy_ecdh_20260802: 公鑰擷取已統一交給上面的
             // touchGuestPlayerFromMessage() 處理（同時涵蓋 join/sync/heartbeat），
@@ -9802,11 +9817,15 @@ function loadUiSettings() {
       return true;
     }
     net.joinAttempts = Math.max(0, Number(net.joinAttempts) || 0) + 1;
-    const stickyPref = (typeof tw16LoadStickySeat === 'function') ? tw16LoadStickySeat(net.room, net.playerKey) : '';
+    let stickyPref = (typeof tw16LoadStickySeat === 'function') ? tw16LoadStickySeat(net.room, net.playerKey) : '';
+    /* 來賓不可請求東家／房主位 */
+    if (stickyPref === 'east') stickyPref = '';
+    let prefSeat = stickyPref || (networkSeatOrder().includes(state.viewSeat) && state.viewSeat !== 'east' ? state.viewSeat : '');
+    if (prefSeat === 'east') prefSeat = '';
     const sent = publishNetworkRoomMessage('hello', {
       action: 'join',
       joinReason: reason || 'join',
-      preferredSeat: stickyPref || (networkSeatOrder().includes(state.viewSeat) ? state.viewSeat : ''),
+      preferredSeat: prefSeat,
       lastAppliedSnapshotSeq: Number(net.lastAppliedSnapshotSeq || 0),
       localAutoplay: false,
       stopTimeoutTakeover: true,
@@ -10005,20 +10024,23 @@ function loadUiSettings() {
   function findAssignedGuestSeatForPlayer(clientId, playerKey, preferredSeat, instanceId) {
     const players = net.players || {};
     const now = Date.now();
-    const hostSeat = tw16HostOwnSeat();
+    const hostSeat = tw16HostOwnSeat() || 'east';
     const requesterIsHost = tw16IsHostIdentity(clientId, instanceId);
+    /* 非房主：永遠不可匹配到 east／房主鎖定位 */
     const identitySeat = networkSeatOrder().find(seat => {
-      /* 房主鎖定座位：非房主身分絕不可認成自己的座位 */
-      if (!requesterIsHost && (seat === hostSeat || (typeof tw16IsHostLockedSeat === 'function' && tw16IsHostLockedSeat(seat)))) return false;
-      return guestPlayerIdentityMatches(players[seat], clientId, playerKey, instanceId);
+      if (!requesterIsHost && (seat === 'east' || seat === hostSeat || (typeof tw16IsHostLockedSeat === 'function' && tw16IsHostLockedSeat(seat)))) return false;
+      const p = players[seat];
+      if (p && p.role === 'host' && !requesterIsHost) return false;
+      return guestPlayerIdentityMatches(p, clientId, playerKey, instanceId);
     });
-    if (identitySeat) return identitySeat;
-    /* 來賓端只認房主 players 名單中身分相符的座位，不可自行套用偏好/本機座位（否則會誤坐房主或他人座位而無法操作） */
+    if (identitySeat && identitySeat !== 'east') return identitySeat;
+    /* 來賓端只認房主 players 名單中身分相符的座位，不可自行套用偏好/本機座位 */
     if (isOnlineGuest()) return '';
-    if (!requesterIsHost && (preferredSeat === hostSeat || (typeof tw16IsHostLockedSeat === 'function' && tw16IsHostLockedSeat(preferredSeat)))) return '';
-    if (networkSeatOrder().includes(preferredSeat)) {
+    if (!requesterIsHost && (preferredSeat === 'east' || preferredSeat === hostSeat || (typeof tw16IsHostLockedSeat === 'function' && tw16IsHostLockedSeat(preferredSeat)))) return '';
+    if (networkSeatOrder().includes(preferredSeat) && preferredSeat !== 'east') {
       if (typeof guestSeatAvailableForNewAssignment === 'function' && !guestSeatAvailableForNewAssignment(preferredSeat, now, playerKey)) return '';
       const preferredPlayer = players[preferredSeat];
+      if (preferredPlayer && preferredPlayer.role === 'host') return '';
       if (!preferredPlayer || isPlayerStale(preferredPlayer, now) || !hasNetworkHumanIdentity(preferredPlayer)) return preferredSeat;
       return '';
     }
@@ -10035,6 +10057,7 @@ function loadUiSettings() {
     let currentTurnChangedToComputer = false;
     networkSeatOrder().forEach(seat => {
       if (seat === activeSeat) return;
+      if (seat === 'east' || (typeof tw16IsHostLockedSeat === 'function' && tw16IsHostLockedSeat(seat))) return;
       const p = net.players && net.players[seat];
       if (!p || !hasNetworkHumanIdentity(p)) return;
       const otherInstance = networkPlayerSessionId(p);
@@ -10087,6 +10110,7 @@ function loadUiSettings() {
     let changed = false;
     let currentTurnChangedToComputer = false;
     SEATS.forEach(seat => {
+      if (seat === 'east' || (typeof tw16IsHostLockedSeat === 'function' && tw16IsHostLockedSeat(seat))) return;
       const player = net.players && net.players[seat];
       if (isPlayerStale(player, now)) {
         delete net.players[seat];
@@ -10097,6 +10121,7 @@ function loadUiSettings() {
         changed = true;
       }
     });
+    if (typeof tw16EnsureHostSeatRecord === 'function') tw16EnsureHostSeatRecord();
     if (changed) {
       clearTurnDeadline();
       publishNetworkSnapshot('player-stale');
@@ -11411,54 +11436,95 @@ function loadUiSettings() {
   }
   function tw16ReserveSeat(seat, playerKey) {
     const key = String(playerKey || '');
-    if (!isOnlineHost() || !key || !networkSeatOrder().includes(seat) || seat === tw16HostOwnSeat()) return;
+    if (!isOnlineHost() || !key || !networkSeatOrder().includes(seat)) return;
+    if (seat === 'east' || seat === tw16HostOwnSeat() || (typeof tw16IsHostLockedSeat === 'function' && tw16IsHostLockedSeat(seat))) return;
     net.seatReservations = net.seatReservations || {};
     Object.keys(net.seatReservations).forEach(k => { if (net.seatReservations[k] === key && k !== seat) delete net.seatReservations[k]; });
     net.seatReservations[seat] = key;
   }
-  /* 房主座位鎖定：以 host 身分／本機座位為準，來賓絕對不可分到 */
+  /* 房主座位鎖定：東家永遠是房主；role:host 或本機 host 身分的座位，來賓絕對不可分到 */
   function tw16IsHostLockedSeat(seat) {
-    if (!isOnlineHost() || !networkSeatOrder().includes(seat)) return false;
+    if (!networkSeatOrder().includes(seat)) return false;
+    /* 線上房主固定東家：任何來賓分配都不可給 east */
+    if (isOnlineHost() && seat === 'east') return true;
     if (seat === tw16HostOwnSeat()) return true;
     const p = net.players && net.players[seat];
     if (!p) return false;
     if (p.role === 'host') return true;
-    return tw16IsHostIdentity(p.clientId, p.instanceId);
+    if (isOnlineHost() && tw16IsHostIdentity(p.clientId, p.instanceId)) return true;
+    return false;
+  }
+
+  /* 確保房主位永遠在 players 裡標成 host，避免被當成空位 */
+  function tw16EnsureHostSeatRecord() {
+    if (!isOnlineHost()) return;
+    const hostSeat = 'east';
+    net.assignedSeat = hostSeat;
+    net.players = net.players || {};
+    const prev = net.players[hostSeat] || {};
+    net.players[hostSeat] = Object.assign({}, prev, {
+      clientId: net.clientId,
+      playerKey: net.playerKey,
+      instanceId: net.instanceId,
+      name: net.name || prev.name || '房主',
+      seat: hostSeat,
+      role: 'host',
+      human: true,
+      autoplay: false,
+      lastSeenAt: Date.now()
+    });
+    state.seatAutoPlay[hostSeat] = false;
   }
 
   function guestSeatOccupiedByDifferentLivePlayer(seat, clientId, playerKey, instanceId) {
     if (!networkSeatOrder().includes(seat)) return false;
-    if (isOnlineHost() && net.seatReservations && net.seatReservations[seat] && net.seatReservations[seat] !== String(playerKey || '')) return true;
+    /* 房主位對任何非房主身分都視為已佔 */
     if (tw16IsHostLockedSeat(seat) && !tw16IsHostIdentity(clientId, instanceId)) return true;
+    if (isOnlineHost() && net.seatReservations && net.seatReservations[seat] && net.seatReservations[seat] !== String(playerKey || '')) return true;
     const player = net.players && net.players[seat];
-    if (!player || isPlayerStale(player, Date.now()) || !hasNetworkHumanIdentity(player)) return false;
+    if (!player) return false;
+    if (player.role === 'host' && !tw16IsHostIdentity(clientId, instanceId)) return true;
+    if (isPlayerStale(player, Date.now()) || !hasNetworkHumanIdentity(player)) return false;
     return !guestPlayerIdentityMatches(player, clientId, playerKey, instanceId);
   }
 
   function guestSeatAvailableForNewAssignment(seat, now, playerKey) {
     if (!networkSeatOrder().includes(seat)) return false;
-    if (isOnlineHost() && net.seatReservations && net.seatReservations[seat] && net.seatReservations[seat] !== String(playerKey || '')) return false;
+    /* 房主位永遠不可分配給來賓 */
     if (tw16IsHostLockedSeat(seat)) return false;
+    if (seat === 'east' && isOnlineHost()) return false;
+    if (isOnlineHost() && net.seatReservations && net.seatReservations[seat] && net.seatReservations[seat] !== String(playerKey || '')) return false;
     const player = net.players && net.players[seat];
     if (!player) return true;
+    if (player.role === 'host') return false;
     if (isPlayerStale(player, now || Date.now())) return true;
     return !hasNetworkHumanIdentity(player);
   }
 
   function assignGuestSeat(clientId, name, playerKey, preferredSeat, instanceId) {
     net.players = net.players || {};
+    tw16EnsureHostSeatRecord();
     cleanupStaleNetworkPlayers('force');
     /* 座位規則（房主完全掌控空位）：
-       ① 房主座位永遠鎖定，來賓不可分到
-       ② 玩家重登優先回到原座位（僅當該位仍空或本人）
-       ③ 新玩家依 南→西→北→東 在「真正無人」的座位入座
+       ① 東家／房主座位永遠鎖定，來賓不可分到
+       ② 玩家重登優先回到原座位（僅當該位仍空或本人，且非房主位）
+       ③ 新玩家依 南→西→北 在「真正無人」的座位入座（不含東）
        ④ 任何已被其他真人佔用的座位，絕不覆蓋 */
+    if (tw16IsHostIdentity(clientId, instanceId)) {
+      /* 房主自己不走來賓分配 */
+      return 'east';
+    }
+    let pref = networkSeatOrder().includes(preferredSeat) ? preferredSeat : '';
+    if (pref === 'east' || tw16IsHostLockedSeat(pref)) pref = '';
+
     const reservedSeat = tw16ReservedSeatOf(playerKey);
-    if (reservedSeat && !guestSeatOccupiedByDifferentLivePlayer(reservedSeat, clientId, playerKey, instanceId) && guestSeatAvailableForNewAssignment(reservedSeat, Date.now(), playerKey)) {
-      preferredSeat = reservedSeat;
+    if (reservedSeat && reservedSeat !== 'east' && !tw16IsHostLockedSeat(reservedSeat)
+        && !guestSeatOccupiedByDifferentLivePlayer(reservedSeat, clientId, playerKey, instanceId)
+        && guestSeatAvailableForNewAssignment(reservedSeat, Date.now(), playerKey)) {
+      pref = reservedSeat;
     } else {
-      if (reservedSeat) {
-        /* 原保留位已被他人佔用：清掉保留，改分空位 */
+      if (reservedSeat && (reservedSeat === 'east' || tw16IsHostLockedSeat(reservedSeat)
+          || guestSeatOccupiedByDifferentLivePlayer(reservedSeat, clientId, playerKey, instanceId))) {
         try {
           if (net.seatReservations && net.seatReservations[reservedSeat] === String(playerKey || '')) {
             delete net.seatReservations[reservedSeat];
@@ -11467,46 +11533,66 @@ function loadUiSettings() {
       }
       try {
         const sticky = tw16LoadStickySeat(net.room, playerKey);
-        if (sticky && !guestSeatOccupiedByDifferentLivePlayer(sticky, clientId, playerKey, instanceId) && guestSeatAvailableForNewAssignment(sticky, Date.now(), playerKey)) {
-          preferredSeat = sticky;
-        } else if (sticky) {
-          preferredSeat = '';
+        if (sticky && sticky !== 'east' && !tw16IsHostLockedSeat(sticky)
+            && !guestSeatOccupiedByDifferentLivePlayer(sticky, clientId, playerKey, instanceId)
+            && guestSeatAvailableForNewAssignment(sticky, Date.now(), playerKey)) {
+          pref = sticky;
+        } else {
+          pref = pref && pref !== 'east' && !tw16IsHostLockedSeat(pref) ? pref : '';
         }
       } catch (e) {}
     }
-    if (guestSeatOccupiedByDifferentLivePlayer(preferredSeat, clientId, playerKey, instanceId) || tw16IsHostLockedSeat(preferredSeat)) preferredSeat = '';
-    let existing = findAssignedGuestSeatForPlayer(clientId, playerKey, preferredSeat, instanceId);
-    if (existing && (guestSeatOccupiedByDifferentLivePlayer(existing, clientId, playerKey, instanceId) || tw16IsHostLockedSeat(existing))) existing = '';
-    if (!existing && networkSeatOrder().includes(preferredSeat) && guestSeatAvailableForNewAssignment(preferredSeat, Date.now(), playerKey)) existing = preferredSeat;
+    if (pref === 'east' || tw16IsHostLockedSeat(pref) || guestSeatOccupiedByDifferentLivePlayer(pref, clientId, playerKey, instanceId)) pref = '';
+
+    let existing = findAssignedGuestSeatForPlayer(clientId, playerKey, pref, instanceId);
+    if (existing === 'east' || tw16IsHostLockedSeat(existing) || guestSeatOccupiedByDifferentLivePlayer(existing, clientId, playerKey, instanceId)) existing = '';
+    if (!existing && pref && guestSeatAvailableForNewAssignment(pref, Date.now(), playerKey)) existing = pref;
+
     if (existing) {
-      if (guestSeatOccupiedByDifferentLivePlayer(existing, clientId, playerKey, instanceId) || tw16IsHostLockedSeat(existing)) return '';
+      if (existing === 'east' || tw16IsHostLockedSeat(existing) || guestSeatOccupiedByDifferentLivePlayer(existing, clientId, playerKey, instanceId)) return '';
       keepGuestPlayerRecordHuman(existing, { clientId, playerKey, name, senderInstanceId: instanceId, role: 'guest' }, 'assign-existing');
-      /* 房主斷線重登／players 被清空後重新認回來賓：未斷線來賓必須恢復真人控制，
-         不可沿用本機因空位 sync 而被設成 true 的托管狀態 */
-      if (net.players[existing]) net.players[existing].autoplay = false;
+      if (net.players[existing]) {
+        net.players[existing].autoplay = false;
+        net.players[existing].role = 'guest';
+      }
       state.seatAutoPlay[existing] = false;
       tw16ReserveSeat(existing, playerKey);
       removeDuplicateGuestPlayerRecords(existing, clientId, playerKey, 'assign-existing');
       try { tw16SaveStickySeat(net.room, playerKey, existing); } catch (e) {}
+      tw16EnsureHostSeatRecord();
       return existing;
     }
+
     const now = Date.now();
-    const available = networkSeatOrder().filter(s => guestSeatAvailableForNewAssignment(s, now, playerKey) && !tw16IsHostLockedSeat(s));
+    /* 來賓只從南、西、北選空位；東家永不開放 */
+    const guestOrder = ['south', 'west', 'north'];
+    const available = guestOrder.filter(s => guestSeatAvailableForNewAssignment(s, now, playerKey) && !tw16IsHostLockedSeat(s));
     if (!available.length) {
-      try { recordNetworkEvent('seat-full', '無空位可分配給來賓', { clientId: clientId || '', playerKey: playerKey || '' }); } catch (e) {}
+      try { recordNetworkEvent('seat-full', '無空位可分配給來賓（東家保留給房主）', { clientId: clientId || '', playerKey: playerKey || '' }); } catch (e) {}
       return '';
     }
-    const seatPriority = ['south', 'west', 'north', 'east'];
-    let seat = available.includes(preferredSeat) ? preferredSeat : (seatPriority.find(s => available.includes(s)) || available[0]);
-    if (tw16IsHostLockedSeat(seat) || guestSeatOccupiedByDifferentLivePlayer(seat, clientId, playerKey, instanceId)) {
-      seat = seatPriority.find(s => available.includes(s) && !tw16IsHostLockedSeat(s)) || available.find(s => !tw16IsHostLockedSeat(s)) || '';
+    let seat = available.includes(pref) ? pref : available[0];
+    if (!seat || seat === 'east' || tw16IsHostLockedSeat(seat) || guestSeatOccupiedByDifferentLivePlayer(seat, clientId, playerKey, instanceId)) {
+      seat = available.find(s => s !== 'east' && !tw16IsHostLockedSeat(s) && !guestSeatOccupiedByDifferentLivePlayer(s, clientId, playerKey, instanceId)) || '';
     }
     if (!seat) return '';
-    net.players[seat] = { clientId, playerKey: playerKey || '', instanceId: instanceId || '', name: name || '來賓', seat, role: 'guest', human: true, autoplay: false, lastSeenAt: Date.now(), handMasterKey: makeNetworkPayloadCode() };
+    net.players[seat] = {
+      clientId: clientId || '',
+      playerKey: playerKey || '',
+      instanceId: instanceId || '',
+      name: name || '來賓',
+      seat: seat,
+      role: 'guest',
+      human: true,
+      autoplay: false,
+      lastSeenAt: Date.now(),
+      handMasterKey: makeNetworkPayloadCode()
+    };
     state.seatAutoPlay[seat] = false;
     tw16ReserveSeat(seat, playerKey);
     removeDuplicateGuestPlayerRecords(seat, clientId, playerKey, 'assign-new');
     try { tw16SaveStickySeat(net.room, playerKey, seat); } catch (e) {}
+    tw16EnsureHostSeatRecord();
     return seat;
   }
 
@@ -11583,7 +11669,9 @@ function loadUiSettings() {
     if (data.senderInstanceId && data.senderInstanceId === net.instanceId && data.senderRole === net.role) return false;
     if (net.role === 'host') {
       if (data.kind === 'hello' || data.kind === 'sync') {
-        const assigned = assignGuestSeat(data.clientId, data.name || '來賓', data.playerKey || '', data.seat, data.senderInstanceId || '');
+        const v3Pref = (data.seat === 'east' || data.preferredSeat === 'east') ? '' : (data.preferredSeat || data.seat || '');
+        let assigned = assignGuestSeat(data.clientId, data.name || '來賓', data.playerKey || '', v3Pref, data.senderInstanceId || '');
+        if (assigned === 'east' || (typeof tw16IsHostLockedSeat === 'function' && tw16IsHostLockedSeat(assigned))) assigned = '';
         if (assigned && net.players && net.players[assigned]) {
           net.players[assigned].instanceId = data.senderInstanceId || net.players[assigned].instanceId || '';
           net.players[assigned].lastSeenAt = Date.now();
@@ -12705,11 +12793,22 @@ function markSawHostSignal(reason) {
     net.guestInitialAutoplayOffNotifiedSeats = {};
     net.guestInitialAutoplayOffAtBySeat = {};
     if (role === 'host') {
-      /* 新規則：房主固定坐東家；南、西、北分配給來賓 */
+      /* 新規則：房主固定坐東家；南、西、北分配給來賓。east 永遠標記 role:host，來賓不可佔 */
       const hostSeat = 'east';
       if (net.seatReservationsRoom !== String(room || '').trim()) { net.seatReservations = {}; net.seatReservationsRoom = String(room || '').trim(); }
       net.assignedSeat = hostSeat;
-      net.players[hostSeat] = { clientId: net.clientId, playerKey: net.playerKey, instanceId: net.instanceId, name: net.name || '房主', seat: hostSeat, autoplay: false, enterAt: Number(net.enterAt || Date.now()), lastSeenAt: Date.now() };
+      net.players[hostSeat] = {
+        clientId: net.clientId,
+        playerKey: net.playerKey,
+        instanceId: net.instanceId,
+        name: net.name || '房主',
+        seat: hostSeat,
+        role: 'host',
+        human: true,
+        autoplay: false,
+        enterAt: Number(net.enterAt || Date.now()),
+        lastSeenAt: Date.now()
+      };
       state.viewSeat = hostSeat;
       state.seatAutoPlay[hostSeat] = false;
       try { tw16SaveStickySeat(String(net.room || room || ''), net.playerKey, hostSeat); } catch (e) {}
