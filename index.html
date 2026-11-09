@@ -2028,6 +2028,10 @@ border-radius:0 !important;
 box-shadow:none !important;
 color:#e0f2fe !important;
 }
+.openingPrompt.exchangePrompt{
+font-size:clamp(14px,3.2vw,30px) !important;
+letter-spacing:.04em !important;
+}
 
 .historyItem{
 border-bottom:1px solid rgba(56,189,248,0.10) !important;
@@ -13282,6 +13286,7 @@ function markSawHostSignal(reason) {
     }
     setNetworkWaitHint('');
     dom.openingPrompt.textContent = value;
+    dom.openingPrompt.classList.toggle('exchangePrompt', /^選3張牌/.test(value));
     dom.openingPrompt.classList.add('show');
     dom.openingPrompt.setAttribute('aria-hidden', 'false');
     positionOpeningFloatingElements();
