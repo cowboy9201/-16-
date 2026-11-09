@@ -4191,7 +4191,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
 
   
   // ========== MODULE: game core state ==========
-  const TW16_LOBBY_BUILD_LABEL = '（115.11.8 改版｜2026-11-08 08:40 台灣時間）';
+  const TW16_LOBBY_BUILD_LABEL = '（115.11.9 改版｜2026-11-09 11:29 台灣時間）';
   const SEATS = ['east', 'south', 'west', 'north'];
   /* tw16_tablemode: 桌面人數模式(4/3/2)輔助函式。
      2人：只啟用 east/west；3人：停用 north；4人(預設)：全啟用。
@@ -7590,9 +7590,9 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     lobby.id = 'tw16Lobby';
     lobby.className = 'tw16-lobby';
     lobby.innerHTML = '<div class="tw16-lobby-card">'
-      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;"><div class="tw16-lobby-chip" id="tw16LobbyChipText" style="flex-shrink:0;margin-bottom:0;">Ably 連線 / 單機</div><span style="font-size:clamp(9px,2.5vw,12px);color:#cbd5e1;font-weight:700;white-space:nowrap;">（115.11.6 改版｜2026-11-06 15:35 台灣時間）</span></div>'
+      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;"><div class="tw16-lobby-chip" id="tw16LobbyChipText" style="flex-shrink:0;margin-bottom:0;">Ably 連線 / 單機</div><span style="font-size:clamp(9px,2.5vw,12px);color:#cbd5e1;font-weight:700;white-space:nowrap;">（115.11.9 改版｜2026-11-09 11:29 台灣時間）</span></div>'
       + '<div class="tw16-lobby-title" id="tw16LobbyTitleText">台灣麻將 連線 / 單機</div>'
-      + '<div class="tw16-lobby-sub">★連線對戰：<br><span style="color:#ef4444">每人都要設同房名</span>，設好房名後<br>設好後按<span style="background:#1d4ed8;color:#fff;border-radius:3px;padding:0 3px;">連線對戰</span><br>最早進入該房名者為房主；房主離開後由下一位依進入順序接任<br>★單人：按<span style="background:#15803d;color:#fff;border-radius:3px;padding:0 3px;">直接離線開始</span></div>'
+      + '<div class="tw16-lobby-sub">★連線對戰：<br><span style="color:#ef4444">每人都要設同房名</span><br>按<span style="background:#1d4ed8;color:#fff;border-radius:3px;padding:0 3px;">連線對戰</span><br>最早進入該房名者為房主<br>★單人：按<span style="background:#15803d;color:#fff;border-radius:3px;padding:0 3px;">直接離線開始</span></div>'
       + '<div class="tw16-lobby-grid">'
       + '<div class="tw16-lobby-row tw16-lobby-inline-row"><label for="tw16LobbyName">玩家名稱</label><input class="tw16-lobby-input" id="tw16LobbyName" value="(請輸入)" onfocus="if(this.value===\'(請輸入)\')this.value=\'\'" onblur="if(!this.value.trim())this.value=\'(請輸入)\'"></div>'
       + '<div class="tw16-lobby-row tw16-lobby-inline-row"><label for="tw16LobbyRoom">房名</label><input class="tw16-lobby-input" id="tw16LobbyRoom" value="對我生財" onfocus="if(this.value===\'對我生財\')this.value=\'\'" onblur="if(!this.value.trim())this.value=\'對我生財\'"></div>'
@@ -7651,7 +7651,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
         const chip = byId('tw16LobbyChipText'); if (chip) chip.textContent = name + ' 連線 / 單機';
         const title = byId('tw16LobbyTitleText'); if (title) title.textContent = '台灣麻將 連線 / 單機';
         if (b === 'supabase') {
-          updateLobbyStatus('使用 Supabase：免 API KEY，輸入房名即可。※同一桌須選同一伺服器。※免費專案閒置約一週會休眠，連線時會先自動喚醒（可能需數十秒）；連不上時會自動改用 Ably 備援。');
+          updateLobbyStatus('用Supabase伺服器：免 API KEY，輸入房名即可。\n※同一桌須選同一伺服器。※免費專案閒置約一週會休眠，連線時會先自動喚醒（可能需數十秒）；連不上時會自動改用 Ably 備援。');
         } else if (announce) {
           updateLobbyStatus('使用 Ably：需 API KEY。※同一桌須選同一伺服器。※訊息有免費額度上限，對局中已降低心跳／快照頻率以省流量。');
         }
@@ -24442,7 +24442,7 @@ function showIntegrityReport(precomputed) {
   
   (function tw16SyncLobbyBuildLabel(){
     try {
-      var label = (typeof TW16_LOBBY_BUILD_LABEL === 'string' && TW16_LOBBY_BUILD_LABEL) ? TW16_LOBBY_BUILD_LABEL : '（115.11.6 改版｜2026-11-06 15:35 台灣時間）';
+      var label = (typeof TW16_LOBBY_BUILD_LABEL === 'string' && TW16_LOBBY_BUILD_LABEL) ? TW16_LOBBY_BUILD_LABEL : '（115.11.9 改版｜2026-11-09 11:29 台灣時間）';
       function apply(){
         try {
           var card = document.querySelector('#tw16Lobby .tw16-lobby-card');
