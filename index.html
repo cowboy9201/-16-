@@ -9830,6 +9830,8 @@ function loadUiSettings() {
       return guestPlayerIdentityMatches(players[seat], clientId, playerKey, instanceId);
     });
     if (identitySeat) return identitySeat;
+    /* 來賓端只認房主 players 名單中身分相符的座位，不可自行套用偏好/本機座位（否則會誤坐房主或他人座位而無法操作） */
+    if (isOnlineGuest()) return '';
     if (hostSeat && preferredSeat === hostSeat && !requesterIsHost) return '';
     if (networkSeatOrder().includes(preferredSeat)) {
       const preferredPlayer = players[preferredSeat];
@@ -11140,7 +11142,10 @@ function loadUiSettings() {
     applyHandVisualColors();
 
     if (isOnlineGuest()) {
-      const assigned = findAssignedGuestSeatForPlayer(net.clientId, net.playerKey, localSeatBeforeApply) || (networkSeatOrder().includes(localSeatBeforeApply) ? localSeatBeforeApply : '');
+      const localSeatRec = net.players && net.players[localSeatBeforeApply];
+      const localSeatTakenByOther = !!(localSeatRec && hasNetworkHumanIdentity(localSeatRec) && !guestPlayerIdentityMatches(localSeatRec, net.clientId, net.playerKey, net.instanceId));
+      const localSeatIsHost = !!(localSeatRec && (localSeatRec.role === 'host' || (net.hostClientId && localSeatRec.clientId === net.hostClientId)));
+      const assigned = findAssignedGuestSeatForPlayer(net.clientId, net.playerKey, localSeatBeforeApply, net.instanceId) || ((networkSeatOrder().includes(localSeatBeforeApply) && !localSeatTakenByOther && !localSeatIsHost && !localSeatRec) ? localSeatBeforeApply : '');
       if (assigned) {
         net.assignedSeat = assigned;
         state.viewSeat = assigned;
