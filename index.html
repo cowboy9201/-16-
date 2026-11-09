@@ -4513,7 +4513,8 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
   let lobbyAblyKeyRemoteFrameLoadingPromise = null;
   let lobbyAblyKeyServerRecordsCache = [];
   let lobbyAblyKeyDisplayState = { key: '', usable: false };
-  const NETWORK_SEAT_ORDER_BASE = ['south', 'west', 'north'];
+  /* 四個座位都可由來賓入座；房主自己的座位由 tw16HostOwnSeat() 排除（房主可能隨機坐在任一座位，東家不可永久保留給房主） */
+  const NETWORK_SEAT_ORDER_BASE = ['east', 'south', 'west', 'north'];
   function networkSeatOrder(){ return NETWORK_SEAT_ORDER_BASE.filter(isSeatActiveInTable); }
   const NETWORK_PLAYER_STALE_MS = 120000;
   const NETWORK_GUEST_ALIVE_MS = 5000;
@@ -4890,7 +4891,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     if (!isOnlineHost() || !net.channel || state.ended) return;
     const handId = state.handId || 0;
     if (!net.privHandSent) net.privHandSent = {};
-    const seats = networkSeatOrder().filter(s => s !== 'east');
+    const seats = networkSeatOrder().filter(s => s !== tw16HostOwnSeat());
     for (const seat of seats) {
       const p = net.players && net.players[seat];
       if (!p || !p.pubKey) continue;
@@ -4967,7 +4968,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     networkSeatOrder().forEach(seat => {
       const p = net.players && net.players[seat];
       const sessionId = networkPlayerSessionId(p);
-      if (sessionId && isActiveNetworkHumanPlayer(p, now) && !seen.has(sessionId)) {
+      if (sessionId && sessionId !== net.instanceId && seat !== tw16HostOwnSeat() && isActiveNetworkHumanPlayer(p, now) && !seen.has(sessionId)) {
         seen.add(sessionId);
         out.push({ sessionId, seat });
       }
@@ -11596,7 +11597,7 @@ function loadUiSettings() {
     }
     recordNetworkEvent(msg.accepted ? 'ack-ok' : 'ack-reject', (msg.accepted ? '動作已接受：' : '動作被拒絕：') + (msg.action || ''), { action: msg.action || '', reason: msg.reason || '', intentId: msg.intentId || '' });
     if (msg.accepted && msg.action === 'join') {
-      const match = String(msg.reason || '').match(/^join-(south|west|north)$/);
+      const match = String(msg.reason || '').match(/^join-(east|south|west|north)$/);
       if (match) {
         net.assignedSeat = match[1];
         state.viewSeat = match[1];
@@ -11682,6 +11683,7 @@ function loadUiSettings() {
     if (net.role !== 'host') return [];
     cleanupStaleNetworkPlayers('snapshot-ack-check');
     return networkSeatOrder().filter(seat => {
+      if (seat === tw16HostOwnSeat()) return false;
       const p = net.players && net.players[seat];
       return !!(p && isActiveNetworkHumanPlayer(p, Date.now()));
     });
