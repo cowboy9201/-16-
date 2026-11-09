@@ -5272,13 +5272,20 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
       } catch (e) {}
       addLog((job.joinName || msg.name || '來賓') + '入座 ' + SEAT_NAME[joinSeat] + '（空位）');
       try { tw16MarkSeatOccupied(joinSeat, 'guest-join'); } catch (e) {}
+      if (msg.pubKey && net.players[joinSeat]) {
+        net.players[joinSeat].pubKey = msg.pubKey;
+        if (net.guestAesKeys) delete net.guestAesKeys[joinSeat];
+      }
       publishNetworkAck(msg, true, 'join-' + joinSeat);
-      publishNetworkSnapshot('guest-join');
+      /* 中途入座：整桌狀態 + 該座所有牌快照（含重試） */
+      try { tw16SendFullSeatSnapshotToNewGuest(joinSeat, msg, 'guest-join-full'); } catch (e) {
+        publishNetworkSnapshot('guest-join');
+      }
       if (!isAblyBackend()) {
-        setTimeout(function () { publishNetworkSnapshot('guest-join-confirm-1'); }, 260);
-        setTimeout(function () { publishNetworkSnapshot('guest-join-confirm-2'); }, 900);
+        setTimeout(function () { try { tw16SendFullSeatSnapshotToNewGuest(joinSeat, msg, 'guest-join-confirm-1'); } catch (e) { publishNetworkSnapshot('guest-join-confirm-1'); } }, 400);
+        setTimeout(function () { try { publishNetworkSnapshot('guest-join-confirm-2', true); } catch (e) {} }, 1000);
       } else {
-        setTimeout(function () { publishNetworkSnapshot('guest-join-confirm-1'); }, 500);
+        setTimeout(function () { try { tw16SendFullSeatSnapshotToNewGuest(joinSeat, msg, 'guest-join-confirm-1'); } catch (e) { publishNetworkSnapshot('guest-join-confirm-1'); } }, 600);
       }
     } else {
       addLog('房間已滿（無安全空位可分配），拒絕來賓');
@@ -5536,6 +5543,46 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
         net.privHandSent[seat] = fp;
       } catch (e) {}
     }
+  }
+
+  /* 中途入座：把整桌狀態 + 該座位完整手牌（加密）強制推給新來賓，並短重試等 ECDH 就緒 */
+  function tw16SendFullSeatSnapshotToNewGuest(seat, joinMsg, reason) {
+    if (!isOnlineHost() || !seat || seat === 'east') return false;
+    const why = reason || 'mid-join-full-snapshot';
+    const targetOptions = networkGuestSnapshotTargetOptions(joinMsg || {}, seat);
+    try {
+      /* 先送 players（含座位標示），再強制整桌 state */
+      publishNetworkPlayers(why + '-players');
+    } catch (e) {}
+    try {
+      if (hasStartedNetworkHand(state)) {
+        publishNetworkSnapshot(why, true, targetOptions || { targetSeat: seat });
+      } else {
+        publishNetworkPlayers(why + '-pregame');
+      }
+    } catch (e) {}
+    /* 私牌：立即一次 + 300/800/1600ms 重試（等來賓公鑰／AES） */
+    const delays = [0, 300, 800, 1600, 3000];
+    delays.forEach(function (ms) {
+      setTimeout(function () {
+        try {
+          if (!isOnlineHost() || !net.channel) return;
+          const p = net.players && net.players[seat];
+          if (!p) return;
+          /* 若 join 訊息有公鑰但座位尚未寫入，補上 */
+          if (joinMsg && joinMsg.pubKey && !p.pubKey) {
+            p.pubKey = joinMsg.pubKey;
+            if (net.guestAesKeys) delete net.guestAesKeys[seat];
+          }
+          if (net.privHandSent) delete net.privHandSent[seat];
+          Promise.resolve(tw16PublishPrivateHands(why + '-private', true)).catch(function () {});
+        } catch (e) {}
+      }, ms);
+    });
+    try {
+      recordNetworkEvent('mid-join-snapshot', '中途入座整桌快照｜' + SEAT_NAME[seat], { seat: seat, reason: why, handId: state.handId || 0, phase: state.phase || '' });
+    } catch (e) {}
+    return true;
   }
 
   function makeNetworkPayloadCode() {
