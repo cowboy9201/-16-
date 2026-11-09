@@ -4882,37 +4882,66 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     return true;
   }
   function tw16NotifyHostSeatLeave(reason) {
-    if (!isOnlineGuest()) return false;
-    const seat = net.assignedSeat;
+    if (net.role !== 'guest') return false;
+    const seat = net.assignedSeat || '';
     if (!networkSeatOrder().includes(seat) || seat === 'east') return false;
+    if (!net.channel && !net.syncChannel) return false;
+    const payload = {
+      seat: seat,
+      clientId: net.clientId || '',
+      playerKey: net.playerKey || '',
+      senderInstanceId: net.instanceId || '',
+      sessionId: net.instanceId || '',
+      name: net.name || '',
+      reason: reason || 'logout',
+      room: net.room || ''
+    };
+    let ok = false;
     try {
-      publishNetworkRoomMessage('seatLeave', {
-        seat: seat,
-        clientId: net.clientId,
-        playerKey: net.playerKey,
-        senderInstanceId: net.instanceId,
-        name: net.name || '',
-        reason: reason || 'logout'
-      }, 'seat-leave');
-      return true;
-    } catch (e) { return false; }
+      ok = !!publishNetworkRoomMessage('seatLeave', payload, 'seat-leave');
+    } catch (e) { ok = false; }
+    /* 再送一次到 control 通道，提高關窗時送達率 */
+    try {
+      if (net.syncChannel && typeof net.syncChannel.publish === 'function') {
+        const msg = buildNetworkRoomMessage('seatLeave', Object.assign({ reason: 'seat-leave-ctl' }, payload), {});
+        net.syncChannel.publish(NETWORK_ROOM_EVENT, msg);
+        ok = true;
+      }
+    } catch (e) {}
+    try { recordNetworkEvent('seat-leave-out', '來賓離座通知｜' + SEAT_NAME[seat], { seat: seat, reason: reason || '', ok: ok }); } catch (e) {}
+    return ok;
   }
   function tw16HandleSeatLeave(data) {
     if (!isOnlineHost() || !data) return false;
-    const seat = data.seat;
+    let seat = data.seat;
+    if (!networkSeatOrder().includes(seat) || seat === 'east') {
+      /* 若沒帶 seat，依身分找座位 */
+      seat = findAssignedGuestSeatForPlayer(data.clientId, data.playerKey, '', data.senderInstanceId || data.sessionId || '');
+    }
     if (!networkSeatOrder().includes(seat) || seat === 'east') return false;
     const p = net.players && net.players[seat];
-    /* 僅在身分相符時釋放，避免他人假冒清位 */
-    const same = !p || guestPlayerIdentityMatches(p, data.clientId, data.playerKey, data.senderInstanceId || data.sessionId || '');
+    const inst = data.senderInstanceId || data.sessionId || data.instanceId || '';
+    const same = !p || guestPlayerIdentityMatches(p, data.clientId, data.playerKey, inst)
+      || (data.playerKey && p.playerKey && String(p.playerKey) === String(data.playerKey))
+      || (data.clientId && p.clientId && String(p.clientId) === String(data.clientId));
     if (!same) return false;
     try {
       if (net.players) delete net.players[seat];
       state.seatAutoPlay[seat] = true;
       if (net.seatReservations && net.seatReservations[seat]) delete net.seatReservations[seat];
     } catch (e) {}
+    /* 強制拿掉「有人」標籤並同步全桌 */
     tw16MarkSeatFree(seat, 'guest-leave');
+    try {
+      const m = Object.assign({}, tw16GetSeatOccupiedMarks());
+      m[seat] = false;
+      m.east = true;
+      tw16SetSeatOccupiedMarks(m, 'guest-leave-force', true);
+    } catch (e) {}
     try { publishNetworkPlayers('seat-leave'); } catch (e) {}
-    try { addLog((data.name || '來賓') + '離開 ' + SEAT_NAME[seat]); } catch (e) {}
+    try { publishNetworkSnapshot('seat-leave', false); } catch (e) {}
+    try { addLog((data.name || '來賓') + '離開 ' + SEAT_NAME[seat] + '（已移除有人標籤）'); } catch (e) {}
+    try { miniDashboardRenderKey = ''; updateMiniDashboard(); } catch (e) {}
     return true;
   }
 
@@ -10547,6 +10576,7 @@ function loadUiSettings() {
         if (state.turn === seat && !state.ended) currentTurnChangedToComputer = true;
         addLog(SEAT_NAME[seat] + '斷線，改由電腦代管');
         recordNetworkEvent('player-stale', SEAT_NAME[seat] + '逾時改電腦', { seat, reason: reason || '' });
+        try { if (typeof tw16MarkSeatFree === 'function') tw16MarkSeatFree(seat, 'player-stale'); } catch (e) {}
         changed = true;
       }
     });
@@ -12726,11 +12756,15 @@ function loadUiSettings() {
   (function tw16InstallSeatLeaveUnload() {
     if (window.tw16SeatLeaveUnloadInstalled) return;
     window.tw16SeatLeaveUnloadInstalled = true;
-    function notify() {
-      try { tw16NotifyHostSeatLeave('page-unload'); } catch (e) {}
+    function notify(reason) {
+      try { tw16NotifyHostSeatLeave(reason || 'page-unload'); } catch (e) {}
     }
-    window.addEventListener('pagehide', notify);
-    window.addEventListener('beforeunload', notify);
+    window.addEventListener('pagehide', function () { notify('pagehide'); });
+    window.addEventListener('beforeunload', function () { notify('beforeunload'); });
+    document.addEventListener('visibilitychange', function () {
+      /* 分頁被系統回收前常會先 hidden；此時仍有機會送出離座 */
+      if (document.visibilityState === 'hidden') notify('visibility-hidden');
+    });
   })();
 
   function stopNetworkPulse() {
@@ -13514,6 +13548,8 @@ function markSawHostSignal(reason) {
 
   function disconnectAbly(logMessage) {
     try { net._sbWakeDone = false; net._sbWakeInProgress = false; } catch (e) {}
+    /* 斷線前先通知房主釋放座位與「有人」標籤 */
+    try { tw16NotifyHostSeatLeave('disconnect'); } catch (e) {}
     clearGuestJoinRetry();
     clearGuestSyncTimer();
     clearGuestApiKeyRetry('disconnect');
