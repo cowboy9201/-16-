@@ -4058,6 +4058,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     this._echo = opts.echoMessages !== false;
     this._channels = {};
     this._closed = false;
+    this._wd = 0;
     this.channels = { get: function (name) { return self._getChannel(name); } };
     if (!window.supabase || !window.supabase.createClient) {
       setTimeout(function () { self.connection._set('failed', 'Supabase SDK 尚未載入'); }, 0);
@@ -4068,6 +4069,43 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
       realtime: { params: { eventsPerSecond: 40 } }
     });
     setTimeout(function () { if (!self._closed) self.connection._set('connected'); }, 0);
+
+    /* 看門狗：supabase-js 在 TIMED_OUT/手機背景休眠後，頻道有時會一直停在 errored/closed，
+       造成該座位收不到房主訊息而卡死（只能重新登入）。這裡偵測到非 joined 狀態太久就
+       移除並重新加入頻道，並讓遊戲收到 disconnected → connected 以觸發重新同步。 */
+    function wdCheck(force) {
+      if (self._closed || !self._sb) return;
+      var now = Date.now();
+      var sockOk = true;
+      try { sockOk = !self._sb.realtime || typeof self._sb.realtime.isConnected !== 'function' || self._sb.realtime.isConnected(); } catch (e) {}
+      Object.keys(self._channels).forEach(function (k) {
+        var ch = self._channels[k];
+        if (!ch || !ch._sbch || !ch._everAttached) return;
+        var st = ch._sbch.state;
+        if (st === 'joined' && sockOk) { ch._badSince = 0; return; }
+        if (!ch._badSince) ch._badSince = now;
+        var limit = force ? 1500 : 7000;
+        if (now - ch._badSince < limit) return;
+        if (now - (ch._lastRejoinAt || 0) < (force ? 2500 : 7000)) return;
+        ch._lastRejoinAt = now;
+        ch._badSince = now;
+        try { if (!sockOk && self._sb.realtime && typeof self._sb.realtime.connect === 'function') self._sb.realtime.connect(); } catch (e) {}
+        try { console.warn('[supabase-shim] channel stuck (' + st + '), rejoining:', ch.name); } catch (e) {}
+        self.connection._set('disconnected', 'rejoin');
+        var old = ch._sbch;
+        ch._sbch = null;
+        ch.state = 'initialized';
+        try { self._sb.removeChannel(old); } catch (e) {}
+        ch.attach(function () {});
+      });
+    }
+    this._wd = setInterval(function () { wdCheck(false); }, 4000);
+    this._wdVis = function () { if (!document.hidden) wdCheck(true); };
+    this._wdOnline = function () { wdCheck(true); };
+    try {
+      document.addEventListener('visibilitychange', this._wdVis);
+      window.addEventListener('online', this._wdOnline);
+    } catch (e) {}
   }
 
   Realtime.prototype._getChannel = function (name) {
@@ -4165,6 +4203,12 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
 
   Realtime.prototype.close = function () {
     this._closed = true;
+    try {
+      if (this._wd) clearInterval(this._wd);
+      this._wd = 0;
+      if (this._wdVis) document.removeEventListener('visibilitychange', this._wdVis);
+      if (this._wdOnline) window.removeEventListener('online', this._wdOnline);
+    } catch (e) {}
     var self = this;
     Object.keys(this._channels).forEach(function (k) { self._channels[k].state = 'detached'; self._channels[k]._sbch = null; });
     try { if (this._sb) { this._sb.removeAllChannels(); this._sb.realtime.disconnect(); } } catch (e) {}
@@ -5526,7 +5570,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
       if (broadcastOk) return true;
     }
     const mainOk = publishNetworkMessageToChannel(net.channel, message, debugSource || 'ably-send', networkRoomChannelName(net.room));
-    if (shouldMirrorNetworkMessageToControl(message) && net.syncChannel && net.syncChannel !== net.channel) {
+    if ((net.backend || (window.tw16GetBackend && window.tw16GetBackend())) !== 'supabase' && shouldMirrorNetworkMessageToControl(message) && net.syncChannel && net.syncChannel !== net.channel) {
       publishNetworkMessageToChannel(net.syncChannel, message, (debugSource || 'ably-send') + '-ctl', networkRoomControlChannelName(net.room));
     }
     return mainOk;
@@ -5832,7 +5876,16 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
           const guestSeq = Number(data.lastAppliedSnapshotSeq || 0);
           const needsLatest = data.type === 'hello' || data.type === 'human' || data.type === 'sync' || !!data.syncDemand || guestSeq < Number(net.seq || 0);
           if (needsLatest) {
-            publishLatestSnapshotToRequestingGuest(data, assigned, (data.type === 'heartbeat' ? 'guest-heartbeat-sync' : data.type + '-state'));
+            /* lag_fix_storm: 落後的座位會每1~2秒要求同步，房主每次都對全桌廣播整包快照，
+               讓其他座位也跟著變慢。同一來賓冷卻內只回一次（hello/human 冷卻較短）。 */
+            const _cdKey = String(data.sessionId || data.senderInstanceId || data.clientId || assigned || '');
+            const _cdMs = (data.type === 'hello' || data.type === 'human') ? 700 : 2200;
+            if (!net._guestSyncReplyAt) net._guestSyncReplyAt = {};
+            const _cdNow = Date.now();
+            if (!_cdKey || _cdNow - Number(net._guestSyncReplyAt[_cdKey] || 0) >= _cdMs) {
+              if (_cdKey) net._guestSyncReplyAt[_cdKey] = _cdNow;
+              publishLatestSnapshotToRequestingGuest(data, assigned, (data.type === 'heartbeat' ? 'guest-heartbeat-sync' : data.type + '-state'));
+            }
           }
         }
         return true;
