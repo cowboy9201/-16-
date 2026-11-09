@@ -10667,10 +10667,15 @@ function loadUiSettings() {
 
   function setSeatAutoplay(seat, enabled, reason) {
     if (!SEATS.includes(seat)) return false;
-    /* 房主座位的托管只能由房主本機切換，來賓入座／同步不可改 */
+    /* 房主座位托管：本機切換與出牌逾時代管允許；其它來賓同步不可改 */
     if (isOnlineHost() && (seat === 'east' || seat === (net.assignedSeat || state.viewSeat))) {
       const r = String(reason || '');
-      if (r && r !== 'local-toggle' && r !== 'host-local-toggle' && r !== 'ui-toggle' && !/^host-/.test(r) && r !== 'autoplay-toggle') {
+      const hostOk = !r
+        || r === 'local-toggle' || r === 'host-local-toggle' || r === 'ui-toggle' || r === 'autoplay-toggle'
+        || r === 'turn-timeout-autoplay' || r === 'battle-start' || r === 'battle-stop'
+        || r === 'menu-auto-all' || r === 'menu-human-bottom' || r === 'menu-human-all' || r === 'menu-toggle'
+        || /^host-/.test(r);
+      if (!hostOk) {
         recordNetworkEvent('autoplay-guard', '拒絕改動房主座位托管｜' + r, { seat, enabled: !!enabled, reason: r });
         return false;
       }
@@ -19507,13 +19512,28 @@ function markSawHostSignal(reason) {
         autoplayTimer = setTimeout(() => scheduleDriveSeat('wait-human-discard'), 1000);
         return;
       }
-      setSeatAutoplay(seat, true, 'turn-timeout-autoplay');
+      const autoOk = setSeatAutoplay(seat, true, 'turn-timeout-autoplay');
+      if (!autoOk) {
+        /* 後備：即使 guard 擋下也強制開啟本機托管，避免無限重開倒計時 */
+        state.seatAutoPlay[seat] = true;
+        try {
+          const _p = net.players && net.players[seat];
+          if (_p) { _p.autoplay = true; _p.lastSeenAt = Date.now(); }
+        } catch (e) {}
+        recordNetworkEvent('autoplay-force', SEAT_NAME[seat] + '逾時強制托管', { seat: seat });
+      }
       addLog(SEAT_NAME[seat] + '未出牌逾時，開啟代管');
       clearTurnDeadline();
       if (isOnlineHost()) {
-        publishNetworkPlayers('turn-timeout-autoplay');
+        try { publishNetworkPlayers('turn-timeout-autoplay'); } catch (e) {}
         const ok = await publishNetworkSnapshotAndWait('turn-timeout-autoplay', () => !state.ended && state.turn === seat && state.phase === 'discard');
-        if (!ok) return;
+        if (!ok) {
+          /* 同步失敗仍繼續本機代打，避免又重開倒計時 */
+          renderAll();
+          clearTimeout(autoplayTimer);
+          autoplayTimer = setTimeout(() => scheduleDriveSeat('turn-timeout-autoplay'), 90);
+          return;
+        }
       }
       renderAll();
       clearTimeout(autoplayTimer);
