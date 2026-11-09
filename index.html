@@ -4637,6 +4637,12 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
   function keepGuestPlayerRecordHuman(seat, msg, reason) {
     if (!networkSeatOrder().includes(seat)) return '';
     net.players = net.players || {};
+    /* 座位獨佔：座位已被另一位仍在線的真人（或房主）佔用時，不可覆蓋其身分 */
+    if (msg && (msg.clientId || msg.playerKey || msg.senderInstanceId || msg.sessionId || msg.instanceId)
+        && guestSeatOccupiedByDifferentLivePlayer(seat, msg.clientId, msg.playerKey, msg.senderInstanceId || msg.sessionId || msg.instanceId || '')) {
+      try { recordNetworkEvent('seat-hijack-blocked', SEAT_NAME[seat] + '已有其他玩家入座，拒絕重複入座', { seat, reason: reason || '' }); } catch (e) {}
+      return '';
+    }
     const player = net.players[seat] || {};
     player.clientId = normalizeNetworkId((msg && msg.clientId) || player.clientId);
     player.playerKey = normalizeNetworkId((msg && msg.playerKey) || player.playerKey);
@@ -4659,8 +4665,8 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     const preferredSeat = networkSeatOrder().includes(msg.seat) ? msg.seat : '';
     let assigned = findAssignedGuestSeatForPlayer(msg.clientId, msg.playerKey, preferredSeat, msg.senderInstanceId || msg.sessionId || msg.instanceId || '');
     if (!assigned) assigned = assignGuestSeat(msg.clientId, msg.name || '來賓', msg.playerKey || '', preferredSeat, msg.senderInstanceId || msg.sessionId || msg.instanceId || '');
+    if (assigned && !keepGuestPlayerRecordHuman(assigned, msg, reason || 'message')) assigned = '';
     if (assigned) {
-      keepGuestPlayerRecordHuman(assigned, msg, reason || 'message');
       // tw16_hand_privacy_ecdh_20260802: 不只 join，sync/heartbeat 等各種來賓訊息
       // 都可能帶著公鑰，這裡統一擷取並在跟快取不同時重新推導，減少「join 當下金鑰
       // 還沒產生好」這種競態造成永遠沒完成金鑰交換的機率。
@@ -9758,13 +9764,37 @@ function loadUiSettings() {
     return seat !== state.viewSeat;
   }
 
+  const TW16_TAB_ID = 't' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+  let tw16KeyLockTimer = 0;
   function getStoredPlayerKey() {
     try {
-      const saved = localStorage.getItem('tw16_clean_ably_player_key');
-      if (saved) return saved;
-      const created = 'p' + Math.random().toString(36).slice(2) + Date.now().toString(36);
-      localStorage.setItem('tw16_clean_ably_player_key', created);
-      return created;
+      const BASE = 'tw16_clean_ably_player_key', LOCK = 'tw16_player_key_lock', TABK = 'tw16_tab_player_key';
+      let base = localStorage.getItem(BASE);
+      if (!base) {
+        base = 'p' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+        localStorage.setItem(BASE, base);
+      }
+      let tabKey = '';
+      try { tabKey = sessionStorage.getItem(TABK) || ''; } catch (e) {}
+      let lock = null;
+      try { lock = JSON.parse(localStorage.getItem(LOCK) || 'null'); } catch (e) {}
+      const lockedByOther = !!(lock && lock.id !== TW16_TAB_ID && Date.now() - Number(lock.at || 0) < 10000);
+      let key;
+      /* 同一瀏覽器開多個分頁會共用 playerKey，造成兩個人被認成同一人而重複入座；
+         第二個分頁起改用獨立的 playerKey（同分頁重新整理仍沿用） */
+      if (tabKey && tabKey !== base) key = tabKey;
+      else if (lockedByOther) key = base + '-t' + Math.random().toString(36).slice(2, 8);
+      else key = base;
+      try { sessionStorage.setItem(TABK, key); } catch (e) {}
+      if (key === base && !tw16KeyLockTimer) {
+        const beat = () => { try { localStorage.setItem(LOCK, JSON.stringify({ id: TW16_TAB_ID, at: Date.now() })); } catch (e) {} };
+        const release = () => { try { const l = JSON.parse(localStorage.getItem(LOCK) || 'null'); if (l && l.id === TW16_TAB_ID) localStorage.setItem(LOCK, JSON.stringify({ id: TW16_TAB_ID, at: 0 })); } catch (e) {} };
+        beat();
+        tw16KeyLockTimer = setInterval(beat, 2000);
+        window.addEventListener('pagehide', release);
+        window.addEventListener('beforeunload', release);
+      }
+      return key;
     } catch (e) {
       return net.playerKey || ('p' + Math.random().toString(36).slice(2));
     }
@@ -9793,8 +9823,14 @@ function loadUiSettings() {
   function findAssignedGuestSeatForPlayer(clientId, playerKey, preferredSeat, instanceId) {
     const players = net.players || {};
     const now = Date.now();
-    const identitySeat = networkSeatOrder().find(seat => guestPlayerIdentityMatches(players[seat], clientId, playerKey, instanceId));
+    const hostSeat = tw16HostOwnSeat();
+    const requesterIsHost = tw16IsHostIdentity(clientId, instanceId);
+    const identitySeat = networkSeatOrder().find(seat => {
+      if (hostSeat && seat === hostSeat && !requesterIsHost) return false;
+      return guestPlayerIdentityMatches(players[seat], clientId, playerKey, instanceId);
+    });
     if (identitySeat) return identitySeat;
+    if (hostSeat && preferredSeat === hostSeat && !requesterIsHost) return '';
     if (networkSeatOrder().includes(preferredSeat)) {
       const preferredPlayer = players[preferredSeat];
       if (!preferredPlayer || isPlayerStale(preferredPlayer, now) || !hasNetworkHumanIdentity(preferredPlayer)) return preferredSeat;
@@ -11168,8 +11204,17 @@ function loadUiSettings() {
     return true;
   }
 
+  /* 座位獨佔：房主自己的座位，任何非房主身分（含同瀏覽器同 playerKey 的分頁）都不可佔用 */
+  function tw16HostOwnSeat() {
+    return isOnlineHost() ? (net.assignedSeat || state.viewSeat || 'east') : '';
+  }
+  function tw16IsHostIdentity(clientId, instanceId) {
+    const c = normalizeNetworkId(clientId), i = normalizeNetworkId(instanceId);
+    return !!((i && i === net.instanceId) || (c && c === net.clientId));
+  }
   function guestSeatOccupiedByDifferentLivePlayer(seat, clientId, playerKey, instanceId) {
     if (!networkSeatOrder().includes(seat)) return false;
+    if (isOnlineHost() && seat === tw16HostOwnSeat() && !tw16IsHostIdentity(clientId, instanceId)) return true;
     const player = net.players && net.players[seat];
     if (!player || isPlayerStale(player, Date.now()) || !hasNetworkHumanIdentity(player)) return false;
     return !guestPlayerIdentityMatches(player, clientId, playerKey, instanceId);
@@ -11177,6 +11222,7 @@ function loadUiSettings() {
 
   function guestSeatAvailableForNewAssignment(seat, now) {
     if (!networkSeatOrder().includes(seat)) return false;
+    if (isOnlineHost() && seat === tw16HostOwnSeat()) return false;
     const player = net.players && net.players[seat];
     if (!player) return true;
     if (isPlayerStale(player, now || Date.now())) return true;
@@ -11571,9 +11617,11 @@ function loadUiSettings() {
   function markNetworkPlayerActive(msg, restoreHumanControl) {
     if (!isOnlineHost() || !msg) return '';
     let seat = networkSeatOrder().includes(msg.seat) ? msg.seat : '';
-    if (!seat) seat = findAssignedGuestSeatForPlayer(msg.clientId, msg.playerKey, msg.seat, msg.senderInstanceId || msg.sessionId || '');
+    const markInst = msg.senderInstanceId || msg.sessionId || '';
+    if (seat && guestSeatOccupiedByDifferentLivePlayer(seat, msg.clientId, msg.playerKey, markInst)) seat = '';
+    if (!seat) seat = findAssignedGuestSeatForPlayer(msg.clientId, msg.playerKey, '', markInst);
     if (!seat) return '';
-    keepGuestPlayerRecordHuman(seat, msg, 'active-' + (msg.action || 'message'));
+    if (!keepGuestPlayerRecordHuman(seat, msg, 'active-' + (msg.action || 'message'))) return '';
     if (restoreHumanControl) {
       recordNetworkEvent('human-active', SEAT_NAME[seat] + '真人訊息已收到，保留原托管狀態', { seat, action: msg.action || '' });
     }
