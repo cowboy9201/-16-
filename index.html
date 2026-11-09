@@ -4907,36 +4907,204 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
   function touchGuestPlayerFromMessage(msg, reason) {
     if (!isOnlineHost() || !msg) return '';
     if ((msg.role && msg.role !== 'guest') || (msg.senderRole && msg.senderRole !== 'guest')) return '';
-    /* 來賓訊息帶來的 seat／偏好若是東家或房主位，一律忽略 */
+    /* 只更新「已入座且身分相符」的座位，絕不在此新分配座位（新分配一律走 seatProbe 入座流程） */
     let preferredSeat = networkSeatOrder().includes(msg.seat) ? msg.seat : '';
     if (preferredSeat === 'east' || (typeof tw16IsHostLockedSeat === 'function' && tw16IsHostLockedSeat(preferredSeat))) preferredSeat = '';
-    if (msg.preferredSeat && networkSeatOrder().includes(msg.preferredSeat) && msg.preferredSeat !== 'east'
-        && !(typeof tw16IsHostLockedSeat === 'function' && tw16IsHostLockedSeat(msg.preferredSeat))) {
-      preferredSeat = preferredSeat || msg.preferredSeat;
-    }
     let assigned = findAssignedGuestSeatForPlayer(msg.clientId, msg.playerKey, preferredSeat, msg.senderInstanceId || msg.sessionId || msg.instanceId || '');
     if (assigned === 'east' || (typeof tw16IsHostLockedSeat === 'function' && tw16IsHostLockedSeat(assigned))) assigned = '';
-    if (!assigned) assigned = assignGuestSeat(msg.clientId, msg.name || '來賓', msg.playerKey || '', preferredSeat, msg.senderInstanceId || msg.sessionId || msg.instanceId || '');
-    if (assigned === 'east' || (typeof tw16IsHostLockedSeat === 'function' && tw16IsHostLockedSeat(assigned))) assigned = '';
-    if (assigned && !keepGuestPlayerRecordHuman(assigned, msg, reason || 'message')) assigned = '';
-    if (assigned) {
-      // tw16_hand_privacy_ecdh_20260802: 不只 join，sync/heartbeat 等各種來賓訊息
-      // 都可能帶著公鑰，這裡統一擷取並在跟快取不同時重新推導，減少「join 當下金鑰
-      // 還沒產生好」這種競態造成永遠沒完成金鑰交換的機率。
-      if (msg.pubKey && net.players[assigned] && JSON.stringify(msg.pubKey) !== JSON.stringify(net.players[assigned].pubKey || null)) {
-        net.players[assigned].pubKey = msg.pubKey;
-        if (net.guestAesKeys) delete net.guestAesKeys[assigned];
-        tw16EnsureHostGuestAesKey(assigned);
-      }
-      const action = String(msg.action || '');
-      const fromInitialJoin = action === 'guestInitialAutoplayOff' || action === 'join';
-      const fromJoinOrSync = /hello|join|sync/.test(String(reason || 'message'));
-      if ((msg.localAutoplay === false || msg.autoplay === false || msg.stopTimeoutTakeover === true) && (fromInitialJoin || fromJoinOrSync)) {
-        setSeatAutoplay(assigned, false, 'guest-initial-default');
-      }
-      removeDuplicateGuestPlayerRecords(assigned, msg.clientId, msg.playerKey, reason || 'message');
+    /* 禁止在 heartbeat/sync 路徑呼叫 assignGuestSeat，避免關窗重開誤分到房主位 */
+    if (!assigned) return '';
+    if (!keepGuestPlayerRecordHuman(assigned, msg, reason || 'message')) return '';
+    if (msg.pubKey && net.players[assigned] && JSON.stringify(msg.pubKey) !== JSON.stringify(net.players[assigned].pubKey || null)) {
+      net.players[assigned].pubKey = msg.pubKey;
+      if (net.guestAesKeys) delete net.guestAesKeys[assigned];
+      tw16EnsureHostGuestAesKey(assigned);
     }
+    const action = String(msg.action || '');
+    const fromInitialJoin = action === 'guestInitialAutoplayOff' || action === 'join';
+    const fromJoinOrSync = /hello|join|sync/.test(String(reason || 'message'));
+    if ((msg.localAutoplay === false || msg.autoplay === false || msg.stopTimeoutTakeover === true) && (fromInitialJoin || fromJoinOrSync)) {
+      setSeatAutoplay(assigned, false, 'guest-initial-default');
+    }
+    removeDuplicateGuestPlayerRecords(assigned, msg.clientId, msg.playerKey, reason || 'message');
     return assigned || '';
+  }
+
+  /* ===== 座位存活探詢：入座前先問各座位有無瀏覽器在操控 ===== */
+  function tw16SeatProbeTimeoutMs() {
+    return isAblyBackend() ? 1400 : 900;
+  }
+  function tw16BeginSeatProbeJoin(joinMsg, source) {
+    if (!isOnlineHost() || !joinMsg) return false;
+    if (!net._seatProbeJoins) net._seatProbeJoins = {};
+    const probeId = 'sp-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+    const joinPref = (joinMsg.preferredSeat === 'east' || joinMsg.preferredSeat === (typeof tw16HostOwnSeat === 'function' ? tw16HostOwnSeat() : 'east')) ? '' : (joinMsg.preferredSeat || '');
+    const joinName = (typeof tw16IsBlankPlayerName === 'function' && tw16IsBlankPlayerName(joinMsg.name))
+      ? tw16PickRandomPlayerName(tw16CollectUsedPlayerNames())
+      : (joinMsg.name || '來賓');
+    const requesterKey = String(joinMsg.playerKey || '');
+    const requesterInst = String(joinMsg.senderInstanceId || joinMsg.sessionId || joinMsg.instanceId || '');
+    const requesterClient = String(joinMsg.clientId || '');
+    /* 房主位永遠視為有人操控 */
+    const alive = { east: { by: 'host', at: Date.now() } };
+    net._seatProbeJoins[probeId] = {
+      msg: joinMsg,
+      source: source || '',
+      joinPref: joinPref,
+      joinName: joinName,
+      requesterKey: requesterKey,
+      requesterInst: requesterInst,
+      requesterClient: requesterClient,
+      alive: alive,
+      startedAt: Date.now()
+    };
+    try {
+      publishNetworkRoomMessage('seatProbe', {
+        probeId: probeId,
+        room: net.room,
+        hostClientId: net.clientId,
+        reason: 'join-allocate'
+      }, 'seat-probe');
+    } catch (e) {}
+    /* 房主本機也記一次 east alive */
+    alive.east = { by: 'host', at: Date.now() };
+    const waitMs = tw16SeatProbeTimeoutMs();
+    setTimeout(function () {
+      try { tw16FinishSeatProbeJoin(probeId); } catch (e) {}
+    }, waitMs);
+    try { updateLobbyStatus('正在向各座位確認是否仍有人操控…'); } catch (e) {}
+    try { recordNetworkEvent('seat-probe-start', '入座前探詢座位存活', { probeId: probeId, waitMs: waitMs }); } catch (e) {}
+    return true;
+  }
+  function tw16OnSeatAlive(data) {
+    if (!isOnlineHost() || !data || !data.probeId) return false;
+    const job = net._seatProbeJoins && net._seatProbeJoins[data.probeId];
+    if (!job) return false;
+    const seat = data.seat;
+    if (!networkSeatOrder().includes(seat) || seat === 'east') {
+      if (seat === 'east') job.alive.east = { by: 'host', at: Date.now() };
+      return true;
+    }
+    /* 申請者本人對舊座位的回應不算「仍有人操控」（同一人重開新窗） */
+    const sameRequester = (
+      (job.requesterInst && data.senderInstanceId && job.requesterInst === String(data.senderInstanceId)) ||
+      (job.requesterKey && data.playerKey && job.requesterKey === String(data.playerKey) && job.requesterInst && data.senderInstanceId && job.requesterInst === String(data.senderInstanceId))
+    );
+    if (sameRequester) return true;
+    /* 若回應者 playerKey 就是申請者，但 instance 不同 → 舊窗已關、新窗在申請，舊窗不該還在；若舊窗真的回應了，仍算佔用（多開） */
+    job.alive[seat] = {
+      by: String(data.senderInstanceId || data.clientId || data.playerKey || 'guest'),
+      playerKey: String(data.playerKey || ''),
+      instanceId: String(data.senderInstanceId || ''),
+      at: Date.now()
+    };
+    return true;
+  }
+  function tw16FinishSeatProbeJoin(probeId) {
+    if (!isOnlineHost() || !net._seatProbeJoins || !net._seatProbeJoins[probeId]) return false;
+    const job = net._seatProbeJoins[probeId];
+    delete net._seatProbeJoins[probeId];
+    const alive = job.alive || {};
+    alive.east = alive.east || { by: 'host', at: Date.now() };
+    /* 無回應的座位：清掉殘留 players，視為可分配 */
+    ['south', 'west', 'north'].forEach(function (seat) {
+      if (alive[seat]) return;
+      const p = net.players && net.players[seat];
+      if (!p) return;
+      /* 若殘留的是申請者自己的舊紀錄，清掉以便重登回原位 */
+      const isRequesterOld = (job.requesterKey && p.playerKey && String(p.playerKey) === job.requesterKey) ||
+        (job.requesterClient && p.clientId && String(p.clientId) === job.requesterClient);
+      if (!alive[seat]) {
+        try {
+          delete net.players[seat];
+          state.seatAutoPlay[seat] = true;
+          if (net.seatReservations && isRequesterOld) {
+            /* 保留申請者的 reserved 以利回原位 */
+          } else if (net.seatReservations && net.seatReservations[seat] && !isRequesterOld) {
+            /* 無回應的他人座位：清保留 */
+            delete net.seatReservations[seat];
+          }
+          recordNetworkEvent('seat-probe-free', SEAT_NAME[seat] + '無瀏覽器回應，可分配', { seat: seat, probeId: probeId });
+        } catch (e) {}
+      }
+    });
+    /* 有回應的座位：標記活人 lastSeenAt，禁止分配 */
+    Object.keys(alive).forEach(function (seat) {
+      if (seat === 'east') return;
+      const p = net.players && net.players[seat];
+      if (p) {
+        p.lastSeenAt = Date.now();
+        p.human = true;
+      }
+    });
+    tw16EnsureHostSeatRecord();
+    const msg = job.msg;
+    let joinSeat = assignGuestSeat(msg.clientId, job.joinName, msg.playerKey || '', job.joinPref, msg.senderInstanceId || msg.sessionId || '');
+    if (joinSeat === 'east' || (typeof tw16IsHostLockedSeat === 'function' && tw16IsHostLockedSeat(joinSeat))) joinSeat = '';
+    /* 雙重保險：若算出的座位當下仍有 alive 回應，改找其他空位 */
+    if (joinSeat && alive[joinSeat] && !(job.requesterKey && alive[joinSeat].playerKey === job.requesterKey && !alive[joinSeat].instanceId)) {
+      /* 有其他人回應此座位 */
+      if (!(job.requesterKey && alive[joinSeat].playerKey === job.requesterKey)) {
+        const alt = ['south', 'west', 'north'].find(function (s) {
+          return s !== joinSeat && !alive[s] && guestSeatAvailableForNewAssignment(s, Date.now(), msg.playerKey || '');
+        });
+        joinSeat = alt || '';
+      }
+    }
+    if (joinSeat && alive[joinSeat] && alive[joinSeat].playerKey && job.requesterKey && alive[joinSeat].playerKey !== job.requesterKey) {
+      joinSeat = ['south', 'west', 'north'].find(function (s) { return !alive[s] && s !== 'east'; }) || '';
+      if (joinSeat) {
+        joinSeat = assignGuestSeat(msg.clientId, job.joinName, msg.playerKey || '', joinSeat, msg.senderInstanceId || msg.sessionId || '') || joinSeat;
+        if (joinSeat === 'east') joinSeat = '';
+      }
+    }
+    if (joinSeat === 'east') joinSeat = '';
+    if (joinSeat) {
+      if (msg.localAutoplay === true && msg.stopTimeoutTakeover !== true) {
+        setSeatAutoplay(joinSeat, true, 'guest-local-toggle');
+      } else {
+        setSeatAutoplay(joinSeat, false, 'guest-initial-default');
+      }
+      if (msg.pubKey && net.players[joinSeat]) {
+        net.players[joinSeat].pubKey = msg.pubKey;
+        if (net.guestAesKeys) delete net.guestAesKeys[joinSeat];
+        try { tw16EnsureHostGuestAesKey(joinSeat); } catch (e) {}
+      }
+      addLog((job.joinName || msg.name || '來賓') + '入座 ' + SEAT_NAME[joinSeat] + '（已確認空位）');
+      publishNetworkAck(msg, true, 'join-' + joinSeat);
+      publishNetworkSnapshot('guest-join');
+      if (!isAblyBackend()) {
+        setTimeout(function () { publishNetworkSnapshot('guest-join-confirm-1'); }, 260);
+        setTimeout(function () { publishNetworkSnapshot('guest-join-confirm-2'); }, 900);
+      } else {
+        setTimeout(function () { publishNetworkSnapshot('guest-join-confirm-1'); }, 500);
+      }
+    } else {
+      addLog('房間已滿（各座位皆有瀏覽器回應），拒絕來賓');
+      publishNetworkAck(msg, false, 'room-full');
+      try { publishNetworkPlayers('room-full'); } catch (e) {}
+    }
+    return true;
+  }
+  function tw16ReplySeatProbe(data) {
+    if (!data || !data.probeId) return false;
+    /* 房主：east 由 begin 時直接標記，不必回 */
+    if (isOnlineHost()) return false;
+    if (!isOnlineGuest()) return false;
+    const seat = net.assignedSeat;
+    if (!networkSeatOrder().includes(seat) || seat === 'east') return false;
+    try {
+      publishNetworkRoomMessage('seatAlive', {
+        probeId: data.probeId,
+        seat: seat,
+        clientId: net.clientId,
+        playerKey: net.playerKey,
+        senderInstanceId: net.instanceId,
+        name: net.name || '',
+        room: net.room
+      }, 'seat-alive');
+      return true;
+    } catch (e) { return false; }
   }
 
   function nextNetworkReceiptTag(seat) {
@@ -6066,38 +6234,19 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     if (net.role === 'guest' && !networkIncomingTargetsThisGuest(data)) return false;
     if (!data._ackAlreadySent) publishNetworkAckReceipt(data, source);
     if (net.role === 'host') {
+      if (data.type === 'seatAlive') { tw16OnSeatAlive(data); return true; }
+      if (data.type === 'seatProbe') { return true; }
       if (data.type === 'hello' || data.type === 'sync' || data.type === 'human' || (data.type === 'heartbeat' && data.role === 'guest')) {
         const assigned = touchGuestPlayerFromMessage(data, 'room-' + data.type);
         recordNetworkEvent('room-in', '收到來賓' + data.type + '｜' + (assigned ? SEAT_NAME[assigned] : '未入座'), { type: data.type, assigned, source: source || '', sessionId: data.sessionId || '', messageId: data.messageId || '' });
         // hello 攜帶 action:'join' 時，直接在此處理入座，不依賴 intent 路徑
         if (data.type === 'hello' && data.action === 'join') {
-          const joinPref = (data.preferredSeat === 'east' || data.preferredSeat === (typeof tw16HostOwnSeat === 'function' ? tw16HostOwnSeat() : 'east')) ? '' : (data.preferredSeat || '');
-          const joinName = tw16IsBlankPlayerName(data.name) ? tw16PickRandomPlayerName(tw16CollectUsedPlayerNames()) : (data.name || '來賓');
-          let joinSeat = assignGuestSeat(data.clientId, joinName, data.playerKey || '', joinPref, data.senderInstanceId || data.sessionId || '');
-          if (joinSeat === 'east' || (typeof tw16IsHostLockedSeat === 'function' && tw16IsHostLockedSeat(joinSeat))) joinSeat = '';
-          if (joinSeat) {
-            // tw16_hand_privacy_ecdh_20260802: 公鑰擷取已統一交給上面的
-            // touchGuestPlayerFromMessage() 處理（同時涵蓋 join/sync/heartbeat），
-            // 這裡不用重複做一次。
-            /* 未斷線來賓重新入座（含房主重登後）：預設關閉托管；僅來賓明確要求托管才開 */
-            if (data.localAutoplay === true && data.stopTimeoutTakeover !== true) {
-              setSeatAutoplay(joinSeat, true, 'guest-local-toggle');
-            } else {
-              setSeatAutoplay(joinSeat, false, 'guest-initial-default');
-            }
-            addLog((data.name || '來賓') + '入座 ' + SEAT_NAME[joinSeat]);
-            publishNetworkAck(data, true, 'join-' + joinSeat);
-          } else {
-            addLog('房間已滿，拒絕來賓');
-            publishNetworkAck(data, false, 'room-full');
-          }
-          publishNetworkSnapshot('guest-join');
-          if (!isAblyBackend()) {
-            setTimeout(() => publishNetworkSnapshot('guest-join-confirm-1'), 260);
-            setTimeout(() => publishNetworkSnapshot('guest-join-confirm-2'), 900);
-          } else {
-            setTimeout(() => publishNetworkSnapshot('guest-join-confirm-1'), 500);
-          }
+          /* 入座改為先探詢各座位是否仍有瀏覽器操控，再分配無回應的空位 */
+          tw16BeginSeatProbeJoin(data, source || 'room-hello');
+          return true;
+        }
+        if (data.type === 'seatAlive') {
+          tw16OnSeatAlive(data);
           return true;
         }
         const now = Date.now();
@@ -6143,6 +6292,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
       return false;
     }
     if (net.role === 'guest') {
+      if (data.type === 'seatProbe') { tw16ReplySeatProbe(data); return true; }
       if (data.type === 'players') return applyNetworkPlayersPayload(data, source);
       if (data.type === 'privateHand') { tw16ApplyPrivateHand(data); return true; }
       if (data.type === 'state' && data.state) return tw16GuestHandleState(data);
@@ -12198,32 +12348,7 @@ function loadUiSettings() {
       return true;
     }
     if (msg.action === 'join') {
-      const intentPref = (msg.preferredSeat === 'east') ? '' : (msg.preferredSeat || '');
-      const intentName = (typeof tw16IsBlankPlayerName === 'function' && tw16IsBlankPlayerName(msg.name))
-        ? tw16PickRandomPlayerName(tw16CollectUsedPlayerNames())
-        : (msg.name || '來賓');
-      let seat = assignGuestSeat(msg.clientId, intentName, msg.playerKey || '', intentPref, msg.senderInstanceId || '');
-      if (seat === 'east' || (typeof tw16IsHostLockedSeat === 'function' && tw16IsHostLockedSeat(seat))) seat = '';
-      if (seat) {
-        if (msg.localAutoplay === true && msg.stopTimeoutTakeover !== true) {
-          setSeatAutoplay(seat, true, 'guest-local-toggle');
-        } else {
-          setSeatAutoplay(seat, false, 'guest-initial-default');
-        }
-        addLog((msg.name || '來賓') + '入座 ' + SEAT_NAME[seat]);
-        try { tw16SaveStickySeat(net.room, msg.playerKey || playerKey, seat); } catch (e) {}
-        publishNetworkAck(msg, true, 'join-' + seat);
-      } else {
-        addLog('房間已滿，拒絕來賓');
-        publishNetworkAck(msg, false, 'room-full');
-      }
-      publishNetworkSnapshot('guest-join');
-      if (!isAblyBackend()) {
-        setTimeout(() => publishNetworkSnapshot('guest-join-confirm-1'), 260);
-        setTimeout(() => publishNetworkSnapshot('guest-join-confirm-2'), 900);
-      } else {
-        setTimeout(() => publishNetworkSnapshot('guest-join-confirm-1'), 500);
-      }
+      tw16BeginSeatProbeJoin(msg, 'intent-join');
       return true;
     }
     if (msg.action === 'syncRequest') {
