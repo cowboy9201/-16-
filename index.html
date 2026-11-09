@@ -4059,10 +4059,13 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     this._channels = {};
     this._closed = false;
     this._wd = 0;
-    this._q = [];
+    this._q = [[], [], []];   /* 三條優先佇列：0 = 關鍵(ack/intent/state/手牌)、1 = 一般、2 = 低優先(心跳/聊天) */
+    this._qN = 0;
     this._qTimer = 0;
     this._qLast = 0;
     this._slowUntil = 0;
+    this._gap = 30;           /* 目前送出間隔(ms)：被限流時倍增、平靜後逐步恢復 */
+    this._lastLimitAt = 0;
     this.channels = { get: function (name) { return self._getChannel(name); } };
     if (!window.supabase || !window.supabase.createClient) {
       setTimeout(function () { self.connection._set('failed', 'Supabase SDK 尚未載入'); }, 0);
@@ -4115,23 +4118,57 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
   /* 送出佇列：每個客戶端最多約每 30ms 送 1 則（約 33 則/秒；被限流時降到約 8 則/秒）。
      開局發牌、全桌同時回 ack 時會瞬間爆量，超過 Supabase 專案的每秒訊息上限就會
      讓整桌同時卡住，這裡把爆量攤平。 */
-  Realtime.prototype._enqueue = function (job) {
+  Realtime.prototype._noteLimited = function () {
+    /* 收到限流訊號：間隔倍增(上限 400ms)，並通知遊戲層暫停重送 */
+    var now = Date.now();
+    this._lastLimitAt = now;
+    this._gap = Math.min(400, Math.max(this._gap * 2, 70));
+    this._slowUntil = now + 6000;
+    try { window.__tw16RtBackoffUntil = now + 4000; } catch (e) {}
+  };
+
+  Realtime.prototype._enqueue = function (job, prio, key) {
     var self = this;
-    this._q.push(job);
-    if (this._q.length > 400) this._q.shift();
-    if (this._qTimer) return;
+    prio = prio === 0 || prio === 1 || prio === 2 ? prio : 1;
+    job._key = key || '';
+    /* 同 key 的待送訊息只留最新一則（心跳、非可靠快照、手牌對照…舊的已無意義） */
+    if (key) {
+      var lane = this._q[prio];
+      for (var i = 0; i < lane.length; i++) {
+        if (lane[i]._key === key) { try { if (lane[i]._done) lane[i]._done(); } catch (e) {} lane[i] = job; job = null; break; }
+      }
+      if (!job) { this._kick(); return; }
+    }
+    this._q[prio].push(job);
+    this._qN++;
+    /* 超過上限時先丟低優先、再丟一般，最後才丟關鍵訊息（舊版是不分輕重丟最舊的） */
+    while (this._qN > 400) {
+      var dropped = false;
+      for (var p = 2; p >= 0 && !dropped; p--) {
+        if (this._q[p].length) { this._q[p].shift(); this._qN--; dropped = true; }
+      }
+      if (!dropped) break;
+    }
+    try { window.__tw16RtQueueLen = this._qN; } catch (e) {}
+    this._kick();
+  };
+
+  Realtime.prototype._kick = function () {
+    var self = this;
+    if (this._qTimer || !this._qN) return;
     var run = function () {
       self._qTimer = 0;
-      if (self._closed) { self._q = []; return; }
-      var j = self._q.shift();
-      if (j) { self._qLast = Date.now(); try { j(); } catch (e) { console.error(e); } }
-      if (self._q.length) {
-        var gap = Date.now() < self._slowUntil ? 120 : 30;
-        self._qTimer = setTimeout(run, gap);
-      }
+      if (self._closed) { self._q = [[], [], []]; self._qN = 0; return; }
+      var j = null;
+      for (var p = 0; p < 3 && !j; p++) { if (self._q[p].length) { j = self._q[p].shift(); self._qN--; } }
+      var now = Date.now();
+      /* 平靜超過 3 秒就把間隔慢慢降回 30ms */
+      if (self._gap > 30 && now - self._lastLimitAt > 3000) self._gap = Math.max(30, Math.floor(self._gap * 0.85));
+      if (j) { self._qLast = now; try { j(); } catch (e) { console.error(e); } }
+      try { window.__tw16RtQueueLen = self._qN; } catch (e) {}
+      if (self._qN) self._qTimer = setTimeout(run, self._gap);
     };
-    var gap0 = Date.now() < this._slowUntil ? 120 : 30;
-    var wait = Math.max(0, gap0 - (Date.now() - this._qLast));
+    var wait = Math.max(0, this._gap - (Date.now() - this._qLast));
     this._qTimer = setTimeout(run, wait);
   };
 
@@ -4140,6 +4177,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     if (this._channels[name]) return this._channels[name];
     var ch = {
       name: name,
+      __tw16Shim: true,
       state: 'initialized',
       _listeners: [],
       _waiters: [],
@@ -4174,7 +4212,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
             var st = p && p.status;
             if (st === 'error') {
               var m = String((p && p.message) || '未知錯誤');
-              if (/rate|too many|limit|quota|exceed/i.test(m)) self._slowUntil = Date.now() + 5000;
+              if (/rate|too many|limit|quota|exceed/i.test(m)) self._noteLimited();
               try { console.warn('[supabase-shim] system error:', p); } catch (e) {}
               try { window.dispatchEvent(new CustomEvent('tw16-rt-error', { detail: { message: m, channel: name } })); } catch (e) {}
             }
@@ -4212,27 +4250,41 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
         if (typeof cb === 'function') setTimeout(function () { cb(null); }, 0);
       },
       publish: function (a, b, c) {
-        var ev, data, cb;
-        if (a && typeof a === 'object') { ev = a.name; data = a.data; cb = b; }
+        var ev, data, cb, meta;
+        if (a && typeof a === 'object') { ev = a.name; data = a.data; cb = b; meta = c; }
         else { ev = a; data = b; cb = c; }
         if (typeof data === 'function') { cb = data; data = undefined; }
+        if (cb && typeof cb === 'object') { meta = cb; cb = undefined; }   /* 第三參數可傳 {prio, key} */
+        var prio = meta && typeof meta.prio === 'number' ? meta.prio : 1;
+        var key = meta && meta.key ? String(meta.key) : '';
         var fail = function (e) {
           if (typeof cb === 'function') cb(e);
           else console.warn('[supabase-shim] publish failed:', e && e.message ? e.message : e);
         };
         if (!ch._sbch) { fail(new Error('頻道尚未附加')); return Promise.resolve(); }
         return new Promise(function (resolve) {
-          self._enqueue(function () {
+          var tries = 0;
+          var job = function () {
             var sb = ch._sbch;
             if (!sb) { fail(new Error('頻道尚未附加')); resolve(); return; }
             Promise.resolve(sb.send({ type: 'broadcast', event: ev, payload: data }))
               .then(function (res) {
-                if (res && res !== 'ok') fail(new Error('送出失敗：' + res));
-                else if (typeof cb === 'function') cb(null);
+                if (res && res !== 'ok') {
+                  if (/rate/i.test(String(res))) self._noteLimited();
+                  /* 關鍵訊息遇到限流/錯誤：放回佇列最前面重試，最多 3 次 */
+                  if (prio === 0 && tries++ < 3 && !self._closed) {
+                    var rj = job; rj._key = '';
+                    self._q[0].unshift(rj); self._qN++; self._kick();
+                    return;
+                  }
+                  fail(new Error('送出失敗：' + res));
+                } else if (typeof cb === 'function') cb(null);
+                resolve();
               })
-              .catch(fail)
-              .then(resolve);
-          });
+              .catch(function (e) { fail(e); resolve(); });
+          };
+          job._done = resolve;
+          self._enqueue(job, prio, key);
         });
       },
       // Supabase Broadcast 沒有歷史訊息；遊戲本身有「來賓向房主要快照」機制，這裡回傳空頁即可
@@ -4250,7 +4302,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
   Realtime.prototype.close = function () {
     this._closed = true;
     try {
-      this._q = [];
+      this._q = [[], [], []]; this._qN = 0;
       if (this._qTimer) clearTimeout(this._qTimer);
       this._qTimer = 0;
       if (this._wd) clearInterval(this._wd);
@@ -5581,6 +5633,25 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     }
   }
 
+  /* 送出優先度與合併鍵：關鍵訊息(ack/intent/可靠state/手牌/結算)優先；
+     心跳、聊天排最後；沒要求 ack 的訊息，佇列裡同類舊包會被最新一包取代。 */
+  function tw16PublishMeta(message) {
+    const t = String(message && message.type || '');
+    const reliable = !!(message && message.requiresAck);
+    let prio = 1, key = '';
+    if (t === 'ack' || t === 'intent' || t === 'settlement' || t === 'snapshotAck' || t === 'privateHand') prio = 0;
+    else if (t === 'state') prio = reliable ? 0 : 1;
+    else if (t === 'heartbeat' || t === 'textBroadcast' || t === 'voiceBroadcast' || t === 'voiceTranscript') prio = 2;
+    if (!reliable) {
+      if (t === 'heartbeat') key = 'hb:' + (message.sessionId || '');
+      else if (t === 'state') key = 'st:' + (message.sessionId || '');
+      else if (t === 'players') key = 'pl:' + (message.sessionId || '');
+      else if (t === 'sync') key = 'sy:' + (message.sessionId || '');
+      else if (t === 'privateHand') key = 'ph:' + (message.handSeat || '');
+    }
+    return { prio: prio, key: key };
+  }
+
   function publishNetworkMessageToChannel(channel, message, debugSource, channelName) {
     if (!channel || !message) return false;
     const resolvedChannelName = channelName || networkRoomChannelName(net.room);
@@ -5597,7 +5668,8 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
       // 語意，實際送出改成加密完成後才呼叫，送出失敗一樣記錄事件方便除錯。
       tw16EncryptChannelEnvelope(wireMessage).then(envelope => {
         try {
-          channel.publish(NETWORK_ROOM_EVENT, envelope);
+          if (channel.__tw16Shim) channel.publish(NETWORK_ROOM_EVENT, envelope, tw16PublishMeta(message));
+          else channel.publish(NETWORK_ROOM_EVENT, envelope);
         } catch (e) {
           recordNetworkEvent('room-channel-error', '封包送出失敗｜' + (message.type || ''), { channel: resolvedChannelName || '', source: debugSource || '', message: e && e.message ? e.message : String(e) });
         }
@@ -5675,6 +5747,8 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
       const resendMs = Math.max(160, Number(pending.nextResendMs || pending.resendMs || 0) || NETWORK_ACK_RESEND_MS);
       const maxAttempts = Math.max(1, Number(pending.maxAttempts || 0) || NETWORK_ACK_MAX_ATTEMPTS);
       if (now - Number(pending.lastSentAt || 0) < resendMs) return;
+      /* 被限流或本機佇列塞車時先不重送：重送只會讓限流更嚴重（原訊息可能還排在佇列裡） */
+      if (now < Number(window.__tw16RtBackoffUntil || 0) || Number(window.__tw16RtQueueLen || 0) > 12) { pending.lastSentAt = now - Math.floor(resendMs * 0.5); return; }
       pending.lastSentAt = now;
       pending.attempts = (Number(pending.attempts) || 1) + 1;
       if (pending.attempts > maxAttempts) {
