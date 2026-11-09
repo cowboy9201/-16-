@@ -843,6 +843,8 @@ background:rgba(3,8,18,.78);overscroll-behavior:contain;-webkit-overflow-scrolli
 .tw16-system-clock{display:inline-block;flex:0 0 auto;align-self:flex-start;pointer-events:none;user-select:none;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.04em;color:#ffe033;text-shadow:0 0 6px rgba(255,210,0,.7),0 1px 3px rgba(0,0,0,.9);line-height:1.1;white-space:nowrap;padding:0;}
 .tw16-mini-dashboard-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:2px;align-items:start;width:100%;}
 .tw16-mini-dashboard-card{position:relative;min-width:0;min-height:0;border-radius:8px!important;padding:1px 3px 2px!important;background:transparent!important;border:1px solid rgba(255,200,50,.85)!important;box-shadow:0 0 4px rgba(255,200,50,.22)!important;color:#f8fafc;text-align:center;overflow:visible;}
+.tw16-mini-dashboard-card.seat-occupied{background:rgba(148,163,184,.38)!important;box-shadow:inset 0 0 0 1px rgba(100,116,139,.45),0 0 4px rgba(148,163,184,.2)!important;}
+.tw16-mini-dashboard-card.seat-occupied.active{background:rgba(148,163,184,.42)!important;}
 .tw16-mini-dashboard-card.active{border:1px solid rgba(255,32,32,.96)!important;border-radius:8px!important;box-shadow:0 0 6px rgba(255,32,32,.50)!important;background:transparent!important;}
 .tw16-mini-dashboard-seat{font-size:clamp(7px,calc(var(--tw-mini-dashboard-card-w,80px) * .13),10px);font-weight:1000;line-height:1.08;color:#dbeafe;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .tw16-mini-dashboard-dealer{color:#ff2020;font-weight:1000;margin-right:2px;text-shadow:0 0 4px rgba(255,255,255,.82),0 1px 2px rgba(0,0,0,.72);}
@@ -4802,6 +4804,118 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     return tw16PickRandomPlayerName(tw16CollectUsedPlayerNames());
   }
 
+  /* 迷你儀表板「已分配座位」淡灰底：房主為唯一權威，同步給全桌 */
+  function tw16GetSeatOccupiedMarks() {
+    if (!net.seatOccupiedMarks || typeof net.seatOccupiedMarks !== 'object') net.seatOccupiedMarks = { east: true, south: false, west: false, north: false };
+    net.seatOccupiedMarks.east = true;
+    return net.seatOccupiedMarks;
+  }
+  function tw16SeatMarkSignature(marks) {
+    const m = marks || tw16GetSeatOccupiedMarks();
+    return ['east','south','west','north'].map(function (s) { return s + ':' + (m[s] ? '1' : '0'); }).join('|');
+  }
+  function tw16IsSeatMarkedOccupied(seat) {
+    if (seat === 'east') return true;
+    const m = tw16GetSeatOccupiedMarks();
+    return !!m[seat];
+  }
+  function tw16RebuildSeatOccupiedMarksFromPlayers() {
+    const marks = { east: true, south: false, west: false, north: false };
+    ['south', 'west', 'north'].forEach(function (seat) {
+      const p = net.players && net.players[seat];
+      if (!p) return;
+      if (p.role === 'host') return;
+      if (hasNetworkHumanIdentity(p) && !isPlayerStale(p, Date.now())) marks[seat] = true;
+    });
+    return marks;
+  }
+  function tw16SetSeatOccupiedMarks(nextMarks, reason, forceBroadcast) {
+    const prevSig = tw16SeatMarkSignature(net.seatOccupiedMarks);
+    const marks = { east: true, south: false, west: false, north: false };
+    const src = nextMarks || {};
+    ['south', 'west', 'north'].forEach(function (s) { marks[s] = !!src[s]; });
+    marks.east = true;
+    net.seatOccupiedMarks = marks;
+    const sig = tw16SeatMarkSignature(marks);
+    try { miniDashboardRenderKey = ''; } catch (e) {}
+    try { if (typeof updateMiniDashboard === 'function') updateMiniDashboard(); } catch (e) {}
+    if (isOnlineHost() && (forceBroadcast || prevSig !== sig)) {
+      try {
+        publishNetworkRoomMessage('seatMarks', {
+          marks: { east: true, south: !!marks.south, west: !!marks.west, north: !!marks.north },
+          reason: reason || 'marks-update',
+          hostClientId: net.clientId
+        }, 'seat-marks');
+      } catch (e) {}
+      try { recordNetworkEvent('seat-marks', '同步座位淡灰標示｜' + (reason || ''), { marks: marks, reason: reason || '' }); } catch (e) {}
+    }
+    return marks;
+  }
+  function tw16MarkSeatOccupied(seat, reason) {
+    if (!networkSeatOrder().includes(seat) || seat === 'east') {
+      tw16GetSeatOccupiedMarks().east = true;
+      return tw16SetSeatOccupiedMarks(tw16GetSeatOccupiedMarks(), reason || 'mark-east', true);
+    }
+    const m = Object.assign({}, tw16GetSeatOccupiedMarks());
+    m[seat] = true;
+    m.east = true;
+    return tw16SetSeatOccupiedMarks(m, reason || ('occupy-' + seat), true);
+  }
+  function tw16MarkSeatFree(seat, reason) {
+    if (!networkSeatOrder().includes(seat) || seat === 'east') return tw16GetSeatOccupiedMarks();
+    const m = Object.assign({}, tw16GetSeatOccupiedMarks());
+    m[seat] = false;
+    m.east = true;
+    return tw16SetSeatOccupiedMarks(m, reason || ('free-' + seat), true);
+  }
+  function tw16ApplySeatMarksPayload(data) {
+    if (!data || !data.marks) return false;
+    const m = data.marks;
+    net.seatOccupiedMarks = {
+      east: true,
+      south: !!m.south,
+      west: !!m.west,
+      north: !!m.north
+    };
+    try { miniDashboardRenderKey = ''; } catch (e) {}
+    try { if (typeof updateMiniDashboard === 'function') updateMiniDashboard(); } catch (e) {}
+    return true;
+  }
+  function tw16NotifyHostSeatLeave(reason) {
+    if (!isOnlineGuest()) return false;
+    const seat = net.assignedSeat;
+    if (!networkSeatOrder().includes(seat) || seat === 'east') return false;
+    try {
+      publishNetworkRoomMessage('seatLeave', {
+        seat: seat,
+        clientId: net.clientId,
+        playerKey: net.playerKey,
+        senderInstanceId: net.instanceId,
+        name: net.name || '',
+        reason: reason || 'logout'
+      }, 'seat-leave');
+      return true;
+    } catch (e) { return false; }
+  }
+  function tw16HandleSeatLeave(data) {
+    if (!isOnlineHost() || !data) return false;
+    const seat = data.seat;
+    if (!networkSeatOrder().includes(seat) || seat === 'east') return false;
+    const p = net.players && net.players[seat];
+    /* 僅在身分相符時釋放，避免他人假冒清位 */
+    const same = !p || guestPlayerIdentityMatches(p, data.clientId, data.playerKey, data.senderInstanceId || data.sessionId || '');
+    if (!same) return false;
+    try {
+      if (net.players) delete net.players[seat];
+      state.seatAutoPlay[seat] = true;
+      if (net.seatReservations && net.seatReservations[seat]) delete net.seatReservations[seat];
+    } catch (e) {}
+    tw16MarkSeatFree(seat, 'guest-leave');
+    try { publishNetworkPlayers('seat-leave'); } catch (e) {}
+    try { addLog((data.name || '來賓') + '離開 ' + SEAT_NAME[seat]); } catch (e) {}
+    return true;
+  }
+
   function networkRoomChannelName(room) {
     return 'tw16-room-' + String(room || '').trim();
   }
@@ -5062,8 +5176,16 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
       occupied[seat] = true;
     });
     tw16EnsureHostSeatRecord();
+    /* 以淡灰標示為準：有淡灰＝已分配，不可再分；並與探詢結果合併 */
+    const markSnap = tw16RebuildSeatOccupiedMarksFromPlayers();
+    ['south', 'west', 'north'].forEach(function (s) {
+      if (occupied[s]) markSnap[s] = true;
+      if (alive[s]) markSnap[s] = true;
+    });
+    markSnap.east = true;
+    tw16SetSeatOccupiedMarks(markSnap, 'probe-sync', false);
     const msg = job.msg;
-    const freeSeats = ['south', 'west', 'north'].filter(function (s) { return !occupied[s]; });
+    const freeSeats = ['south', 'west', 'north'].filter(function (s) { return !occupied[s] && !tw16IsSeatMarkedOccupied(s); });
     if (!freeSeats.length) {
       addLog('房間已滿（各座位皆有真人操控），拒絕來賓');
       publishNetworkAck(msg, false, 'room-full');
@@ -5120,6 +5242,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
         removeDuplicateGuestPlayerRecords(joinSeat, msg.clientId, msg.playerKey, 'probe-join');
       } catch (e) {}
       addLog((job.joinName || msg.name || '來賓') + '入座 ' + SEAT_NAME[joinSeat] + '（空位）');
+      try { tw16MarkSeatOccupied(joinSeat, 'guest-join'); } catch (e) {}
       publishNetworkAck(msg, true, 'join-' + joinSeat);
       publishNetworkSnapshot('guest-join');
       if (!isAblyBackend()) {
@@ -6168,6 +6291,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
       reason: reason || 'players',
       seq: net.seq,
       players: tw16PublicPlayers(net.players),
+      seatOccupiedMarks: (typeof tw16GetSeatOccupiedMarks === 'function') ? Object.assign({}, tw16GetSeatOccupiedMarks()) : { east: true, south: false, west: false, north: false },
       scoreChipSettings: currentScoreChipSettings(),
       handStarted: hasStartedNetworkHand(state),
       hostSessionId: net.instanceId,
@@ -6188,6 +6312,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     if (net.role !== 'guest' || !data) return false;
     if (Number(data.seq || 0) > 0) net.hostAdvertisedSeq = Math.max(Number(net.hostAdvertisedSeq || 0), Number(data.seq || 0));
     net.players = data.players ? clonePlain(data.players) : (net.players || {});
+    if (data.seatOccupiedMarks) tw16ApplySeatMarksPayload({ marks: data.seatOccupiedMarks });
     if (data.handMasterKey) net.handMasterKey = data.handMasterKey;
     // tw16_hand_privacy_ecdh_20260802: 收到房主公鑰後推導共用AES金鑰，之後才能解密
     // 房主傳來的「自己座位手牌」私密封包。
@@ -6285,6 +6410,8 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     if (net.role === 'host') {
       if (data.type === 'seatAlive') { tw16OnSeatAlive(data); return true; }
       if (data.type === 'seatProbe') { return true; }
+      if (data.type === 'seatLeave') { tw16HandleSeatLeave(data); return true; }
+      if (data.type === 'seatMarks') { return true; }
       if (data.type === 'hello' || data.type === 'sync' || data.type === 'human' || (data.type === 'heartbeat' && data.role === 'guest')) {
         const assigned = touchGuestPlayerFromMessage(data, 'room-' + data.type);
         recordNetworkEvent('room-in', '收到來賓' + data.type + '｜' + (assigned ? SEAT_NAME[assigned] : '未入座'), { type: data.type, assigned, source: source || '', sessionId: data.sessionId || '', messageId: data.messageId || '' });
@@ -6342,6 +6469,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     }
     if (net.role === 'guest') {
       if (data.type === 'seatProbe') { tw16ReplySeatProbe(data); return true; }
+      if (data.type === 'seatMarks') { tw16ApplySeatMarksPayload(data); return true; }
       if (data.type === 'players') return applyNetworkPlayersPayload(data, source);
       if (data.type === 'privateHand') { tw16ApplyPrivateHand(data); return true; }
       if (data.type === 'state' && data.state) return tw16GuestHandleState(data);
@@ -11828,7 +11956,12 @@ function loadUiSettings() {
     if (!networkSeatOrder().includes(seat)) return false;
     /* 房主位永遠不可分配給來賓 */
     if (tw16IsHostLockedSeat(seat)) return false;
-    if (seat === 'east' && isOnlineHost()) return false;
+    if (seat === 'east') return false;
+    if (typeof tw16IsSeatMarkedOccupied === 'function' && tw16IsSeatMarkedOccupied(seat)) {
+      /* 淡灰底＝已分配；僅當 playerKey 本人要回原位且座位上就是本人時才放行 */
+      const p = net.players && net.players[seat];
+      if (!(p && playerKey && guestPlayerIdentityMatches(p, '', playerKey, ''))) return false;
+    }
     if (isOnlineHost() && net.seatReservations && net.seatReservations[seat] && net.seatReservations[seat] !== String(playerKey || '')) return false;
     const player = net.players && net.players[seat];
     if (!player) return true;
@@ -12589,6 +12722,17 @@ function loadUiSettings() {
   }
 
 
+
+  (function tw16InstallSeatLeaveUnload() {
+    if (window.tw16SeatLeaveUnloadInstalled) return;
+    window.tw16SeatLeaveUnloadInstalled = true;
+    function notify() {
+      try { tw16NotifyHostSeatLeave('page-unload'); } catch (e) {}
+    }
+    window.addEventListener('pagehide', notify);
+    window.addEventListener('beforeunload', notify);
+  })();
+
   function stopNetworkPulse() {
     if (net.heartbeatTimer) clearInterval(net.heartbeatTimer);
     net.heartbeatTimer = 0;
@@ -13156,6 +13300,7 @@ function markSawHostSignal(reason) {
       };
       state.viewSeat = hostSeat;
       state.seatAutoPlay[hostSeat] = prevHostAuto;
+      try { tw16SetSeatOccupiedMarks({ east: true, south: false, west: false, north: false }, 'host-open', false); } catch (e) {}
       try { tw16SaveStickySeat(String(net.room || room || ''), net.playerKey, hostSeat); } catch (e) {}
     } else {
       state.viewSeat = networkSeatOrder().includes(state.viewSeat) ? state.viewSeat : (networkSeatOrder()[0] || 'east');
@@ -26354,14 +26499,16 @@ function showIntegrityReport(precomputed) {
       miniDashboardRenderKey = '';
       return;
     }
-    const renderKey = Number(state.tableMode || 4) + '|' + (state.debugPauseBy || '') + '|' + (state.viewSeat || '') + '|' + SEATS.map(seat => [
+    const _occMarks = (typeof tw16GetSeatOccupiedMarks === 'function') ? tw16GetSeatOccupiedMarks() : {};
+    const renderKey = Number(state.tableMode || 4) + '|' + (state.debugPauseBy || '') + '|' + (state.viewSeat || '') + '|' + (typeof tw16SeatMarkSignature === 'function' ? tw16SeatMarkSignature(_occMarks) : '') + '|' + SEATS.map(seat => [
       seat,
       seat === state.turn ? 'active' : '',
       dealerDashboardPrefixText(seat),
       miniDashboardSeatLabelText(seat),
       String(state.chips[seat] ?? 0),
       state.declaredTing[seat] ? 'ting' : '',
-      (state.pending && publicPendingHumanSeats(state.pending).includes(seat)) ? 'deciding' : ''
+      (state.pending && publicPendingHumanSeats(state.pending).includes(seat)) ? 'deciding' : '',
+      (_occMarks && _occMarks[seat]) ? 'occ' : ''
     ].join('~')).join('|');
     if (miniDashboardRenderKey !== renderKey || grid.dataset.renderKey !== renderKey) {
       /* 保留已選取（+號）的座位 */
@@ -26376,7 +26523,8 @@ function showIntegrityReport(precomputed) {
         const card = document.createElement('div');
         const _deciding = !!(state.pending && publicPendingHumanSeats(state.pending).includes(seat));
         const _pausedBy = state.debugPauseBy === seat;
-        card.className = 'tw16-mini-dashboard-card' + (seat === state.turn ? ' active' : '') + (!isSeatActiveInTable(seat) ? ' tw16-mini-dashboard-inactive' : '') + (_deciding ? ' deciding' : '') + (_pausedBy ? ' tw16-paused-by-card' : '');
+        const _occupied = (typeof tw16IsSeatMarkedOccupied === 'function') ? tw16IsSeatMarkedOccupied(seat) : (seat === 'east');
+        card.className = 'tw16-mini-dashboard-card' + (seat === state.turn ? ' active' : '') + (!isSeatActiveInTable(seat) ? ' tw16-mini-dashboard-inactive' : '') + (_deciding ? ' deciding' : '') + (_pausedBy ? ' tw16-paused-by-card' : '') + (_occupied ? ' seat-occupied' : '');
         const name = document.createElement('div');
         name.className = 'tw16-mini-dashboard-seat';
         const dealerPrefix = (seat === state.dealer) ? '莊' : '';
