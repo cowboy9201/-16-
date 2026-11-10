@@ -4322,14 +4322,17 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
   };
 
   window.TW16SupabaseRealtime = Realtime;
-  /* 預設使用 Supabase；只有使用者在大廳明確選 Ably，或 Supabase 連不上自動備援（僅本次、不寫入儲存）時才用 Ably */
+  /* 預設永遠 Supabase；大廳手動選 Ably 或備援只在本頁有效，不寫入 localStorage */
+  window.__tw16BackendChoice = window.__tw16BackendChoice || '';
   window.tw16GetBackend = function () {
     if (window.__tw16BackendFallback === 'ably') return 'ably';
-    try { return localStorage.getItem('tw16Backend') === 'ably' ? 'ably' : 'supabase'; } catch (e) { return 'supabase'; }
+    if (window.__tw16BackendChoice === 'ably') return 'ably';
+    return 'supabase';
   };
   window.tw16SetBackend = function (v) {
     window.__tw16BackendFallback = '';
-    try { localStorage.setItem('tw16Backend', v === 'ably' ? 'ably' : 'supabase'); } catch (e) {}
+    window.__tw16BackendChoice = (v === 'ably') ? 'ably' : 'supabase';
+    try { localStorage.removeItem('tw16Backend'); } catch (e) {}
   };
   window.tw16BackendName = function (b) { return (b || window.tw16GetBackend()) === 'supabase' ? 'Supabase' : 'Ably'; };
   window.tw16RealtimeClass = function (b) {
@@ -4345,7 +4348,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
 
   
   // ========== MODULE: game core state ==========
-  const TW16_LOBBY_BUILD_LABEL = '（115.11.9 改版｜2026-11-09 11:29 台灣時間）';
+  const TW16_LOBBY_BUILD_LABEL = '（115.11.10 改版｜2026-11-10 22:42 台灣時間）';
   const SEATS = ['east', 'south', 'west', 'north'];
   /* tw16_tablemode: 桌面人數模式(4/3/2)輔助函式。
      2人：只啟用 east/west；3人：停用 north；4人(預設)：全啟用。
@@ -8410,7 +8413,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     lobby.id = 'tw16Lobby';
     lobby.className = 'tw16-lobby';
     lobby.innerHTML = '<div class="tw16-lobby-card">'
-      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;"><div class="tw16-lobby-chip" id="tw16LobbyChipText" style="flex-shrink:0;margin-bottom:0;">Ably 連線 / 單機</div><span style="font-size:clamp(9px,2.5vw,12px);color:#cbd5e1;font-weight:700;white-space:nowrap;">（115.11.9 改版｜2026-11-09 11:29 台灣時間）</span></div>'
+      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;"><div class="tw16-lobby-chip" id="tw16LobbyChipText" style="flex-shrink:0;margin-bottom:0;">Ably 連線 / 單機</div><span style="font-size:clamp(9px,2.5vw,12px);color:#cbd5e1;font-weight:700;white-space:nowrap;">（115.11.10 改版｜2026-11-10 22:42 台灣時間）</span></div>'
       + '<div class="tw16-lobby-title" id="tw16LobbyTitleText">台灣麻將 連線 / 單機</div>'
       + '<div class="tw16-lobby-sub">★連線對戰：<br><span style="color:#ef4444">每人都要設同房名</span><br>按<span style="background:#1d4ed8;color:#fff;border-radius:3px;padding:0 3px;">連線對戰</span><br>最早進入該房名者為房主<br>★單人：按<span style="background:#15803d;color:#fff;border-radius:3px;padding:0 3px;">直接離線開始</span></div>'
       + '<div class="tw16-lobby-grid">'
@@ -8463,6 +8466,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     setLobbyUsableAblyKeyDisplay('', '', '連線對戰首次需要使用 API KEY 時，會先一次取回伺服器表格可查到的所有 key，並把本地 KEY 列表更新成和伺服器一致，再本地逐組測試；來賓若無法入桌約 3 秒會自動換不同 Api key，從頭到尾只試一輪，仍進不了就停止並提示檢查房名。', '');
     (function tw16InitBackendSelector() {
       const sel = byId('tw16LobbyBackend');
+      try { window.__tw16BackendChoice = 'supabase'; window.__tw16BackendFallback = ''; localStorage.removeItem('tw16Backend'); } catch (e) {}
       const apply = (announce) => {
         const b = window.tw16GetBackend();
         const name = window.tw16BackendName(b);
@@ -8632,8 +8636,10 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
   }
 
   function showInterface329Lobby(reason) {
-    /* 每次回大廳都重新以 Supabase 為預設（上次自動備援到 Ably 只限當次） */
+    /* 每次回大廳都重新以 Supabase 為預設，不沿用上次選擇 */
     window.__tw16BackendFallback = '';
+    window.__tw16BackendChoice = 'supabase';
+    try { localStorage.removeItem('tw16Backend'); } catch (e) {}
     try { if (typeof window.tw16RefreshBackendSelector === 'function') window.tw16RefreshBackendSelector(); } catch (e) {}
     clearGameDataForLobby();
     setGameSurfaceVisible(false);
@@ -25714,7 +25720,7 @@ function showIntegrityReport(precomputed) {
   
   (function tw16SyncLobbyBuildLabel(){
     try {
-      var label = (typeof TW16_LOBBY_BUILD_LABEL === 'string' && TW16_LOBBY_BUILD_LABEL) ? TW16_LOBBY_BUILD_LABEL : '（115.11.9 改版｜2026-11-09 11:29 台灣時間）';
+      var label = (typeof TW16_LOBBY_BUILD_LABEL === 'string' && TW16_LOBBY_BUILD_LABEL) ? TW16_LOBBY_BUILD_LABEL : '（115.11.10 改版｜2026-11-10 22:42 台灣時間）';
       function apply(){
         try {
           var card = document.querySelector('#tw16Lobby .tw16-lobby-card');
