@@ -4389,7 +4389,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     flowerReplacement: 'tail',
     kongReplacement: 'tail',
     claimPriority: { win: 100, kong: 30, pong: 20, chi: 10 },
-    humanDecisionMs: 60000,
+    humanDecisionMs: 6000, /* 每次決策倒數 6 秒 */
     snapshotDebounceMs: 24,
     pulseMs: 3000,
     minLiveWallTiles: 16,
@@ -10486,11 +10486,48 @@ function loadUiSettings() {
     return !!tileByIdInSeatHand(seat, String(tile.dataset.tileId));
   }
 
+  /* 托管中任何牌桌／手牌／吃碰槓胡按鈕的點擊都視為真人操作；選單、設定、暫停等系統按鈕不算 */
+  function eventTargetIsGameAreaClick(target) {
+    if (!target || !target.closest) return false;
+    if (eventTargetIsLocalHandTile(target)) return true;
+    if (target.closest('#autoBtn,#menuBtn,#fullBtn,#broadcastBtn,#voiceBtn,#newGameBtn,#tw16DebugPauseToggle,#tw16AiSuggestionToggleMini,dialog,.modal,.menu,[role="dialog"],#tw16Lobby,[id^="tw16Lobby"]')) return false;
+    if (target.closest('#table')) return true;
+    return !!(target.closest('button') && target.closest('.claimBar,.claim-bar,.actions,.actionBar,[class*="claim"],[class*="action"]'));
+  }
+
+  /* 倒數歸零一次就計一次（出牌、吃碰槓胡、自摸皆同）；連續 3 次開托管 */
+  function tw16CountCountdownZero(seat, what) {
+    if (!SEATS.includes(seat)) return 0;
+    if (!state.timeoutAiStreak || typeof state.timeoutAiStreak !== 'object') state.timeoutAiStreak = {};
+    const streak = (Number(state.timeoutAiStreak[seat]) || 0) + 1;
+    state.timeoutAiStreak[seat] = streak;
+    if (streak >= 3) {
+      const ok = setSeatAutoplay(seat, true, 'turn-timeout-autoplay');
+      if (!ok) state.seatAutoPlay[seat] = true;
+      addLog(SEAT_NAME[seat] + '連續3次倒數歸零未操作，開啟托管');
+      if (isOnlineHost()) { try { publishNetworkPlayers('turn-timeout-autoplay'); } catch (e) {} }
+    } else {
+      addLog(SEAT_NAME[seat] + (what || '') + '倒數歸零（' + streak + '/3）');
+    }
+    return streak;
+  }
+
+  function tw16ResetTimeoutAiStreak(seat, reason) {
+    if (!SEATS.includes(seat)) return;
+    if (!state.timeoutAiStreak || typeof state.timeoutAiStreak !== 'object') state.timeoutAiStreak = {};
+    if (!state.timeoutOneShotAi || typeof state.timeoutOneShotAi !== 'object') state.timeoutOneShotAi = {};
+    state.timeoutAiStreak[seat] = 0;
+    state.timeoutOneShotAi[seat] = false;
+    try { recordNetworkEvent('timeout-streak-reset', SEAT_NAME[seat] + '逾時連計歸零', { seat: seat, reason: reason || '' }); } catch (e) {}
+  }
   function turnOffLocalAutoplayByHumanActivity(reason, target) {
     const seat = localHumanSeat();
-    if (!SEATS.includes(seat) || !state.seatAutoPlay[seat]) return false;
+    if (!SEATS.includes(seat)) return false;
     if (eventTargetIsAutoplayButton(target)) return false;
-    if (!eventTargetIsLocalHandTile(target)) return false;
+    if (!eventTargetIsGameAreaClick(target)) return false;
+    /* 有點擊手牌：關托管 + 逾時連計歸零 */
+    tw16ResetTimeoutAiStreak(seat, reason || 'hand-tile-action');
+    if (!state.seatAutoPlay[seat]) return false;
     const stopReason = isOnlineGuest() && seat === net.assignedSeat ? 'guest-local-activity' : 'local-human-activity';
     if (!setSeatAutoplay(seat, false, stopReason)) return false;
     renderAll();
@@ -10880,7 +10917,7 @@ function loadUiSettings() {
       const r = String(reason || '');
       const hostOk = !r
         || r === 'local-toggle' || r === 'host-local-toggle' || r === 'ui-toggle' || r === 'autoplay-toggle'
-        || r === 'turn-timeout-autoplay' || r === 'battle-start' || r === 'battle-stop'
+        || r === 'turn-timeout-autoplay' || r === 'local-human-activity' || r === 'battle-start' || r === 'battle-stop'
         || r === 'menu-auto-all' || r === 'menu-human-bottom' || r === 'menu-human-all' || r === 'menu-toggle'
         || /^host-/.test(r);
       if (!hostOk) {
@@ -10902,6 +10939,9 @@ function loadUiSettings() {
     if (player && player.clientId) {
       player.autoplay = !!enabled;
       player.lastSeenAt = Date.now();
+    }
+    if (!enabled) {
+      try { tw16ResetTimeoutAiStreak(seat, reason || 'autoplay-off'); } catch (e) {}
     }
     recordNetworkEvent('autoplay', SEAT_NAME[seat] + (enabled ? '交由電腦托管' : '恢復真人控制'), { seat, enabled: !!enabled, reason: reason || '' });
     return true;
@@ -11049,23 +11089,21 @@ function loadUiSettings() {
     return Array.from(new Set(visiblePendingCandidates(pending).filter(c => c && seatShowsPublicDecisionCountdown(c.seat)).map(c => c.seat)));
   }
 
+  /* 顯示用倒數：不論房主／來賓，每次新的出牌／吃碰槓胡決策都在本機從 6 秒起算，
+     完全不採用房主傳來的 deadline（避免舊快照、時鐘差、網路延遲造成不是由 6 開始）。
+     以 map 依 key 各自記錄起算時間，多個座位同時待決時彼此不會互相重置。 */
+  const tw16UiDeadlineMap = {};
   function ensureGuestUiDecisionDeadline(key, hostDeadlineAt) {
-    if (!isOnlineGuest()) return Number(hostDeadlineAt) || 0;
-    const host = Number(hostDeadlineAt) || 0;
-    if (!key) {
-      guestUiDeadlineKey = '';
-      guestUiDeadlineAt = 0;
-      return 0;
+    if (!key) return 0;
+    if (!isOnlineGuest() && !hostDeadlineAt) return 0; /* 房主／單機：沒有時限就不顯示 */
+    const now = Date.now();
+    const sig = key + '|' + (state.lastActionId || 0) + '|' + ((state.wall && state.wall.length) || 0) + '|' + ((state.discards && state.discards.length) || 0);
+    let rec = tw16UiDeadlineMap[sig];
+    if (!rec) {
+      Object.keys(tw16UiDeadlineMap).forEach(function(k) { if (now - tw16UiDeadlineMap[k].t0 > 60000) delete tw16UiDeadlineMap[k]; });
+      rec = tw16UiDeadlineMap[sig] = { t0: now, at: now + GAME_RULES.humanDecisionMs };
     }
-    if (guestUiDeadlineKey !== key || !guestUiDeadlineAt) {
-      guestUiDeadlineKey = key;
-      // 紅框／待決座位一換就立即起算，不必等房主 deadline 訊號
-      guestUiDeadlineAt = host || (Date.now() + (GAME_RULES.humanDecisionMs || 60000));
-    } else if (host && Math.abs(host - guestUiDeadlineAt) > 1500) {
-      // 房主時限到達後再對齊（避免本機時鐘與房主差太多）
-      guestUiDeadlineAt = host;
-    }
-    return guestUiDeadlineAt;
+    return rec.at;
   }
 
   function miniDashboardCountdownText(seat) {
@@ -11075,18 +11113,14 @@ function loadUiSettings() {
     if (state.pending && publicPending.includes(seat)) {
       const hostDl = state.pending.deadlineAt || 0;
       const key = 'pending:' + String(state.pending.kind || '') + ':' + String(state.pending.actionId || state.pending.reason || '') + ':' + String(seat);
-      const deadline = isOnlineGuest()
-        ? ensureGuestUiDecisionDeadline(key, hostDl)
-        : hostDl;
+      const deadline = ensureGuestUiDecisionDeadline(key, hostDl);
       if (!deadline) return '';
       return String(remainingDecisionSeconds(deadline));
     }
     if (seat === state.turn && state.phase === 'discard' && seatShowsPublicDecisionCountdown(seat)) {
       const hostDl = state.actionDeadlineAt || 0;
       const key = 'turn:' + String(state.turn || '') + ':' + String(state.handId || '') + ':' + String(state.phase || '');
-      const deadline = isOnlineGuest()
-        ? ensureGuestUiDecisionDeadline(key, hostDl)
-        : hostDl;
+      const deadline = ensureGuestUiDecisionDeadline(key, hostDl);
       if (!deadline) return '';
       return String(remainingDecisionSeconds(deadline));
     }
@@ -11099,25 +11133,72 @@ function loadUiSettings() {
     if (state.pending && publicPending.includes(seat)) {
       const hostDl = state.pending.deadlineAt || 0;
       const key = 'pending:' + String(state.pending.kind || '') + ':' + String(state.pending.actionId || state.pending.reason || '') + ':' + String(seat);
-      const deadline = isOnlineGuest()
-        ? ensureGuestUiDecisionDeadline(key, hostDl)
-        : hostDl;
+      const deadline = ensureGuestUiDecisionDeadline(key, hostDl);
       if (!deadline) return '';
       return '｜待決 ' + remainingDecisionSeconds(deadline) + '秒';
     }
     if (seat === state.turn && state.phase === 'discard' && seatShowsPublicDecisionCountdown(seat)) {
       const hostDl = state.actionDeadlineAt || 0;
       const key = 'turn:' + String(state.turn || '') + ':' + String(state.handId || '') + ':' + String(state.phase || '');
-      const deadline = isOnlineGuest()
-        ? ensureGuestUiDecisionDeadline(key, hostDl)
-        : hostDl;
+      const deadline = ensureGuestUiDecisionDeadline(key, hostDl);
       if (!deadline) return '';
       return '｜' + remainingDecisionSeconds(deadline) + '秒';
     }
     return '';
   }
 
+  /* 大字倒數：顯示在對應座位的畫面中央（固定定位，不受 table 3D 轉換影響） */
+  const TW16_BIG_CD_POS = { bottom: [0.5, 0.68], top: [0.5, 0.30], left: [0.28, 0.5], right: [0.72, 0.5] };
+  function tw16UpdateBigCountdowns(hideAll) {
+    let layer = document.getElementById('tw16BigCountdownLayer');
+    if (!layer) {
+      if (hideAll) return;
+      layer = document.createElement('div');
+      layer.id = 'tw16BigCountdownLayer';
+      layer.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483000;';
+      Object.keys(TW16_BIG_CD_POS).forEach(function(pos) {
+        const n = document.createElement('div');
+        n.className = 'tw16-big-cd';
+        n.dataset.pos = pos;
+        n.style.cssText = 'position:absolute;display:none;transform:translate(-50%,-50%);font-weight:1000;line-height:1;font-family:Arial Black,Impact,"Noto Sans TC",sans-serif;font-size:clamp(72px,16vmin,180px);color:#fff;-webkit-text-stroke:3px rgba(0,0,0,.55);text-shadow:0 4px 18px rgba(0,0,0,.6);opacity:.88;user-select:none;';
+        layer.appendChild(n);
+      });
+      document.body.appendChild(layer);
+    }
+    const nodes = {};
+    Array.prototype.forEach.call(layer.children, function(n) { nodes[n.dataset.pos] = n; });
+    const shown = {};
+    if (!hideAll) {
+      const tEl = document.getElementById('table');
+      const r = tEl ? tEl.getBoundingClientRect() : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+      let map = null;
+      try { map = displayMap(); } catch (e) { map = null; }
+      if (map && !state.ended) {
+        let mySeatForBigCd = '';
+        try { mySeatForBigCd = localHumanSeat(); } catch (e) { mySeatForBigCd = state.viewSeat || ''; }
+        SEATS.forEach(function(seat) {
+          if (mySeatForBigCd && seat !== mySeatForBigCd) return; /* 大字倒數只顯示自己的 */
+          const pos = map[seat];
+          const node = pos && nodes[pos];
+          if (!node) return;
+          const text = miniDashboardCountdownText(seat);
+          if (!text) return;
+          const c = TW16_BIG_CD_POS[pos];
+          node.style.left = (r.left + r.width * c[0]) + 'px';
+          node.style.top = (r.top + r.height * c[1]) + 'px';
+          node.textContent = text;
+          node.style.color = Number(text) <= 3 ? '#ff3b30' : '#fff';
+          node.style.display = 'block';
+          shown[pos] = true;
+        });
+      }
+    }
+    Object.keys(nodes).forEach(function(pos) { if (!shown[pos]) nodes[pos].style.display = 'none'; });
+  }
+
   function refreshMiniDashboardCountdowns() {
+    if (isUiPriorityModeActive() || isTileManagementPausingGame()) { try { tw16UpdateBigCountdowns(true); } catch (e) {} return; }
+    try { tw16UpdateBigCountdowns(false); } catch (e) {}
     // tw16_settings_pause_skip_countdown_20260730: 設定框開啟等暫停狀態時，倒數時限已被
     // 清空（見 pauseGameForTileManagement），這裡的每秒多節點 DOM 寫入不會呈現任何有意義
     // 的變化，只會在使用者操作設定畫面時徒增卡頓，直接跳過。
@@ -11143,7 +11224,7 @@ function loadUiSettings() {
 
   function ensureMiniDashboardCountdownTimer() {
     if (miniDashboardCountdownTimer) return;
-    miniDashboardCountdownTimer = setInterval(function(){ if (!document.hidden) refreshMiniDashboardCountdowns(); }, 500);
+    miniDashboardCountdownTimer = setInterval(function(){ if (!document.hidden) refreshMiniDashboardCountdowns(); }, 250);
   }
 
   function claimPriorityTier(type) {
@@ -12849,7 +12930,7 @@ function loadUiSettings() {
             if (!state.exchange.picks) state.exchange.picks = {};
             state.exchange.picks[seat] = ids;
             accepted = true;
-            addLog(SEAT_NAME[seat] + '已確認換三張');
+            addLog(SEAT_NAME[seat] + (ids.every(function (id) { return String(id) === '__noswap__'; }) ? '選擇不換三張' : '已確認換三張'));
             publishNetworkSnapshot('exchange-pick-' + seat, true);
           }
         }
@@ -14911,8 +14992,20 @@ function markSawHostSignal(reason) {
         ev.stopPropagation();
         confirmOpeningExchange();
       });
+      const skipBtn = document.createElement('button');
+      skipBtn.id = 'tw16ExchangeSkipBtn';
+      skipBtn.type = 'button';
+      skipBtn.textContent = '不換';
+      skipBtn.className = 'btn';
+      skipBtn.style.cssText = 'pointer-events:auto;padding:12px 20px;font-size:16px;font-weight:900;background:#64748b;color:#fff;border:0;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.35);transform:none!important;';
+      skipBtn.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        skipOpeningExchange();
+      });
       wrap.appendChild(suggestBtn);
       wrap.appendChild(btn);
+      wrap.appendChild(skipBtn);
       document.body.appendChild(wrap);
     }
     const conf = document.getElementById('tw16ExchangeConfirmBtn');
@@ -14922,8 +15015,53 @@ function markSawHostSignal(reason) {
       conf.style.opacity = n === 3 ? '1' : '0.45';
       conf.style.pointerEvents = n === 3 ? 'auto' : 'none';
     }
+    const skip = document.getElementById('tw16ExchangeSkipBtn');
+    if (skip) {
+      skip.disabled = false;
+      skip.style.opacity = '1';
+      skip.style.pointerEvents = 'auto';
+    }
   }
 
+  function tw16ExchangeSkipIds() {
+    return ['__noswap__', '__noswap__', '__noswap__'];
+  }
+  function isExchangeSkipPick(ids) {
+    const a = Array.isArray(ids) ? ids.map(String) : [];
+    return a.length === 3 && a.every(function (id) { return id === '__noswap__'; });
+  }
+  function skipOpeningExchange() {
+    if (!isOpeningExchangeActive()) return false;
+    const seat = localHumanSeat();
+    if (!canLocalHumanOperateSeat(seat) && !(isOnlineGuest() && net.assignedSeat === seat)) return false;
+    if (state.exchange.picks && state.exchange.picks[seat] && state.exchange.picks[seat].length === 3) return true;
+    const sel = tw16ExchangeSkipIds();
+    if (isOnlineGuest()) {
+      try {
+        publishNetworkIntent({ action: 'exchange', seat: seat, tileIds: sel, handId: state.handId, skip: true });
+        setOpeningPrompt('不換牌…（已送出）');
+        ensureExchangeConfirmBtn(false);
+        state.exchange.localSelected = [];
+        if (!state.exchange.picks) state.exchange.picks = {};
+        state.exchange.picks[seat] = sel;
+        renderAll();
+        try { hintVoiceBroadcast('不換'); } catch (e) {}
+        return true;
+      } catch (e) {
+        addLog('不換送出失敗');
+        return false;
+      }
+    }
+    if (!state.exchange.picks) state.exchange.picks = {};
+    state.exchange.picks[seat] = sel;
+    state.exchange.localSelected = [];
+    ensureExchangeConfirmBtn(false);
+    setOpeningPrompt('不換牌…');
+    addLog(SEAT_NAME[seat] + '選擇不換三張');
+    renderAll();
+    try { hintVoiceBroadcast('不換'); } catch (e) {}
+    return true;
+  }
   function confirmOpeningExchange() {
     if (!isOpeningExchangeActive()) return false;
     const seat = localHumanSeat();
@@ -15317,6 +15455,16 @@ function markSawHostSignal(reason) {
   }
 
   function submitDiscard(seat, tileId, source, options = {}) {
+    const src = String(source || '');
+    /* 真人出牌：逾時連計歸零；AI 一次性逾時代打後清 one-shot */
+    if (SEATS.includes(seat)) {
+      if (!src.startsWith('auto:') && src !== 'remote' && !src.includes('timeout')) {
+        try { tw16ResetTimeoutAiStreak(seat, 'human-discard'); } catch (e) {}
+      }
+      if (state.timeoutOneShotAi && state.timeoutOneShotAi[seat] && (src.startsWith('auto:') || src.includes('timeout'))) {
+        state.timeoutOneShotAi[seat] = false;
+      }
+    }
     if (isOnlineGuest() && source !== 'remote' && seat === net.assignedSeat && !state.seatAutoPlay[seat]) {
       // 來賓防連續重複出牌：同回合只允許送出一次 discard intent，避免牌數錯亂
       if (hasPendingGuestLocalDiscard(seat) || net._guestDiscardInFlight) {
@@ -15974,6 +16122,7 @@ function markSawHostSignal(reason) {
       if (waitForHumanPendingDecision(pending, reason)) return false;
       if (pendingDeadlineExpired(pending) && seatNeedsManualDecision(pending.seat)) {
         addLog(SEAT_NAME[pending.seat] + '自摸逾時，略過');
+        try { tw16CountCountdownZero(pending.seat, '自摸'); } catch (e) {}
         return skipSelfWinForSeat(pending.seat, 'timeout');
       }
       return executeSelfWin(pending.seat, 'auto:' + reason);
@@ -15996,6 +16145,7 @@ function markSawHostSignal(reason) {
       if (timeoutSeats.length) {
         pending.candidates = (pending.candidates || []).filter(c => !timeoutSeats.includes(c.seat));
         addLog('吃碰胡逾時略過：' + timeoutSeats.map(seat => SEAT_NAME[seat]).join('、'));
+        timeoutSeats.forEach(seat => { try { tw16CountCountdownZero(seat, '吃碰胡'); } catch (e) {} });
         if (!pending.candidates.length) return finishNoClaim('timeout');
       }
     }
@@ -16067,6 +16217,9 @@ function markSawHostSignal(reason) {
     const pending = state.pending;
     if (!pending || (pending.kind !== 'claim' && pending.kind !== 'robkong')) return false;
     if (!pending.candidates.some(c => c === candidate || (c.seat === candidate.seat && c.type === candidate.type && sameTileIdList(c.tiles, candidate.tiles)))) return false;
+    if (candidate && SEATS.includes(candidate.seat) && !String(source || '').startsWith('auto') && !String(source || '').includes('timeout')) {
+      try { if (!state.seatAutoPlay[candidate.seat]) tw16ResetTimeoutAiStreak(candidate.seat, 'human-claim'); } catch (e) {}
+    }
     if (candidate.type === 'win' && !seatHasDeclaredTingForWin(candidate.seat)) {
       pending.candidates = pending.candidates.filter(c => !(c && c.seat === candidate.seat && c.type === 'win'));
       addLog(SEAT_NAME[candidate.seat] + '未宣告聽牌，禁止胡牌');
@@ -19744,7 +19897,11 @@ function markSawHostSignal(reason) {
       if (tingAutoStarted) return;
     }
 
-    if (state.phase === 'discard' && seatNeedsManualDecision(seat)) {
+    if (state.phase === 'draw' && state.timeoutOneShotAi && state.timeoutOneShotAi[seat]) {
+      state.timeoutOneShotAi[seat] = false; /* 新回合開始，清除上一回合的一次性代打旗標 */
+    }
+    const tw16OneShotAiNow = !!(state.timeoutOneShotAi && state.timeoutOneShotAi[seat]);
+    if (state.phase === 'discard' && seatNeedsManualDecision(seat) && !tw16OneShotAiNow) {
       ensureTurnDeadline(seat, reason);
       if (!isTurnDeadlineExpired()) {
         refreshMiniDashboardCountdowns();
@@ -19752,36 +19909,41 @@ function markSawHostSignal(reason) {
         autoplayTimer = setTimeout(() => scheduleDriveSeat('wait-human-discard'), 1000);
         return;
       }
-      const autoOk = setSeatAutoplay(seat, true, 'turn-timeout-autoplay');
-      if (!autoOk) {
-        /* 後備：即使 guard 擋下也強制開啟本機托管，避免無限重開倒計時 */
-        state.seatAutoPlay[seat] = true;
-        try {
-          const _p = net.players && net.players[seat];
-          if (_p) { _p.autoplay = true; _p.lastSeenAt = Date.now(); }
-        } catch (e) {}
-        recordNetworkEvent('autoplay-force', SEAT_NAME[seat] + '逾時強制托管', { seat: seat });
-      }
-      addLog(SEAT_NAME[seat] + '未出牌逾時，開啟代管');
+      /* 逾時：先 AI 代打一次，不開托管；連續 3 次才開托管（房主／來賓相同） */
+      if (!state.timeoutAiStreak || typeof state.timeoutAiStreak !== 'object') state.timeoutAiStreak = {};
+      if (!state.timeoutOneShotAi || typeof state.timeoutOneShotAi !== 'object') state.timeoutOneShotAi = {};
+      state.timeoutAiStreak[seat] = (Number(state.timeoutAiStreak[seat]) || 0) + 1;
+      const streak = state.timeoutAiStreak[seat];
       clearTurnDeadline();
-      if (isOnlineHost()) {
-        try { publishNetworkPlayers('turn-timeout-autoplay'); } catch (e) {}
-        const ok = await publishNetworkSnapshotAndWait('turn-timeout-autoplay', () => !state.ended && state.turn === seat && state.phase === 'discard');
-        if (!ok) {
-          /* 同步失敗仍繼續本機代打，避免又重開倒計時 */
-          renderAll();
-          clearTimeout(autoplayTimer);
-          autoplayTimer = setTimeout(() => scheduleDriveSeat('turn-timeout-autoplay'), 90);
-          return;
+      if (streak >= 3) {
+        const autoOk = setSeatAutoplay(seat, true, 'turn-timeout-autoplay');
+        if (!autoOk) {
+          state.seatAutoPlay[seat] = true;
+          try {
+            const _p = net.players && net.players[seat];
+            if (_p) { _p.autoplay = true; _p.lastSeenAt = Date.now(); }
+          } catch (e) {}
+        }
+        state.timeoutOneShotAi[seat] = false;
+        addLog(SEAT_NAME[seat] + '連續3次逾時未操作，開啟托管');
+        if (isOnlineHost()) {
+          try { publishNetworkPlayers('turn-timeout-autoplay'); } catch (e) {}
+          try { await publishNetworkSnapshotAndWait('turn-timeout-autoplay', () => !state.ended && state.turn === seat && state.phase === 'discard'); } catch (e) {}
+        }
+      } else {
+        state.timeoutOneShotAi[seat] = true;
+        addLog(SEAT_NAME[seat] + '逾時，AI代打一次（' + streak + '/3，未開托管）');
+        if (isOnlineHost()) {
+          try { publishNetworkSnapshot('turn-timeout-ai-once', false); } catch (e) {}
         }
       }
       renderAll();
       clearTimeout(autoplayTimer);
-      autoplayTimer = setTimeout(() => scheduleDriveSeat('turn-timeout-autoplay'), 90);
+      autoplayTimer = setTimeout(() => scheduleDriveSeat(streak >= 3 ? 'turn-timeout-autoplay' : 'turn-timeout-ai-once'), 90);
       return;
     }
 
-    const canAutoDiscard = isSeatAutoDrivenBySystem(seat) || !!state.seatAutoPlay[seat];
+    const canAutoDiscard = isSeatAutoDrivenBySystem(seat) || !!state.seatAutoPlay[seat] || !!(state.timeoutOneShotAi && state.timeoutOneShotAi[seat]);
     if (state.phase !== 'discard' || !canAutoDiscard) return;
 
     // tw16_kong_stall_guard_20260709: 加槓/暗槓判斷與執行任何一步若拋例外，
@@ -19803,7 +19965,10 @@ function markSawHostSignal(reason) {
         kongStarted = false;
         try { recordNetworkEvent('auto-drive-kong-exec-error', SEAT_NAME[seat] + '執行加槓/暗槓時發生例外，改回一般出牌', { seat, reason: reason || '', error: String((e && e.message) || e) }); } catch (_) {}
       }
-      if (kongStarted) return;
+      if (kongStarted) {
+        if (state.timeoutOneShotAi) state.timeoutOneShotAi[seat] = false;
+        return;
+      }
     }
 
     if (canAutoDiscard && !state.declaredTing[seat]) {
