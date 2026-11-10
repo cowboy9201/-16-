@@ -4936,16 +4936,12 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     try { if (typeof updateMiniDashboard === 'function') updateMiniDashboard(); } catch (e) {}
     return true;
   }
-  /* 主路徑：來賓離線前主動通知房主；心跳逾時僅為備援 */
-  function tw16NotifyHostSeatLeave(reason) {
-    if (net.role !== 'guest') return false;
-    const seat = net.assignedSeat || '';
-    if (!networkSeatOrder().includes(seat)) return false;
-    if (!net.channel && !net.syncChannel) return false;
-    const payload = {
+  /* 主路徑：來賓離線前主動通知房主（會等加密送出）；心跳逾時僅備援 */
+  function tw16BuildSeatLeavePayload(reason) {
+    return {
       typeHint: 'seatLeave',
       action: 'seatLeave',
-      seat: seat,
+      seat: net.assignedSeat || '',
       clientId: net.clientId || '',
       playerKey: net.playerKey || '',
       senderInstanceId: net.instanceId || '',
@@ -4955,46 +4951,97 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
       reason: reason || 'logout',
       room: net.room || '',
       role: 'guest',
-      senderRole: 'guest'
+      senderRole: 'guest',
+      leaving: true
     };
-    let ok = false;
-    /* 1) 主頻道 seatLeave */
+  }
+  function tw16PublishRawOnChannel(channel, message) {
+    if (!channel || !message) return Promise.resolve(false);
     try {
-      ok = !!publishNetworkRoomMessage('seatLeave', payload, 'seat-leave-primary');
-    } catch (e) { ok = false; }
-    /* 2) control 頻道備援 */
-    try {
-      if (net.syncChannel && typeof net.syncChannel.publish === 'function') {
-        const msg = buildNetworkRoomMessage('seatLeave', Object.assign({ reason: 'seat-leave-ctl' }, payload), {});
-        net.syncChannel.publish(NETWORK_ROOM_EVENT, msg);
-        ok = true;
+      const wireMessage = (typeof buildNetworkCompressedWireMessage === 'function')
+        ? buildNetworkCompressedWireMessage(message)
+        : message;
+      const pub = function (envelope) {
+        try {
+          if (channel.__tw16Shim) channel.publish(NETWORK_ROOM_EVENT, envelope, typeof tw16PublishMeta === 'function' ? tw16PublishMeta(message) : undefined);
+          else channel.publish(NETWORK_ROOM_EVENT, envelope);
+          return true;
+        } catch (e) { return false; }
+      };
+      if (typeof tw16EncryptChannelEnvelope === 'function') {
+        return tw16EncryptChannelEnvelope(wireMessage).then(function (envelope) {
+          return pub(envelope || wireMessage);
+        }).catch(function () { return pub(wireMessage); });
       }
-    } catch (e) {}
-    /* 3) 主頻道再直送一次 */
+      return Promise.resolve(pub(wireMessage));
+    } catch (e) { return Promise.resolve(false); }
+  }
+  function tw16NotifyHostSeatLeave(reason) {
+    if (net.role !== 'guest') return false;
+    const seat = net.assignedSeat || '';
+    if (!networkSeatOrder().includes(seat)) return false;
+    if (!net.channel && !net.syncChannel) return false;
+    const payload = tw16BuildSeatLeavePayload(reason);
+    /* 同步排程：立刻組好訊息並 await 加密送出（不依賴之後還開著的 channel） */
     try {
-      if (net.channel && typeof net.channel.publish === 'function') {
-        const msg2 = buildNetworkRoomMessage('seatLeave', Object.assign({ reason: 'seat-leave-direct' }, payload), {});
-        net.channel.publish(NETWORK_ROOM_EVENT, msg2);
-        ok = true;
-      }
-    } catch (e) {}
-    /* 4) intent 路徑（房主 intent 處理也會清標示） */
-    try {
-      if (typeof publishNetworkIntent === 'function') {
-        publishNetworkIntent({
-          action: 'seatLeave',
-          seat: seat,
-          clientId: net.clientId || '',
-          playerKey: net.playerKey || '',
-          senderInstanceId: net.instanceId || '',
-          name: net.name || '',
-          reason: reason || 'logout'
-        });
-        ok = true;
-      }
-    } catch (e) {}
-    try { recordNetworkEvent('seat-leave-out', '來賓離座主通知｜' + (SEAT_NAME[seat] || seat), { seat: seat, reason: reason || '', ok: ok }); } catch (e) {}
-    return ok;
+      const msg = buildNetworkRoomMessage('seatLeave', Object.assign({ reason: 'seat-leave-primary' }, payload), {});
+      const ch = net.channel;
+      const sch = net.syncChannel;
+      /* 保留 channel 參照，即使隨後 disconnect 清 net.channel 仍可送完 */
+      Promise.resolve()
+        .then(function () { return tw16PublishRawOnChannel(ch, msg); })
+        .then(function () {
+          if (sch && sch !== ch) return tw16PublishRawOnChannel(sch, buildNetworkRoomMessage('seatLeave', Object.assign({ reason: 'seat-leave-ctl' }, payload), {}));
+        })
+        .catch(function () {});
+      /* 再送一次 human/heartbeat 帶 leaving，房主舊版也能清 */
+      try {
+        const hb = buildNetworkRoomMessage('human', Object.assign({}, payload, { type: 'human', action: 'seatLeave', leaving: true }), {});
+        tw16PublishRawOnChannel(ch, hb);
+      } catch (e) {}
+      try {
+        if (typeof publishNetworkIntent === 'function') {
+          publishNetworkIntent({
+            action: 'seatLeave',
+            seat: seat,
+            clientId: net.clientId || '',
+            playerKey: net.playerKey || '',
+            senderInstanceId: net.instanceId || '',
+            name: net.name || '',
+            reason: reason || 'logout',
+            leaving: true
+          });
+        }
+      } catch (e) {}
+      try { recordNetworkEvent('seat-leave-out', '來賓離座主通知已排程｜' + (SEAT_NAME[seat] || seat), { seat: seat, reason: reason || '' }); } catch (e) {}
+      return true;
+    } catch (e) {
+      try { recordNetworkEvent('seat-leave-out', '來賓離座通知失敗', { message: String(e && e.message || e) }); } catch (e2) {}
+      return false;
+    }
+  }
+  function tw16NotifyHostSeatLeaveAndWait(reason, waitMs) {
+    if (net.role !== 'guest') return Promise.resolve(false);
+    const seat = net.assignedSeat || '';
+    if (!networkSeatOrder().includes(seat)) return Promise.resolve(false);
+    const payload = tw16BuildSeatLeavePayload(reason);
+    const msg = buildNetworkRoomMessage('seatLeave', Object.assign({ reason: 'seat-leave-wait' }, payload), {});
+    const ch = net.channel;
+    const sch = net.syncChannel;
+    const ms = Math.max(120, Number(waitMs) || 450);
+    return Promise.resolve()
+      .then(function () { return tw16PublishRawOnChannel(ch, msg); })
+      .then(function () {
+        if (sch && sch !== ch) return tw16PublishRawOnChannel(sch, buildNetworkRoomMessage('seatLeave', Object.assign({ reason: 'seat-leave-ctl' }, payload), {}));
+      })
+      .then(function () {
+        try {
+          const hb = buildNetworkRoomMessage('human', Object.assign({}, payload, { action: 'seatLeave', leaving: true }), {});
+          return tw16PublishRawOnChannel(ch, hb);
+        } catch (e) { return false; }
+      })
+      .then(function () { return new Promise(function (r) { setTimeout(function () { r(true); }, Math.min(200, ms)); }); })
+      .catch(function () { return false; });
   }
   function tw16HandleSeatLeave(data) {
     if (!isOnlineHost() || !data) return false;
@@ -5043,6 +5090,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     }
     try { publishNetworkPlayers('seat-leave'); } catch (e) {}
     try { addLog((data.name || '來賓') + '離開 ' + (SEAT_NAME[seat] || seat) + '（已移除有人標籤）'); } catch (e) {}
+    try { if (typeof updateLobbyStatus === 'function') updateLobbyStatus((data.name || '來賓') + ' 已離座'); } catch (e) {}
     try { miniDashboardRenderKey = ''; updateMiniDashboard(); renderAll(); } catch (e) {}
     return true;
   }
@@ -6606,6 +6654,10 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
       }
       if (data.type === 'seatMarks' || data.action === 'seatMarks') { return true; }
       if (data.type === 'hello' || data.type === 'sync' || data.type === 'human' || (data.type === 'heartbeat' && data.role === 'guest')) {
+        if (data.leaving === true || data.action === 'seatLeave' || data.typeHint === 'seatLeave') {
+          tw16HandleSeatLeave(data);
+          return true;
+        }
         const assigned = touchGuestPlayerFromMessage(data, 'room-' + data.type);
         recordNetworkEvent('room-in', '收到來賓' + data.type + '｜' + (assigned ? SEAT_NAME[assigned] : '未入座'), { type: data.type, assigned, source: source || '', sessionId: data.sessionId || '', messageId: data.messageId || '' });
         // hello 攜帶 action:'join' 時，直接在此處理入座，不依賴 intent 路徑
@@ -8517,8 +8569,9 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
       };
       /* 主路徑：先通知房主再離線，短延遲讓封包送出 */
       if (isOnlineGuest()) {
-        try { tw16NotifyHostSeatLeave('lobby-offline'); } catch (e) {}
-        setTimeout(goOffline, 220);
+        try {
+          tw16NotifyHostSeatLeaveAndWait('lobby-offline', 500).then(function () { goOffline(); }).catch(function () { goOffline(); });
+        } catch (e) { goOffline(); }
       } else {
         goOffline();
       }
@@ -8659,8 +8712,27 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     clearAutoNextTimer('exit-lobby');
     stopContinuousRun('退出至大廳');
     closeUtilityPanel();
-    if (isNetworked() || net.connecting) disconnectAbly(false);
-    showInterface329Lobby('已清空牌局資料並退出至大廳。');
+    const finishExit = function () {
+      if (isNetworked() || net.connecting) disconnectAbly(false);
+      showInterface329Lobby('已清空牌局資料並退出至大廳。');
+    };
+    /* 來賓退至大廳：先完成離座通知再斷線（主路徑） */
+    if (isOnlineGuest()) {
+      try {
+        updateLobbyStatus && updateLobbyStatus('正在通知房主離座…');
+      } catch (e) {}
+      try {
+        tw16NotifyHostSeatLeaveAndWait('exit-lobby', 700)
+          .then(function () { finishExit(); })
+          .catch(function () { finishExit(); });
+        return;
+      } catch (e) {
+        try { tw16NotifyHostSeatLeave('exit-lobby'); } catch (e2) {}
+        setTimeout(finishExit, 500);
+        return;
+      }
+    }
+    finishExit();
   }
 
   function createInterface329Extras() {
@@ -13772,19 +13844,41 @@ function markSawHostSignal(reason) {
 
   function disconnectAbly(logMessage) {
     try { net._sbWakeDone = false; net._sbWakeInProgress = false; } catch (e) {}
-    /* 主路徑：斷線前主動通知房主；房主心跳逾時僅為第二備援 */
+    const wasGuest = net.role === 'guest';
+    const holdChannel = net.channel;
+    const holdSync = net.syncChannel;
+    const holdAbly = net.ably;
+    const holdBroadcast = net.broadcastChannel;
+    /* 主路徑：先用仍有效的 channel 送離座；延遲關閉 */
     try {
-      if (net.role === 'guest') tw16NotifyHostSeatLeave('disconnect');
+      if (wasGuest) {
+        const payload = typeof tw16BuildSeatLeavePayload === 'function' ? tw16BuildSeatLeavePayload('disconnect') : null;
+        if (payload && holdChannel) {
+          const msg = buildNetworkRoomMessage('seatLeave', Object.assign({ reason: 'disconnect-hold' }, payload), {});
+          tw16PublishRawOnChannel(holdChannel, msg);
+          if (holdSync && holdSync !== holdChannel) {
+            tw16PublishRawOnChannel(holdSync, buildNetworkRoomMessage('seatLeave', Object.assign({ reason: 'disconnect-hold-ctl' }, payload), {}));
+          }
+          const hb = buildNetworkRoomMessage('human', Object.assign({}, payload, { action: 'seatLeave', leaving: true }), {});
+          tw16PublishRawOnChannel(holdChannel, hb);
+        } else {
+          tw16NotifyHostSeatLeave('disconnect');
+        }
+      }
     } catch (e) {}
     clearGuestJoinRetry();
     clearGuestSyncTimer();
     clearGuestApiKeyRetry('disconnect');
     clearReliableNetworkQueue();
-    try { if (net.channel) net.channel.unsubscribe(); } catch (e) {}
-    try { if (net.syncChannel) net.syncChannel.unsubscribe(); } catch (e) {}
-    try { if (net.broadcastChannel) net.broadcastChannel.unsubscribe(); } catch (e) {}
-    try { if (net.ably) net.ably.close(); } catch (e) {}
-    closeLocalNetworkBus();
+    const finishClose = function () {
+      try { if (holdChannel) holdChannel.unsubscribe(); } catch (e) {}
+      try { if (holdSync) holdSync.unsubscribe(); } catch (e) {}
+      try { if (holdBroadcast) holdBroadcast.unsubscribe(); } catch (e) {}
+      try { if (holdAbly) holdAbly.close(); } catch (e) {}
+    };
+    if (wasGuest) setTimeout(finishClose, 700);
+    else finishClose();
+    try { closeLocalNetworkBus(); } catch (e) {}
     net.channel = null;
     net.syncChannel = null;
     net.broadcastChannel = null;
