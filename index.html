@@ -4653,14 +4653,14 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
   ];
   const LOBBY_ABLY_KEY_REMOTE_AUTO_MAX_CODE = 30;
   const LOBBY_ABLY_KEY_REMOTE_AUTO_EMPTY_STOP = 5;
-  const LOBBY_ABLY_KEY_TEST_TIMEOUT_MS = 6500;
+  const LOBBY_ABLY_KEY_TEST_TIMEOUT_MS = 2800;
   const DEFAULT_LOBBY_ROOM_CODE = '';
   const SEAT_AVATAR_SRCS=['data:image/jpeg;base64,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','data:image/jpeg;base64,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','data:image/jpeg;base64,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','data:image/jpeg;base64,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'];
   let seatAvatarMap={};
-  const LOBBY_ABLY_KEY_REMOTE_TIMEOUT_MS = 9000;
-  const LOBBY_ABLY_KEY_REMOTE_POST_INTERVAL_MS = 650;
-  const LOBBY_ABLY_KEY_REMOTE_BATCH_TIMEOUT_MS = 4500;
-  const LOBBY_ABLY_KEY_REMOTE_BATCH_POST_INTERVAL_MS = 900;
+  const LOBBY_ABLY_KEY_REMOTE_TIMEOUT_MS = 4500;
+  const LOBBY_ABLY_KEY_REMOTE_POST_INTERVAL_MS = 320;
+  const LOBBY_ABLY_KEY_REMOTE_BATCH_TIMEOUT_MS = 2800;
+  const LOBBY_ABLY_KEY_REMOTE_BATCH_POST_INTERVAL_MS = 380;
   let lobbyAblyKeyRemoteRequestSeq = 0;
   let lobbyAblyKeyRemoteFrame = null;
   let lobbyAblyKeyRemoteFrameLoaded = false;
@@ -7472,6 +7472,38 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     if (window.tw16GetBackend() === 'supabase') return 'supabase-realtime';
     const roomName = String(room || DEFAULT_LOBBY_ROOM_CODE || '').trim() || DEFAULT_LOBBY_ROOM_CODE;
     const actionLabel = reason === 'guest' ? '來賓進桌' : '房主開桌';
+    /* 快速路徑：本頁曾自遠端驗證成功的 KEY（仍源自遠端），避免每次整表同步 */
+    try {
+      let sessionKey = '';
+      let sessionCode = '';
+      try {
+        const raw = sessionStorage.getItem('tw16_ably_last_remote_ok');
+        if (raw) {
+          const o = JSON.parse(raw);
+          if (o && o.key && (Date.now() - Number(o.at || 0) < 6 * 60 * 60 * 1000)) {
+            sessionKey = normalizeAblyApiKey(o.key);
+            sessionCode = String(o.code || '');
+          }
+        }
+      } catch (e) {}
+      const cached = sessionKey || normalizeAblyApiKey(
+        (typeof getDirectLobbySelectedAblyKey === 'function' && getDirectLobbySelectedAblyKey() && getDirectLobbySelectedAblyKey().key)
+        || (typeof getStoredAblyApiKey === 'function' && getStoredAblyApiKey())
+        || (byId('tw16LobbyAblyKey') && byId('tw16LobbyAblyKey').value)
+        || ''
+      );
+      if (cached) {
+        updateLobbyStatus(actionLabel + '：快速驗證先前遠端可用 KEY…');
+        const quick = await testLobbyAblyApiKeyUsable(cached, roomName);
+        if (quick && quick.ok) {
+          setLobbyAblyApiKey(cached, sessionCode ? ('遠端口令「' + sessionCode + '」') : '遠端 KEY', { noFocus: true, silent: true });
+          setLobbyUsableAblyKeyDisplay(cached, sessionCode, '沿用本頁已驗證之遠端 Ably KEY（略過整表同步）。', 'ok');
+          updateLobbyStatus('已套用遠端可用 Ably API KEY，準備連線。');
+          try { setLobbyAutoKeyBusy(false); } catch (e) {}
+          return cached;
+        }
+      }
+    } catch (e) {}
     const requestSeq = ++lobbyAblyKeyRemoteRequestSeq;
     const tried = [];
     setLobbyAutoKeyBusy(true);
@@ -7517,28 +7549,39 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
           clearLobbyManualSelectedAblyKey();
         }
       }
-      updateLobbyStatus('已向伺服器取回 ' + savedServerList.length + ' 組 Ably API KEY，並已將本地列表更新成伺服器列表；開始本地逐組測試…');
-      setLobbyRemoteCodeStatus('已同步伺服器 KEY 列表，共 ' + savedServerList.length + ' 組；開始本地測試第 1 組…', '');
-      for (let i = 0; i < recordsToTest.length; i += 1) {
+      updateLobbyStatus('已向伺服器取回 ' + savedServerList.length + ' 組 Ably API KEY；並行測試以加速首位開局…');
+      setLobbyRemoteCodeStatus('已同步 ' + savedServerList.length + ' 組，開始並行測試…', '');
+      const CONCURRENCY = 3;
+      for (let i = 0; i < recordsToTest.length; i += CONCURRENCY) {
         if (requestSeq !== lobbyAblyKeyRemoteRequestSeq) return '';
-        const record = recordsToTest[i];
-        const code = String(record && (record.code || record.label) || ('第' + String(i + 1) + '組')).trim();
-        const key = normalizeAblyApiKey(record && record.key);
-        if (!key) {
-          tried.push('第 ' + String(i + 1) + ' 組「' + code + '」無 key');
-          continue;
-        }
-        updateLobbyStatus(actionLabel + '前已同步伺服器列表，正在本地測試第 ' + String(i + 1) + '/' + String(recordsToTest.length) + ' 組，A欄口令「' + code + '」…');
-        setLobbyRemoteCodeStatus('已同步 ' + String(savedServerList.length) + ' 組伺服器 key，正在本地測試第 ' + String(i + 1) + '/' + String(recordsToTest.length) + ' 組，A欄口令「' + code + '」…', '');
-        const test = await testLobbyAblyApiKeyUsable(key, roomName);
+        const batch = recordsToTest.slice(i, i + CONCURRENCY);
+        updateLobbyStatus(actionLabel + '：並行測試第 ' + String(i + 1) + '–' + String(Math.min(i + CONCURRENCY, recordsToTest.length)) + '/' + String(recordsToTest.length) + ' 組…');
+        const results = await Promise.all(batch.map(async function (record, j) {
+          const idx = i + j + 1;
+          const code = String(record && (record.code || record.label) || ('第' + String(idx) + '組')).trim();
+          const key = normalizeAblyApiKey(record && record.key);
+          if (!key) return { ok: false, code: code, key: '', message: '無 key', idx: idx };
+          try {
+            const test = await testLobbyAblyApiKeyUsable(key, roomName);
+            return { ok: !!(test && test.ok), code: code, key: key, message: (test && test.message) || '', idx: idx };
+          } catch (e) {
+            return { ok: false, code: code, key: key, message: String(e && e.message || e), idx: idx };
+          }
+        }));
         if (requestSeq !== lobbyAblyKeyRemoteRequestSeq) return '';
-        if (test && test.ok) {
-          setLobbyAblyApiKey(key, '伺服器 A欄口令「' + code + '」', { noFocus: true, silent: true });
-          setLobbyUsableAblyKeyDisplay(key, code, '已先同步伺服器所有 key 並更新本地列表，再選用 A欄口令「' + code + '」對應的可用 Ably API KEY。', 'ok');
-          updateLobbyStatus('伺服器 KEY 列表已同步到本地，已找到並套用 A欄口令「' + code + '」對應的可用 Ably API KEY，準備連線。');
-          return key;
+        const won = results.find(function (r) { return r && r.ok && r.key; });
+        results.forEach(function (r) {
+          if (!r) return;
+          if (r.ok) return;
+          tried.push('第 ' + String(r.idx) + ' 組 A欄口令「' + r.code + '」測試失敗：' + (r.message || '不可用'));
+        });
+        if (won) {
+          setLobbyAblyApiKey(won.key, '伺服器 A欄口令「' + won.code + '」', { noFocus: true, silent: true });
+          setLobbyUsableAblyKeyDisplay(won.key, won.code, '已自遠端取得並套用可用 Ably API KEY（並行測試加速）。', 'ok');
+          updateLobbyStatus('已套用遠端可用 Ably API KEY（口令「' + won.code + '」），準備連線。');
+          try { sessionStorage.setItem('tw16_ably_last_remote_ok', JSON.stringify({ key: won.key, code: won.code, at: Date.now() })); } catch (e) {}
+          return won.key;
         }
-        tried.push('第 ' + String(i + 1) + ' 組 A欄口令「' + code + '」測試失敗：' + (test && test.message ? test.message : '不可用'));
       }
       setLobbyUsableAblyKeyDisplay('', '', '已同步伺服器 KEY 列表共 ' + String(savedServerList.length) + ' 組，但本地測試皆不可用。' + (tried.length ? ' 最後結果：' + tried.slice(-3).join('；') : ''), 'bad');
       updateLobbyStatus('伺服器 KEY 列表已同步到本地，但沒有找到可用 Ably API KEY，尚未進行連線。');
@@ -9087,17 +9130,8 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
       if (document.readyState === 'complete') hideDashWhenLobby();
       else window.addEventListener('load', hideDashWhenLobby);
 
-      let dashLastTouchHandled = false;
-      const handleDashToggle = function(x, y) {
-        let hit = null;
-        dash.querySelectorAll('.tw16-mini-dashboard-card').forEach(c => {
-          const r = c.getBoundingClientRect();
-          if (x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom) hit=c;
-        });
-        if (!hit) return;
-        const plus = hit.querySelector('.tw16-mini-dashboard-chip-plus');
-        if (!plus) return;
-        plus.style.display = plus.style.display !== 'none' ? 'none' : '';
+      /* 籌碼加計：改為在該座位迷你格子上左右滑動啟動／取消，避免點按誤觸 */
+      const refreshDashChipSum = function() {
         const grid2 = byId('tw16MiniDashboardGrid');
         const oldSum = dash.querySelector('.tw16-mini-dashboard-chip-sum');
         if (oldSum) oldSum.remove();
@@ -9105,27 +9139,90 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
           .filter(c => c.querySelector('.tw16-mini-dashboard-chip-plus') && c.querySelector('.tw16-mini-dashboard-chip-plus').style.display !== 'none');
         if (!sel.length) return;
         const total = sel.reduce((s,c) => s + (Number(state.chips && state.chips[c.dataset.seat]) || 0), 0);
+        const windOrder = ['east','south','west','north'];
+        const winds = windOrder.filter(function(se) { return sel.some(function(c) { return c.dataset.seat === se; }); })
+          .map(function(se) { return (typeof SEAT_NAME !== 'undefined' && SEAT_NAME[se]) ? SEAT_NAME[se].charAt(0) : ({east:'東',south:'南',west:'西',north:'北'})[se]; })
+          .join('');
         const sumEl = document.createElement('div');
         sumEl.className = 'tw16-mini-dashboard-chip-sum';
         const initPer=(state.gameSettings&&state.gameSettings.startChips)||5000;
         const diff=total-sel.length*initPer;
         const diffStr=diff>0?' (+'+diff+')':diff<0?' ('+diff+')':'';
-        sumEl.textContent = '合計 ' + total + diffStr;
+        sumEl.textContent = (winds ? winds + ' ' : '') + '合計 ' + total + diffStr;
         sumEl.style.top = (dash.getBoundingClientRect().bottom + 4) + 'px';
         dash.appendChild(sumEl);
       };
-      document.addEventListener('touchend', function(ev) {
+      const toggleDashCardChipPlus = function(card) {
+        if (!card) return;
+        const plus = card.querySelector('.tw16-mini-dashboard-chip-plus');
+        if (!plus) return;
+        plus.style.display = plus.style.display !== 'none' ? 'none' : '';
+        refreshDashChipSum();
+      };
+      const hitDashCard = function(x, y) {
+        let hit = null;
+        dash.querySelectorAll('.tw16-mini-dashboard-card').forEach(c => {
+          const r = c.getBoundingClientRect();
+          if (x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom) hit=c;
+        });
+        return hit;
+      };
+      let dashSwipe = null;
+      const SWIPE_MIN_DX = 28;
+      const SWIPE_MAX_DY = 36;
+      const onDashSwipeStart = function(x, y, pointerId) {
         if (!dash.classList.contains('show')) return;
-        const t = ev.changedTouches && ev.changedTouches[0];
+        const card = hitDashCard(x, y);
+        if (!card) { dashSwipe = null; return; }
+        dashSwipe = { x0: x, y0: y, card: card, pointerId: pointerId, done: false };
+      };
+      const onDashSwipeMove = function(x, y, pointerId) {
+        if (!dashSwipe || dashSwipe.done) return;
+        if (pointerId != null && dashSwipe.pointerId != null && pointerId !== dashSwipe.pointerId) return;
+        const dx = x - dashSwipe.x0;
+        const dy = y - dashSwipe.y0;
+        if (Math.abs(dy) > SWIPE_MAX_DY && Math.abs(dy) > Math.abs(dx)) {
+          dashSwipe = null;
+          return;
+        }
+        if (Math.abs(dx) >= SWIPE_MIN_DX && Math.abs(dx) > Math.abs(dy) * 1.15) {
+          dashSwipe.done = true;
+          toggleDashCardChipPlus(dashSwipe.card);
+          dashSwipe = null;
+        }
+      };
+      const onDashSwipeEnd = function() { dashSwipe = null; };
+      document.addEventListener('touchstart', function(ev) {
+        if (!dash.classList.contains('show')) return;
+        const t = ev.touches && ev.touches[0];
         if (!t) return;
-        dashLastTouchHandled = true;
-        setTimeout(() => { dashLastTouchHandled = false; }, 600);
-        handleDashToggle(t.clientX, t.clientY);
+        onDashSwipeStart(t.clientX, t.clientY, t.identifier);
       }, { capture: true, passive: true });
-      document.addEventListener('click', function(ev) {
+      document.addEventListener('touchmove', function(ev) {
+        if (!dashSwipe) return;
+        const t = ev.touches && ev.touches[0];
+        if (!t) return;
+        onDashSwipeMove(t.clientX, t.clientY, t.identifier);
+      }, { capture: true, passive: true });
+      document.addEventListener('touchend', function() { onDashSwipeEnd(); }, { capture: true, passive: true });
+      document.addEventListener('touchcancel', function() { onDashSwipeEnd(); }, { capture: true, passive: true });
+      document.addEventListener('pointerdown', function(ev) {
+        if (ev.pointerType === 'touch') return;
         if (!dash.classList.contains('show')) return;
-        if (dashLastTouchHandled) return;
-        handleDashToggle(ev.clientX, ev.clientY);
+        if (ev.button != null && ev.button !== 0) return;
+        onDashSwipeStart(ev.clientX, ev.clientY, ev.pointerId);
+      }, { capture: true });
+      document.addEventListener('pointermove', function(ev) {
+        if (ev.pointerType === 'touch') return;
+        onDashSwipeMove(ev.clientX, ev.clientY, ev.pointerId);
+      }, { capture: true });
+      document.addEventListener('pointerup', function(ev) {
+        if (ev.pointerType === 'touch') return;
+        onDashSwipeEnd();
+      }, { capture: true });
+      document.addEventListener('pointercancel', function(ev) {
+        if (ev.pointerType === 'touch') return;
+        onDashSwipeEnd();
       }, { capture: true });
     }
     const table = byId('table');
@@ -13225,17 +13322,22 @@ function loadUiSettings() {
     try { if (typeof beginGuestApiKeyEntrySession === 'function') beginGuestApiKeyEntrySession(room, name, key); } catch (e) {}
     connectAbly('guest', room, name, key);
 
-    /* 探測 4.5 秒：廣播 hostClaim，並聽房主快照／其他玩家的更早宣告 */
-    const PROBE_MS = 4500;
+    /* 探測房主：Ably/首位可縮短，避免空房乾等 4.5 秒才當房主開局 */
+    const isAbly = (typeof isAblyBackend === 'function' ? isAblyBackend() : false) || (typeof window.tw16GetBackend === 'function' && window.tw16GetBackend() === 'ably');
+    const PROBE_MS = isAbly ? 1400 : 2200;
+    const CLAIM_GAP_MS = isAbly ? 350 : 500;
+    const POLL_MS = isAbly ? 120 : 180;
     const started = Date.now();
     let lastClaimAt = 0;
+    /* 進探測立刻宣告一次，縮短首位當房主等待 */
+    try { tw16PublishHostClaim('probe-start'); lastClaimAt = Date.now(); } catch (e) {}
     while (Date.now() - started < PROBE_MS) {
       if (net._sawHostSignal) break;
-      if (Date.now() - lastClaimAt > 700) {
+      if (Date.now() - lastClaimAt > CLAIM_GAP_MS) {
         lastClaimAt = Date.now();
         try { tw16PublishHostClaim('probe'); } catch (e) {}
       }
-      await new Promise(function (r) { setTimeout(r, 200); });
+      await new Promise(function (r) { setTimeout(r, POLL_MS); });
     }
     if (net._lobbyConnectToken !== myConnectToken) return false;
     net._hostProbeActive = false;
@@ -13253,11 +13355,11 @@ function loadUiSettings() {
     if (!iAmWinner) {
       updateLobbyStatus('同房有更早進入者，等待其成為房主…');
       net._hostProbeActive = true;
-      const waitMore = Date.now() + 5000;
+      const waitMore = Date.now() + (isAbly ? 2200 : 3500);
       while (Date.now() < waitMore) {
         if (net._sawHostSignal) break;
         try { tw16PublishHostClaim('wait-winner'); } catch (e) {}
-        await new Promise(function (r) { setTimeout(r, 300); });
+        await new Promise(function (r) { setTimeout(r, isAbly ? 180 : 250); });
       }
       if (net._lobbyConnectToken !== myConnectToken) return false;
       net._hostProbeActive = false;
@@ -26848,12 +26950,16 @@ function showIntegrityReport(precomputed) {
         });
         if (!sel.length) return;
         const total = sel.reduce((s,c) => s + (Number(state.chips && state.chips[c.dataset.seat]) || 0), 0);
+        const windOrder2 = ['east','south','west','north'];
+        const winds2 = windOrder2.filter(function(se) { return sel.some(function(c) { return c.dataset.seat === se; }); })
+          .map(function(se) { return (typeof SEAT_NAME !== 'undefined' && SEAT_NAME[se]) ? SEAT_NAME[se].charAt(0) : ({east:'東',south:'南',west:'西',north:'北'})[se]; })
+          .join('');
         const initPer2=(state.gameSettings&&state.gameSettings.startChips)||5000;
         const diff2=total-sel.length*initPer2;
         const diffStr2=diff2>0?' (+'+diff2+')':diff2<0?' ('+diff2+')':'';
         const sumEl = document.createElement('div');
         sumEl.className = 'tw16-mini-dashboard-chip-sum';
-        sumEl.textContent = '合計 ' + total + diffStr2;
+        sumEl.textContent = (winds2 ? winds2 + ' ' : '') + '合計 ' + total + diffStr2;
         sumEl.style.top = (dash2.getBoundingClientRect().bottom + 4) + 'px';
         dash2.appendChild(sumEl);
       })();
