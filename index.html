@@ -4389,7 +4389,7 @@ text-shadow:0 1px 2px rgba(0,0,0,.75)!important;
     flowerReplacement: 'tail',
     kongReplacement: 'tail',
     claimPriority: { win: 100, kong: 30, pong: 20, chi: 10 },
-    humanDecisionMs: 6000, /* 每次決策倒數 6 秒 */
+    humanDecisionMs: 10000, /* 每次決策倒數 10 秒 */
     snapshotDebounceMs: 24,
     pulseMs: 3000,
     minLiveWallTiles: 16,
@@ -11089,7 +11089,7 @@ function loadUiSettings() {
     return Array.from(new Set(visiblePendingCandidates(pending).filter(c => c && seatShowsPublicDecisionCountdown(c.seat)).map(c => c.seat)));
   }
 
-  /* 顯示用倒數：不論房主／來賓，每次新的出牌／吃碰槓胡決策都在本機從 6 秒起算，
+  /* 顯示用倒數：不論房主／來賓，每次新的出牌／吃碰槓胡決策都在本機從 10 秒起算，
      完全不採用房主傳來的 deadline（避免舊快照、時鐘差、網路延遲造成不是由 6 開始）。
      以 map 依 key 各自記錄起算時間，多個座位同時待決時彼此不會互相重置。 */
   const tw16UiDeadlineMap = {};
@@ -11155,12 +11155,12 @@ function loadUiSettings() {
       if (hideAll) return;
       layer = document.createElement('div');
       layer.id = 'tw16BigCountdownLayer';
-      layer.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483000;';
+      layer.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483647;'; /* 高於聽牌選擇框(2147483646)，避免被蓋住 */
       Object.keys(TW16_BIG_CD_POS).forEach(function(pos) {
         const n = document.createElement('div');
         n.className = 'tw16-big-cd';
         n.dataset.pos = pos;
-        n.style.cssText = 'position:absolute;display:none;transform:translate(-50%,-50%);font-weight:1000;line-height:1;font-family:Arial Black,Impact,"Noto Sans TC",sans-serif;font-size:clamp(72px,16vmin,180px);color:#fff;-webkit-text-stroke:3px rgba(0,0,0,.55);text-shadow:0 4px 18px rgba(0,0,0,.6);opacity:.88;user-select:none;';
+        n.style.cssText = 'position:absolute;display:none;transform:translate(-50%,-50%);font-weight:900;line-height:1;font-variant-numeric:tabular-nums;font-family:system-ui,-apple-system,\"Noto Sans TC\",sans-serif;font-size:clamp(72px,20vmin,200px);color:#fff;opacity:0;text-shadow:0 2px 3px rgba(0,0,0,.55),0 0 10px rgba(0,0,0,.5),0 0 24px rgba(0,0,0,.4);will-change:transform,opacity;user-select:none;';
         layer.appendChild(n);
       });
       document.body.appendChild(layer);
@@ -11168,14 +11168,13 @@ function loadUiSettings() {
     const nodes = {};
     Array.prototype.forEach.call(layer.children, function(n) { nodes[n.dataset.pos] = n; });
     const shown = {};
-    if (!hideAll) {
-      const tEl = document.getElementById('table');
-      const r = tEl ? tEl.getBoundingClientRect() : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+    if (!hideAll && !state.ended) {
       let map = null;
       try { map = displayMap(); } catch (e) { map = null; }
-      if (map && !state.ended) {
+      if (map) {
         let mySeatForBigCd = '';
         try { mySeatForBigCd = localHumanSeat(); } catch (e) { mySeatForBigCd = state.viewSeat || ''; }
+        let rect = null; /* getBoundingClientRect 會強制重排，只有真的要顯示時才量 */
         SEATS.forEach(function(seat) {
           if (mySeatForBigCd && seat !== mySeatForBigCd) return; /* 大字倒數只顯示自己的 */
           const pos = map[seat];
@@ -11183,19 +11182,35 @@ function loadUiSettings() {
           if (!node) return;
           const text = miniDashboardCountdownText(seat);
           if (!text) return;
-          const c = TW16_BIG_CD_POS[pos];
-          node.style.left = (r.left + r.width * c[0]) + 'px';
-          node.style.top = (r.top + r.height * c[1]) + 'px';
-          node.textContent = text;
-          node.style.color = Number(text) <= 3 ? '#ff3b30' : '#fff';
-          node.style.display = 'block';
+          /* 位置固定：畫面正中央；圖層為全站最上層(z-index 2147483647)，pointer-events:none 不擋操作。 */
+          const lx = Math.round(window.innerWidth / 2) + 'px';
+          const ty = Math.round(window.innerHeight / 2) + 'px';
+          if (node._lx !== lx) { node.style.left = lx; node._lx = lx; }
+          if (node._ty !== ty) { node.style.top = ty; node._ty = ty; }
+          if (node._tx !== text) {
+            node._tx = text;
+            node.textContent = text;
+            /* 每個數字：快速放大彈出 → 慢慢縮小並淡出到消失（約 0.95 秒，對應每秒一個數字） */
+            try {
+              if (node._an) node._an.cancel();
+              node._an = node.animate([
+                { transform: 'translate(-50%,-50%) scale(.5)', opacity: 0, offset: 0 },
+                { transform: 'translate(-50%,-50%) scale(1.6)', opacity: 1, offset: .12 },
+                { transform: 'translate(-50%,-50%) scale(.2)', opacity: 0, offset: 1 }
+              ], { duration: 950, easing: 'ease-out', fill: 'forwards' });
+            } catch (e) { node.style.opacity = '1'; }
+          }
+          if (node._dp !== 'block') { node.style.display = 'block'; node._dp = 'block'; }
           shown[pos] = true;
         });
       }
     }
-    Object.keys(nodes).forEach(function(pos) { if (!shown[pos]) nodes[pos].style.display = 'none'; });
+    Object.keys(nodes).forEach(function(pos) {
+      if (!shown[pos] && nodes[pos]._dp !== 'none') { nodes[pos].style.display = 'none'; nodes[pos]._dp = 'none'; nodes[pos]._tx = ''; }
+    });
   }
 
+  const tw16CdNodeCache = {};
   function refreshMiniDashboardCountdowns() {
     if (isUiPriorityModeActive() || isTileManagementPausingGame()) { try { tw16UpdateBigCountdowns(true); } catch (e) {} return; }
     try { tw16UpdateBigCountdowns(false); } catch (e) {}
@@ -11204,20 +11219,29 @@ function loadUiSettings() {
     // 的變化，只會在使用者操作設定畫面時徒增卡頓，直接跳過。
     if (isUiPriorityModeActive() || isTileManagementPausingGame()) return;
     const dash = dom.tw16MiniDashboard || byId('tw16MiniDashboard');
+    const dashShown = !!(dash && dash.classList.contains('show'));
     SEATS.forEach(seat => {
-      if (dash && dash.classList.contains('show')) {
-        const node = dash.querySelector('[data-dashboard-countdown-seat="' + seat + '"]');
+      if (dashShown) {
+        let node = tw16CdNodeCache['d' + seat];
+        if (!node || !node.isConnected) node = tw16CdNodeCache['d' + seat] = dash.querySelector('[data-dashboard-countdown-seat="' + seat + '"]');
         if (node) {
           const text = miniDashboardCountdownText(seat);
-          node.textContent = text;
-          node.style.display = text ? '' : 'none';
+          if (node._ct !== text) {
+            node._ct = text;
+            node.textContent = text;
+            node.style.display = text ? '' : 'none';
+          }
         }
       }
-      const labelNode = document.querySelector('[data-seat-countdown-label="' + seat + '"]');
+      let labelNode = tw16CdNodeCache['l' + seat];
+      if (!labelNode || !labelNode.isConnected) labelNode = tw16CdNodeCache['l' + seat] = document.querySelector('[data-seat-countdown-label="' + seat + '"]');
       if (labelNode) {
         const labelText = seatLabelCountdownText(seat);
-        labelNode.textContent = labelText || '｜00秒';
-        labelNode.classList.toggle('empty', !labelText);
+        if (labelNode._ct !== labelText) {
+          labelNode._ct = labelText;
+          labelNode.textContent = labelText || '｜00秒';
+          labelNode.classList.toggle('empty', !labelText);
+        }
       }
     });
   }
@@ -14727,9 +14751,6 @@ function markSawHostSignal(reason) {
     await openingPause(OPENING_AFTER_FLOWER_READY_PAUSE_MS);
     if (!stillCurrent()) return;
 
-    await runOpeningExchangeStep(dealOrder, stillCurrent);
-    if (!stillCurrent()) return;
-
     setOpeningPrompt('');
     let dealerDraw = drawFromFront();
     let dealerFinalSafety = 0;
@@ -14743,6 +14764,14 @@ function markSawHostSignal(reason) {
     }
     if (dealerDraw) {
       state.hands[state.dealer].push(dealerDraw);
+      sortHand(state.dealer);
+    }
+    renderAll();
+    /* 換三張：必須等所有牌（含莊家最後那一張）都取完才詢問 */
+    await runOpeningExchangeStep(dealOrder, stillCurrent);
+    if (!stillCurrent()) return;
+    setOpeningPrompt('');
+    if (dealerDraw && (state.hands[state.dealer] || []).some(t => t && t.id === dealerDraw.id)) {
       setActiveDrawnTile(state.dealer, dealerDraw);
       sortHand(state.dealer, dealerDraw.id);
     }
@@ -14900,7 +14929,10 @@ function markSawHostSignal(reason) {
       .map(t => t.id);
   }
 
-  function applyExchangeRotation(dealOrder, picks) {
+  function applyExchangeRotation(dealOrderAll, picks) {
+    /* 選「不換」的座位退出交換圈：不交出也不收牌，其餘座位在圈內輪轉 */
+    const dealOrder = (dealOrderAll || []).filter(seat => !isExchangeSkipPick(picks && picks[seat]));
+    if (dealOrder.length < 2) return;
     const removed = {};
     dealOrder.forEach(seat => {
       removed[seat] = [];
@@ -28569,6 +28601,15 @@ function showIntegrityReport(precomputed) {
     } else if (state.turn === mySeat && canLocalHumanOperateSeat(mySeat) && state.phase === 'discard' && !state.locked && !state.ended) {
       const ownKongs = getOwnKongOptions(mySeat);
       if (ownKongs.length) newKey = 'ownkong:' + ownKongs.map(o => o.type + '/' + o.label).join(',');
+      else if (!state.declaredTing[mySeat]) {
+        /* 修正：原本只有「同時有暗槓/加槓」時 newKey 才非空，後面「是否聽牌」詢問框的程式碼根本跑不到；
+           沒有槓、但打某張就能聽時，也要詢問是否宣告聽牌（按過取消的同一手牌型不再重問）。 */
+        const _tingOpts = getTingOptions(mySeat);
+        if (_tingOpts.length) {
+          const _tk = tingChoiceKey(mySeat, _tingOpts);
+          if (tingChoiceDismissKey !== _tk) newKey = 'tingprompt:' + _tk;
+        }
+      }
     }
 
     /* key 相同：panel 內容不變，只重新定位，不重建 DOM */
