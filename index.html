@@ -349,12 +349,16 @@ W.__tw16LanMode=(v==="lan");
 if(was&&!W.__tw16LanMode)fullReset();
 origSet(v==="lan"?"supabase":v)};
 W.tw16GetBackend=function(){return W.__tw16LanMode?"supabase":origGet()};
-function lanLabel(){var D=hub.peers.length;
+function peerLive(p){try{var c=p.pc&&p.pc.connectionState,ic=p.pc&&p.pc.iceConnectionState;if(c==="disconnected"||c==="failed"||c==="closed"||ic==="disconnected"||ic==="failed"||ic==="closed")return false;return !p.dc||p.dc.readyState==="open"}catch(e){return true}}
+function privIp(a){return !a||/\.local$/i.test(a)||/^(10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|127\.|f[cd][0-9a-f]{2}:|fe80:)/i.test(a)||a.indexOf(":")>=0&&!/^[23]/.test(a)}
+function probePath(p){try{if(!p.pc||p.probing||!p.pc.getStats)return;p.probing=1;p.pc.getStats().then(function(r){var m={},sel=null,pair=null;r.forEach(function(x){m[x.id]=x;if(x.type==="transport"&&x.selectedCandidatePairId)sel=x.selectedCandidatePairId});if(sel&&m[sel])pair=m[sel];else r.forEach(function(x){if(x.type==="candidate-pair"&&(x.selected||x.nominated&&x.state==="succeeded"))pair=x});if(pair){var l=m[pair.localCandidateId],q=m[pair.remoteCandidateId];if(l&&q){var ty=function(c){return c.candidateType||c.type},ad=function(c){return c.address||c.ip||""};var wan=ty(l)==="srflx"||ty(l)==="relay"||ty(q)==="srflx"||ty(q)==="relay"||(ty(q)==="prflx"&&/^\d+\.\d+\.\d+\.\d+$/.test(ad(q))&&!privIp(ad(q)));p.path=wan?"wan":"lan"}}p.probing=0}).catch(function(){p.probing=0})}catch(e){p.probing=0}}
+function lanWan(){var L=hub.peers.filter(peerLive);L.forEach(probePath);return L.length>0&&L.every(function(p){return p.path==="wan"})}
+function lanLabel(){var D=hub.peers.filter(peerLive).length;var WAN=lanWan();
 if(hub.mode==="host"){var J=Object.keys(hub.joined).length;
 if(!J)return "區網（等待來賓）";
-if(!hubNeedRelay())return "區網（直連）";
+if(!hubNeedRelay())return D?(WAN?"區網（跨網直連）":"區網（直連）"):"區網（連線中斷）";
 return D?"區網（直連"+D+"＋轉送"+(J-D)+"）":"區網（Supabase轉送）"}
-if(hub.mode==="guest"){if(D)return "區網（直連）";if(hub.relayLinked)return "區網（Supabase轉送）"}
+if(hub.mode==="guest"){if(D)return WAN?"區網（跨網直連）":"區網（直連）";if(hub.relayLinked)return "區網（Supabase轉送）"}
 return "區網（未連線）"}
 W.tw16BackendName=function(b){return W.__tw16LanMode?lanLabel():origName(b)};
 var lastLanLabel="";
