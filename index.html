@@ -143,6 +143,23 @@ function validIp(v){var m=/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(v)
 function fixSdp(sdp){if(!lanIp||!validIp(lanIp))return sdp;var seen={};
 return sdp.split(/\r?\n/).map(function(l){return /^a=candidate:/.test(l)?l.replace(/(\s)\S+\.local(\s+\d+\s+typ\s)/,"$1"+lanIp+"$2"):l})
 .filter(function(l){if(l==="")return false;if(!/^a=candidate:/.test(l))return true;var k=l.replace(/^a=candidate:\S+/,"");if(seen[k])return false;seen[k]=1;return true}).join("\r\n")+"\r\n"}
+/* ---------- 露出真實區網 IP ----------
+   瀏覽器預設把本機 IP 藏成 xxxx.local（mDNS），Android／部分路由器／不同瀏覽器解析不到，區網直連就失敗。
+   取得麥克風權限後瀏覽器會改用真實 IP。只在收集連線候選的那一瞬間開著麥克風，收完立刻關閉（不錄音、不傳送）。 */
+var micRefs=0,micStream=null,micFail=false,micPending=null,micOffTimer=0;
+function micOn(){micRefs++;clearTimeout(micOffTimer);
+if(micStream||micFail)return Promise.resolve();
+if(micPending)return micPending;
+var md=null;try{md=navigator.mediaDevices}catch(e){}
+if(!md||!md.getUserMedia){micFail=true;return Promise.resolve()}
+var gum=md.getUserMedia({audio:true,video:false}).then(function(st){
+if(micRefs>0&&!micStream)micStream=st;else st.getTracks().forEach(function(t){t.stop()})
+}).catch(function(){micFail=true;try{toast("未允許麥克風：同 Wi‑Fi 直連可能失敗，仍會改由 Supabase 轉送")}catch(e){}});
+micPending=Promise.race([gum,new Promise(function(r){setTimeout(r,20000)})]).then(function(){micPending=null});
+return micPending}
+function micOff(){micRefs=Math.max(0,micRefs-1);if(micRefs)return;clearTimeout(micOffTimer);
+micOffTimer=setTimeout(function(){if(micRefs||!micStream)return;micStream.getTracks().forEach(function(t){t.stop()});micStream=null},400)}
+async function micWarm(){await micOn();micOff()}
 function newPC(){return new RTCPeerConnection({iceServers:ICE_SERVERS,iceCandidatePoolSize:0})}
 function newPeer(pc){var p={pc:pc,dc:null,open:false,closed:false,buf:{}};
 pc.oniceconnectionstatechange=function(){emit()};
@@ -195,7 +212,7 @@ hub.room=room;
 if(hub.peers.length>=MAX_GUESTS)throw new Error("已達 "+MAX_GUESTS+" 位來賓上限");
 if(hub.pending){closePeer(hub.pending);hub.pending=null}
 var pc=newPC(),p=newPeer(pc);hub.pending=p;attachDc(p,pc.createDataChannel("tw16",{ordered:true}));
-await pc.setLocalDescription(await pc.createOffer());await waitIce(pc);
+await micOn();try{await pc.setLocalDescription(await pc.createOffer());await waitIce(pc)}finally{micOff()}
 emit();return pack({t:"o",r:room,s:fixSdp(pc.localDescription.sdp)})}
 async function hostAcceptAnswer(code){var o=await unpack(code);
 if(o.t!=="a")throw new Error("這是邀請碼，不是回覆碼。請貼上來賓回傳的「回覆碼」");
@@ -206,7 +223,7 @@ var o=await unpack(code);if(o.t!=="o")throw new Error("這是回覆碼，不是�
 resetAll();hub.mode="guest";hub.room=o.r||"";
 var pc=newPC(),p=newPeer(pc);hub.pending=p;pc.ondatachannel=function(e){attachDc(p,e.channel)};
 await pc.setRemoteDescription({type:"offer",sdp:o.s});
-await pc.setLocalDescription(await pc.createAnswer());await waitIce(pc);
+await micOn();try{await pc.setLocalDescription(await pc.createAnswer());await waitIce(pc)}finally{micOff()}
 emit();return {room:hub.room,code:await pack({t:"a",s:fixSdp(pc.localDescription.sdp)})}}
 hub.hostCreateInvite=hostCreateInvite;hub.hostAcceptAnswer=hostAcceptAnswer;hub.guestJoin=guestJoin;
 
@@ -238,6 +255,7 @@ function newGid(){return Math.random().toString(36).slice(2,9)+Date.now().toStri
 async function autoHostStart(room){
 if(typeof RTCPeerConnection==="undefined")throw new Error("此瀏覽器不支援 WebRTC");
 if(!room)throw new Error("請先輸入房名");
+await micWarm();
 autoStop();
 if(hub.mode!=="host"){resetAll();hub.mode="host"}
 hub.room=room;
@@ -256,8 +274,8 @@ Object.keys(a.peers).forEach(function(k){var q=a.peers[k];if(!q.p.open&&now-q.at
 if(hub.peers.length+hostPendingCount(a)>=MAX_GUESTS){sigSend(a,{r:a.room,t:"full",g:g});return}
 var pc=newPC(),p=newPeer(pc);e=a.peers[g]={p:p,sdp:"",answered:false,at:now};hub.joined[g]=p;
 attachDc(p,pc.createDataChannel("tw16",{ordered:true}));
-try{await pc.setLocalDescription(await pc.createOffer());await waitIce(pc)}
-catch(err){closePeer(p);delete a.peers[g];toast("建立連線失敗："+(err&&err.message||err));return}
+try{await micOn();await pc.setLocalDescription(await pc.createOffer());await waitIce(pc)}
+catch(err){closePeer(p);delete a.peers[g];toast("建立連線失敗："+(err&&err.message||err));return}finally{micOff()}
 if(a.stopped||p.closed)return;
 e.sdp=fixSdp(pc.localDescription.sdp);sigSend(a,{r:a.room,t:"offer",g:g,s:e.sdp});emit()}
 function hostOnAnswer(a,g,sdp){var e=a.peers[g];
@@ -270,6 +288,7 @@ closePeer(e.p);delete a.peers[g];toast("來賓回覆無法使用："+(err&&err.m
 async function autoGuestJoin(room){
 if(typeof RTCPeerConnection==="undefined")throw new Error("此瀏覽器不支援 WebRTC");
 if(!room)throw new Error("請輸入房主的房名");
+await micWarm();
 autoStop();
 var g=newGid(),a={role:"guest",room:room,g:g,answered:false,stopped:false,status:"連線配對伺服器…"};
 var sg=await sigOpen(room,function(d){guestOnSig(a,d)});
@@ -290,7 +309,7 @@ resetAll();hub.mode="guest";hub.room=a.room;
 var pc=newPC(),p=newPeer(pc);hub.pending=p;
 pc.ondatachannel=function(e){attachDc(p,e.channel)};
 await pc.setRemoteDescription({type:"offer",sdp:sdp});
-await pc.setLocalDescription(await pc.createAnswer());await waitIce(pc);
+await micOn();try{await pc.setLocalDescription(await pc.createAnswer());await waitIce(pc)}finally{micOff()}
 if(a.stopped)return;
 sigSend(a,{r:a.room,t:"answer",g:a.g,s:fixSdp(pc.localDescription.sdp)});
 clearTimeout(a.giveUp);a.giveUp=setTimeout(function(){if(auto!==a||hub.peers.length)return;var dg=diagPeer(p);autoStop();
