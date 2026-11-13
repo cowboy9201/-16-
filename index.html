@@ -130,7 +130,8 @@ if(adapter&&adapter._echo)setTimeout(function(){if(!adapter._closed)adapter._del
 return sent||hub.mode==="host"}
 
 /* ---------- Peer ---------- */
-function newPC(){return new RTCPeerConnection({iceServers:[]})}
+var ICE_SERVERS=[{urls:["stun:stun.l.google.com:19302","stun:stun1.l.google.com:19302","stun:stun.cloudflare.com:3478","stun:global.stun.twilio.com:3478"]}];
+function newPC(){return new RTCPeerConnection({iceServers:ICE_SERVERS,iceCandidatePoolSize:0})}
 function newPeer(pc){var p={pc:pc,dc:null,open:false,closed:false,buf:{}};
 pc.onconnectionstatechange=function(){var s=pc.connectionState;if(s==="failed"||s==="closed")onPeerGone(p)};return p}
 function attachDc(p,dc){p.dc=dc;
@@ -170,7 +171,7 @@ return JSON.parse(new TextDecoder().decode(bytes))}
 function waitIce(pc){return new Promise(function(res){if(pc.iceGatheringState==="complete")return res();
 var done=false,fin=function(){if(done)return;done=true;res()};
 pc.addEventListener("icegatheringstatechange",function(){pc.iceGatheringState==="complete"&&fin()});
-pc.addEventListener("icecandidate",function(e){!e.candidate&&fin()});setTimeout(fin,5000)})}
+pc.addEventListener("icecandidate",function(e){!e.candidate&&fin()});setTimeout(fin,7000)})}
 
 /* ---------- 配對流程 ---------- */
 async function hostCreateInvite(room){
