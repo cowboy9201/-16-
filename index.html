@@ -567,7 +567,11 @@ else stat("房主：按「開房」，把房名告訴來賓。來賓：輸入房
 ui.refresh=refresh;
 function setLobbyRoom(v){var r=document.getElementById("tw16LobbyRoom");if(r&&r.value!==v){r.value=v;r.dispatchEvent(new Event("input",{bubbles:true}))}}
 hub.listeners.push(function(){ui&&refresh();ui&&ui.diagRefresh&&ui.diagRefresh();
-if(hub.mode==="guest"&&(hub.peers.length||hub.relayLinked)&&hub.room)setLobbyRoom(hub.room)});
+if(hub.mode==="guest"&&(hub.peers.length||hub.relayLinked)&&hub.room)setLobbyRoom(hub.room);
+try{var as=hub.autoState&&hub.autoState(),rl=as?as.role:hub.mode,conn=false;
+if(rl==="guest")conn=!!(hub.peers.length||hub.relayLinked);
+else if(rl==="host")conn=!!(hub.peers.length||Object.keys(hub.joined||{}).some(function(g){var q=hub.joined[g];return q&&q.open}));
+if(conn&&!hub._lanWasConn&&ui&&ui.m)ui.m.classList.remove("on");hub._lanWasConn=conn}catch(e){}});
 function clip(t){try{navigator.clipboard.writeText(t)}catch(e){}}
 function tapCopy(el,msg){el.addEventListener("click",function(){var t=el.tagName==="TEXTAREA"?el.value:el.textContent;if(!t)return;
 try{navigator.clipboard.writeText(t).then(function(){toast(msg)},function(){})}catch(e){}if(el.select)try{el.select()}catch(e){}})}
