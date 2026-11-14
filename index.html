@@ -155,7 +155,7 @@ if(!md||!md.getUserMedia){micFail=true;return Promise.resolve()}
 var gum=md.getUserMedia({audio:true,video:false}).then(function(st){micOk=true;
 if(micRefs>0&&!micStream)micStream=st;else st.getTracks().forEach(function(t){t.stop()})
 }).catch(function(){micFail=true;try{toast("未允許麥克風：同 Wi‑Fi 直連可能失敗，仍會改由 Supabase 轉送")}catch(e){}});
-micPending=Promise.race([gum,new Promise(function(r){setTimeout(r,20000)})]).then(function(){micPending=null});
+micPending=Promise.race([gum,new Promise(function(r){setTimeout(r,8000)})]).then(function(){micPending=null});
 return micPending}
 function micOff(){micRefs=Math.max(0,micRefs-1);if(micRefs)return;clearTimeout(micOffTimer);
 micOffTimer=setTimeout(function(){if(micRefs||!micStream)return;micStream.getTracks().forEach(function(t){t.stop()});micStream=null},400)}
@@ -175,7 +175,7 @@ if(hub.peers.indexOf(p)<0)hub.peers.push(p);
 if(hub.pending===p)hub.pending=null;
 if(hub.mode==="guest")hub.adapters.forEach(function(a){a.connection._set("connected")});
 emit()}
-function closePeer(p){if(!p)return;p.closed=true;p.open=false;try{p.dc&&p.dc.close()}catch(e){}try{p.pc&&p.pc.close()}catch(e){}}
+function closePeer(p){if(!p)return;if(!p.open&&!p.closed&&p.pc){try{hub.lastPeerDiag=diagPeer(p)+"｜已嘗試 "+Math.round((Date.now()-p.t0)/1000)+" 秒"}catch(e){}}p.closed=true;p.open=false;try{p.dc&&p.dc.close()}catch(e){}try{p.pc&&p.pc.close()}catch(e){}}
 function onPeerGone(p){if(p.closed&&hub.peers.indexOf(p)<0&&hub.pending!==p)return;
 var was=p.open;closePeer(p);
 var i=hub.peers.indexOf(p);if(i>=0)hub.peers.splice(i,1);
@@ -202,7 +202,7 @@ return JSON.parse(new TextDecoder().decode(bytes))}
 function waitIce(pc){return new Promise(function(res){if(pc.iceGatheringState==="complete")return res();
 var done=false,fin=function(){if(done)return;done=true;res()};
 pc.addEventListener("icegatheringstatechange",function(){pc.iceGatheringState==="complete"&&fin()});
-pc.addEventListener("icecandidate",function(e){!e.candidate&&fin()});setTimeout(fin,7000)})}
+var t1=0;pc.addEventListener("icecandidate",function(e){if(!e.candidate){fin();return}if(!t1)t1=setTimeout(fin,700)});setTimeout(fin,2500)})}
 
 /* ---------- 配對流程 ---------- */
 async function hostCreateInvite(room){
@@ -228,7 +228,7 @@ emit();return {room:hub.room,code:await pack({t:"a",s:fixSdp(pc.localDescription
 hub.hostCreateInvite=hostCreateInvite;hub.hostAcceptAnswer=hostAcceptAnswer;hub.guestJoin=guestJoin;
 
 /* ---------- 自動配對：由 Supabase 頻道代為轉送邀請／回覆，不必貼碼 ---------- */
-var SIG_JOIN_MS=2500,SIG_GIVEUP_MS=60000,SIG_STALE_MS=90000,auto=null;
+var SIG_JOIN_MS=1000,SIG_GIVEUP_MS=60000,SIG_STALE_MS=90000,auto=null;
 function sigOpen(room,onData,pre,evn){pre=pre||"tw16lan-sig-";evn=evn||"sig";return new Promise(function(resolve,reject){
 var RT=W.TW16SupabaseRealtime;
 if(!RT||!W.supabase){reject(new Error("配對元件沒有載入，請確認網路後重新整理，或改用下方「手動貼碼配對」"));return}
@@ -248,30 +248,34 @@ try{(JSON.parse(localStorage.getItem("tw16_clean_ably_api_key_candidates")||"[]"
 return ks}
 function ablyAttach(room,onData,pre,evn,key){return new Promise(function(resolve,reject){
 if(!W.Ably||!W.Ably.Realtime){reject(new Error("Ably SDK 未載入"));return}
-var rt,done=false;try{rt=new W.Ably.Realtime({key:key,clientId:"lan-"+newGid(),echoMessages:false})}catch(e){reject(e);return}
+var st={rx:0},rt,done=false;try{rt=new W.Ably.Realtime({key:key,clientId:"lan-"+newGid(),echoMessages:false})}catch(e){reject(e);return}
 var c=rt.channels.get(pre+room);
 var t=setTimeout(function(){if(done)return;done=true;try{rt.close()}catch(e){}reject(new Error("逾時"))},12000);
-c.subscribe(evn,function(msg){try{onData(msg&&msg.data||{})}catch(e){console.error(e)}});
+c.subscribe(evn,function(msg){st.rx++;hub.ablyRx=(hub.ablyRx||0)+1;try{onData(msg&&msg.data||{})}catch(e){console.error(e)}});
 c.attach(function(err){if(done){try{rt.close()}catch(e){}return}done=true;clearTimeout(t);
 if(err){try{rt.close()}catch(e){}reject(new Error((err&&err.message)||String(err)));return}
-resolve({key:key,rt:rt,ch:{publish:function(n,d){return new Promise(function(r){try{c.publish(n,d,function(){r()})}catch(e){r()}})}}})})})}
+resolve({key:key,rt:rt,st:st,ch:{publish:function(n,d){return new Promise(function(r){function bad(e){hub.pubErr=(hub.pubErr||0)+1;hub.lastPubErr=String((e&&e.message)||e).slice(0,120)}try{c.publish(n,d,function(e){if(e)bad(e);else hub.pubOk=(hub.pubOk||0)+1;r()})}catch(x){bad(x);r()}})}}})})})}
 function ablyFirst(room,onData,pre,evn,keys,conc){return new Promise(function(resolve,reject){
 var rails=[],pending=keys.length,done=false,closed=false,timer=0;
 if(!pending){reject(new Error("沒有金鑰"));return}
 var comp={key:"",rt:{close:function(){closed=true;rails.forEach(function(r){try{r.rt.close()}catch(e){}})}},
-ch:{publish:function(n,d){return Promise.all(rails.map(function(r){try{return Promise.resolve(r.ch.publish(n,d))}catch(e){return Promise.resolve()}}))}}};
+ch:{publish:function(n,d){var live=rails.filter(function(r){return r.st&&r.st.rx>0}),tg=live.length?live:rails;return Promise.all(tg.map(function(r){try{return Promise.resolve(r.ch.publish(n,d))}catch(e){return Promise.resolve()}}))}}};
+comp.isClosed=function(){return closed};
+comp.addKeys=function(ks){ks.forEach(function(k){ablyAttach(room,onData,pre,evn,k).then(function(x){if(closed){try{x.rt.close()}catch(e){}return}rails.push(x)},function(){})})};
 function fin(){if(done)return;done=true;clearTimeout(timer);
 if(!rails.length){reject(new Error("金鑰都無法連線（共試 "+keys.length+" 組）"));return}
 comp.key=rails[0].key;resolve(comp)}
 keys.forEach(function(k){ablyAttach(room,onData,pre,evn,k).then(function(r){
 if(closed){try{r.rt.close()}catch(e){}return}
-rails.push(r);if(!timer&&!done)timer=setTimeout(fin,5000);if(--pending===0)fin()},
+rails.push(r);if(!timer&&!done)timer=setTimeout(fin,1200);if(--pending===0)fin()},
 function(){if(--pending===0)fin()})})})}
 function rememberAblyKey(k){try{sessionStorage.setItem("tw16_ably_last_remote_ok",JSON.stringify({key:k,code:"LAN",at:Date.now()}))}catch(e){}}
 async function openAbly(room,onData,pre,evn){
 var local=ablyKeys();
 if(local.length){hub.ablyState="測試本機金鑰 "+local.length+" 組…";
-try{var r=await ablyFirst(room,onData,pre,evn,local,3);rememberAblyKey(r.key);hub.ablyState="已連上（本機金鑰）";return r}catch(e){}}
+try{var r=await ablyFirst(room,onData,pre,evn,local,3);rememberAblyKey(r.key);hub.ablyState="已連上（本機金鑰）";
+try{if(typeof W.tw16FetchRemoteAblyKeys==="function"){(function fr(n){if(r.isClosed())return;Promise.race([W.tw16FetchRemoteAblyKeys(),new Promise(function(_,rej){setTimeout(function(){rej(new Error("逾時"))},12000)})]).then(function(rk){rk=(rk||[]).filter(function(k){return local.indexOf(k)<0});if(rk.length){r.addKeys(rk);hub.ablyState="已連上（本機金鑰＋遠端 "+rk.length+" 組）"}else hub.ablyState="已連上（本機金鑰；遠端沒有其他金鑰）"},function(e){hub.ablyState="已連上（本機金鑰；遠端金鑰查詢失敗第 "+n+" 次："+((e&&e.message)||e)+"）";if(n<5)setTimeout(function(){fr(n+1)},3000)})})(1)}}catch(e){}
+return r}catch(e){}}
 hub.ablyState="向遠端資料庫查詢 Ably 金鑰中…";
 var remote=[];
 try{if(typeof W.tw16FetchRemoteAblyKeys!=="function")throw new Error("主程式尚未提供查詢功能");
@@ -301,18 +305,19 @@ if(hub.mode==="host")hub.peers.forEach(function(q){q.open&&sendEnv(q,env)});disp
 function relayClose(){var r=hub.relay;hub.relay=null;if(r)try{r.rt.close()}catch(e){}}
 async function relayOpen(room){if(hub.relay&&hub.relay.room===room)return;relayClose();
 var r={room:room,rt:null,ch:null};var sg=await sigOpenAny(room,function(d){relayRecv(r,d)},"tw16lan-rly-","rly");
-r.rt=sg.rt;r.ch=sg.ch;hub.relay=r;emit()}
+r.rt=sg.rt;r.ch=sg.ch;r.names=sg.names;hub.relay=r;emit()}
 function autoStop(){var a=auto;auto=null;if(!a)return;a.stopped=true;
 clearInterval(a.joinTimer);clearTimeout(a.giveUp);
 try{a.rt.close()}catch(e){}emit()}
+function normRoom(r){try{return String(r||"").normalize("NFKC").replace(/[\s\u200b-\u200f\u2060\ufeff]/g,"").toLowerCase()}catch(e){return String(r||"").trim()}}
 function newGid(){return Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-4)}
 
 /* 房主：開始等待，來賓一送出 join 就自動建立連線 */
 async function autoHostStart(room){
 if(typeof RTCPeerConnection==="undefined")throw new Error("此瀏覽器不支援 WebRTC");
-if(!room)throw new Error("請先輸入房名");
-hub.stage={t:Date.now(),s:"等待麥克風權限回應（最久 20 秒）"};
-await micWarm();
+room=normRoom(room);if(!room)throw new Error("請先輸入房名");
+hub.stage={t:Date.now(),s:"連線配對伺服器"};
+micWarm().catch(function(){});
 autoStop();
 if(hub.mode!=="host"){resetAll();hub.mode="host"}
 hub.room=room;
@@ -344,9 +349,9 @@ closePeer(e.p);delete a.peers[g];toast("來賓回覆無法使用："+(err&&err.m
 /* 來賓：輸入房名後不斷喊 join，收到 offer 就自動回覆 */
 async function autoGuestJoin(room){
 if(typeof RTCPeerConnection==="undefined")throw new Error("此瀏覽器不支援 WebRTC");
-if(!room)throw new Error("請輸入房主的房名");
-hub.stage={t:Date.now(),s:"等待麥克風權限回應（最久 20 秒）"};
-await micWarm();
+room=normRoom(room);if(!room)throw new Error("請輸入房主的房名");
+hub.stage={t:Date.now(),s:"連線配對伺服器"};
+micWarm().catch(function(){});
 autoStop();
 var g=newGid(),a={role:"guest",room:room,g:g,answered:false,stopped:false,status:"連線配對伺服器…"};
 var sg=await sigOpenT(room,function(d){guestOnSig(a,d)});
@@ -358,7 +363,7 @@ if(ui)ui.stat("找不到房主「"+room+"」：請確認房主已按「開始等
 emit()}
 function guestOnSig(a,d){if(a.stopped||!d||d.r!==a.room||d.g!==a.g)return;
 if(d.t==="offer"&&d.s&&!a.answered){a.answered=true;a.status="找到房主，正在建立連線…";clearInterval(a.joinTimer);clearTimeout(a.giveUp);emit();
-guestAnswer(a,String(d.s)).catch(function(err){if(auto===a)autoStop();
+guestAnswer(a,String(d.s)).catch(function(err){hub.guestErr=(err&&err.message)||String(err);if(auto===a)autoStop();
 if(ui&&!hub.relayLinked)ui.stat("配對失敗："+(err&&err.message||err)+"。請再按一次「加入房間」。",true)});
 hub.relayLinked=true;hub.adapters.forEach(function(x){x.connection._set("connected")});emit()}
 else if(d.t==="full"){autoStop();if(ui)ui.stat("房主的位置已滿（最多 3 位來賓）。",true)}}
@@ -423,6 +428,10 @@ if(hub.stage)L.push("目前步驟："+hub.stage.s+"（"+Math.round((Date.now()-h
 if(hub.lastErr)L.push("最近錯誤："+hub.lastErr);
 var au=auto;L.push("配對伺服器："+(!au?"未啟動（還在連線，或已失敗：請看上方狀態框的錯誤訊息）":au.role==="host"?"已連上｜身分：房主｜已收到來賓呼叫 "+(au.joins||0)+" 次"+((au.joins||0)?"":"（來賓的訊息還沒到）"):"已連上｜身分：來賓｜已呼叫房主 "+(au.knocks||0)+" 次｜"+(au.answered?"已收到房主邀請":"房主尚未回應")));
 L.push("Ably 備援："+(hub.ablyState||"尚未嘗試")+"｜本機金鑰 "+ablyKeys().length+" 組");if(au&&au.names)L.push("已連上的配對通道："+(au.names.join("＋")||"（無）"));
+L.push("金鑰帳號代碼（兩台要有相同的）："+ablyKeys().map(function(k){return k.split(":")[0]}).join("、"));
+L.push("Ably 訊息：送出成功 "+(hub.pubOk||0)+"｜送出失敗 "+(hub.pubErr||0)+(hub.lastPubErr?"（"+hub.lastPubErr+"）":"")+"｜收到 "+(hub.ablyRx||0)+"｜房名碼位 "+Array.from(auto&&auto.room||"").map(function(c){return c.codePointAt(0).toString(16)}).join(" "));
+if(hub.guestErr)L.push("來賓回覆錯誤："+hub.guestErr);
+if(hub.lastPeerDiag)L.push("最近一次直連失敗："+hub.lastPeerDiag);
 L.push("雲端轉送（Supabase／Ably）："+((hub.relayLinked||hub.relay)?"已連上（直連失敗時走這條）":"未連上"));
 var ps=[],seen=[];function add(p){if(p&&p.pc&&!p.closed&&seen.indexOf(p)<0){seen.push(p);ps.push(p)}}
 hub.peers.forEach(add);add(hub.pending);Object.keys(hub.joined||{}).forEach(function(g){add(hub.joined[g])});
@@ -483,12 +492,13 @@ function peerLive(p){try{var c=p.pc&&p.pc.connectionState,ic=p.pc&&p.pc.iceConne
 function privIp(a){return !a||/\.local$/i.test(a)||/^(10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|127\.|f[cd][0-9a-f]{2}:|fe80:)/i.test(a)||a.indexOf(":")>=0&&!/^[23]/.test(a)}
 function probePath(p){try{if(!p.pc||p.probing||!p.pc.getStats)return;p.probing=1;p.pc.getStats().then(function(r){var m={},sel=null,pair=null;r.forEach(function(x){m[x.id]=x;if(x.type==="transport"&&x.selectedCandidatePairId)sel=x.selectedCandidatePairId});if(sel&&m[sel])pair=m[sel];else r.forEach(function(x){if(x.type==="candidate-pair"&&(x.selected||x.nominated&&x.state==="succeeded"))pair=x});if(pair){var l=m[pair.localCandidateId],q=m[pair.remoteCandidateId];if(l&&q){var ty=function(c){return c.candidateType||c.type},ad=function(c){return c.address||c.ip||""};var wan=ty(l)==="srflx"||ty(l)==="relay"||ty(q)==="srflx"||ty(q)==="relay"||(ty(q)==="prflx"&&/^\d+\.\d+\.\d+\.\d+$/.test(ad(q))&&!privIp(ad(q)));p.path=wan?"wan":"lan"}}p.probing=0}).catch(function(){p.probing=0})}catch(e){p.probing=0}}
 function lanWan(){var L=hub.peers.filter(peerLive);L.forEach(probePath);return L.length>0&&L.every(function(p){return p.path==="wan"})}
+function relayName(){var n=hub.relay&&hub.relay.names&&hub.relay.names.length?hub.relay.names.join("＋"):"雲端";return n+"轉送"}
 function lanLabel(){var D=hub.peers.filter(peerLive).length;var WAN=lanWan();
 if(hub.mode==="host"){var J=Object.keys(hub.joined).length;
 if(!J)return "區網（等待來賓）";
 if(!hubNeedRelay())return D?(WAN?"區網（跨網直連）":"區網（直連）"):"區網（連線中斷）";
-return D?"區網（直連"+D+"＋轉送"+(J-D)+"）":"區網（Supabase轉送）"}
-if(hub.mode==="guest"){if(D)return WAN?"區網（跨網直連）":"區網（直連）";if(hub.relayLinked)return "區網（Supabase轉送）"}
+return D?"區網（直連"+D+"＋轉送"+(J-D)+"）":"區網（"+relayName()+"）"}
+if(hub.mode==="guest"){if(D)return WAN?"區網（跨網直連）":"區網（直連）";if(hub.relayLinked)return "區網（"+relayName()+"）"}
 return "區網（未連線）"}
 W.tw16BackendName=function(b){return W.__tw16LanMode?lanLabel():origName(b)};
 var lastLanLabel="";
