@@ -288,8 +288,8 @@ if(!remote.length){hub.ablyState="❌ "+(local.length?"本機金鑰都連不上�
 hub.ablyState="遠端取得 "+remote.length+" 組，測試中…";
 try{var r2=await ablyFirst(room,onData,pre,evn,remote,3);rememberAblyKey(r2.key);hub.ablyState="已連上（遠端資料庫金鑰）";return r2}
 catch(e){hub.ablyState="❌ 遠端金鑰 "+remote.length+" 組都連不上";throw new Error(hub.ablyState)}}
-function lanRelayAddr(){var v="";try{v=String(localStorage.getItem("tw16LanRelay")||"").trim().replace(/^https?:\/\//,"")}catch(e){}return /^[\w.\-]+:\d{2,5}$/.test(v)?v:""}
-hub.relayText=function(){var n=(hub.relay&&hub.relay.names)||[];return n.indexOf("LAN")>=0?"區網轉介伺服器":(n.length?n.join("＋"):"雲端")+"轉送"};
+function lanRelayAddr(){var v="";try{v=String(localStorage.getItem("tw16LanRelay")||"").trim().replace(/^https?:\/\//,"")}catch(e){}return /^([\w.\-]+|\[[0-9a-fA-F:]+\]):\d{2,5}$/.test(v)?v:""}
+hub.relayText=function(){var n=(hub.relay&&hub.relay.names)||[];return n.indexOf("LAN")>=0?"轉介伺服器":(n.length?n.join("＋"):"雲端")+"轉送"};
 function lanRelayAttach(room,onData,pre,evn,addr){return new Promise(function(resolve,reject){
 var base="http://"+addr,topic=pre+room,cid="lr-"+newGid(),es,done=false,st={rx:0};
 try{es=new EventSource(base+"/sub?t="+encodeURIComponent(topic)+"&c="+encodeURIComponent(cid))}catch(e){reject(e);return}
@@ -621,7 +621,7 @@ var ipEl=$("lanIp");ipEl.value=lanIp;
 ipEl.oninput=function(){var v=ipEl.value.trim();lanIp=v;try{localStorage.setItem("tw16LanIp",v)}catch(e){}
 if(v&&!validIp(v))stat("IP 格式不正確，應為 192.168.1.23 這種格式",true)};
 var ak=$("lanAblyKey");ak.value=ablyKeys()[0]||"";ak.oninput=function(){var v=ak.value.trim();try{if(v.length>8&&v.indexOf(":")>0)localStorage.setItem("tw16_clean_ably_api_key",v)}catch(e){}};
-var lrEl=$("lanRelay");lrEl.value=lanRelayAddr();lrEl.oninput=function(){var v=lrEl.value.trim().replace(/^https?:\/\//,"");try{localStorage.setItem("tw16LanRelay",v)}catch(e){}if(v&&!/^[\w.\-]+:\d{2,5}$/.test(v))stat("轉介伺服器格式應為 192.168.1.153:8765",true)};
+var lrEl=$("lanRelay");lrEl.value=lanRelayAddr();lrEl.oninput=function(){var v=lrEl.value.trim().replace(/^https?:\/\//,"");try{localStorage.setItem("tw16LanRelay",v)}catch(e){}if(v&&!/^([\w.\-]+|\[[0-9a-fA-F:]+\]):\d{2,5}$/.test(v))stat("格式應為 192.168.1.153:8765 或 [IPv6位址]:8765",true)};
 ui.diagRefresh();refresh()}
 W.tw16LanOpen=function(){if(!ui)buildUI();ui.m.classList.add("on");var rv=roomValue(),inp=ui.$("lanRoom");if(rv)inp.value=rv;else if(hub.room&&!inp.value)inp.value=hub.room;ui.refresh()};
 })();
