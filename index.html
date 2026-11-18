@@ -514,26 +514,7 @@ if(ln.length&&rn.length&&!common.length)tips.push("兩台不在同一網段（�
 else if(common.length&&age>=12&&(ic==="checking"||ic==="failed"||cs==="failed"||cs==="connecting"))tips.push("同網段卻連不上：幾乎可確定是路由器開了「AP／用戶端隔離」（iPhone 另請確認瀏覽器的「本地網路」權限已開）。請房主手機開熱點，來賓連該熱點")}
 L.push("  ✗ 尚未直連"+(tips.length?"\n  → "+tips.join("\n  → "):""))}
 return L.join("\n")}
-hub.diagReport=function(){var L=[];
-L.push("環境："+(W.isSecureContext?"安全環境(https)":"⚠ 非 https")+"｜麥克風權限已停用（區網改 IPv6／轉介）｜手動 IPv4 已移除");
-var sdkOk=false,cmpOk=false;
-L.push("連線後端：Ably／區網（Supabase 已移除）｜網路："+(navigator.onLine===false?"❌ 離線":"在線"));
-if(hub.stage)L.push("目前步驟："+hub.stage.s+"（"+Math.round((Date.now()-hub.stage.t)/1000)+" 秒前）");
-if(hub.lastErr)L.push("最近錯誤："+hub.lastErr);
-var au=auto;L.push("配對伺服器："+(!au?"未啟動（還在連線，或已失敗：請看上方狀態框的錯誤訊息）":au.role==="host"?"已連上｜身分：房主｜已收到來賓呼叫 "+(au.joins||0)+" 次"+((au.joins||0)?"":"（來賓的訊息還沒到）"):"已連上｜身分：來賓｜已呼叫房主 "+(au.knocks||0)+" 次｜"+(au.answered?"已收到房主邀請":"房主尚未回應")));
-L.push("Ably 備援："+(hub.ablyState||"尚未嘗試")+"｜本機金鑰 "+ablyKeys().length+" 組");if(au&&au.names)L.push("已連上的配對通道："+(au.names.join("＋")||"（無）"));
-L.push("金鑰帳號代碼（兩台要有相同的）："+ablyKeys().map(function(k){return k.split(":")[0]}).join("、"));
-L.push("Ably 訊息：送出成功 "+(hub.pubOk||0)+"｜送出失敗 "+(hub.pubErr||0)+(hub.lastPubErr?"（"+hub.lastPubErr+"）":"")+"｜收到 "+(hub.ablyRx||0)+"｜房名碼位 "+Array.from(auto&&auto.room||"").map(function(c){return c.codePointAt(0).toString(16)}).join(" "));
-if(hub.guestErr)L.push("來賓回覆錯誤："+hub.guestErr);
-if(hub.lastPeerDiag)L.push("最近一次直連失敗："+hub.lastPeerDiag);
-L.push("IPv6 自動切換："+(hub.v6Status||"未啟動"));L.push("區網轉介伺服器：查到 "+((hub.relayCand&&hub.relayCand.length)?hub.relayCand.length+" 個位址":"0 個（沒有執行 lan_relay.py？）")+"｜收 "+(hub.lanRx||0)+"｜送 "+(hub.lanPub||0));
-(function(){var st=hub.lanStat||{},ks=Object.keys(st);if(!ks.length){L.push("  "+(hub.lanState||"尚未嘗試連線"));return}ks.forEach(function(k){L.push("  "+k+" → "+st[k])})})();
-L.push("雲端轉送："+((hub.relayLinked||hub.relay)?"已連上（"+hub.relayText()+"；直連不成功時走這條，不影響打牌）":"未連上"));
-var ps=[],seen=[];function add(p){if(p&&p.pc&&!p.closed&&seen.indexOf(p)<0){seen.push(p);ps.push(p)}}
-hub.peers.forEach(add);add(hub.pending);Object.keys(hub.joined||{}).forEach(function(g){add(hub.joined[g])});
-if(!ps.length)L.push("（目前沒有連線物件）");
-ps.forEach(function(p,i){L.push(diagPeerFull(p,(hub.mode==="host"?"來賓 ":"房主 ")+(i+1)))});
-return L.join("\n")};
+hub.diagReport=function(){return ""};
 function fullReset(){autoStop();relayClose();hub.joined={};hub.relayLinked=false;resetAll()}
 hub.autoHostStart=autoHostStart;hub.autoGuestJoin=autoGuestJoin;hub.autoStop=autoStop;hub.reset=fullReset;
 hub.autoState=function(){return auto};
@@ -642,8 +623,7 @@ m.innerHTML='<div id="tw16LanBox"><div class="hd"><b>區網直連（免打碼配
 '<div class="row"><button id="lanHostGo" style="flex:1">我是房主：開房</button><button id="lanGuestGo" style="flex:1">我是來賓：加入</button><button class="red" id="lanStop" style="flex:1;display:none">中斷</button></div>'+
 '<div class="stat" id="lanStat"></div>'+
 '<details><summary>進階／疑難排解</summary>'+
-'<p>連不上時看這裡，會自動指出原因（點一下可複製，貼給我看）：</p>'+
-'<div class="stat" id="lanDiag" title="點一下複製" style="color:#cbd5e1;font:12px/1.5 monospace;cursor:pointer"></div>'+
+'<div class="stat" id="lanDiag" title="點一下複製" style="display:none;color:#cbd5e1;font:12px/1.5 monospace;cursor:pointer"></div>'+
 '<div class="row"><label for="lanAblyKey"><b>Ably 金鑰</b></label><input id="lanAblyKey" type="text" autocomplete="off" placeholder="選填，通常會自動取得"></div>'+
 '<div class="row"><label for="lanRelay"><b>轉介伺服器</b></label><input id="lanRelay" type="text" autocomplete="off" placeholder="選填，通常不用填"></div>'+
 '<p style="font-size:12px;margin:0 0 6px">選填，通常不用填：連線時會自動向 lan_relay.py 查詢它目前的位址（本機預設 127.0.0.1:8765），位址變了也會更新；查不到就改走 Ably。</p>'+
