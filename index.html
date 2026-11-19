@@ -1074,6 +1074,22 @@ renderAll steps (avg/max ms)
 <style id="tw16HandEdgeArrowsCss">
 .tw16-hand-edge-arrow{position:fixed;left:-9999px;top:-9999px;width:18px;height:8px;display:none;pointer-events:none;z-index:2147483001;filter:drop-shadow(0 0 1px rgba(0,0,0,.9))}
 .tw16-hand-edge-arrow svg{display:block;width:18px;height:8px}
+
+/* nav drawer */
+#resultPanel.result.menu-open{inset:0 auto 0 0!important;width:min(84vw,320px)!important;min-width:0!important;max-width:320px!important;height:100dvh!important;border-radius:0 18px 18px 0!important;padding:max(14px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom))!important;box-shadow:6px 0 28px #000a!important;animation:tw16DrawerIn .24s ease-out;display:flex!important;flex-direction:column!important;text-align:left!important}
+@keyframes tw16DrawerIn{from{transform:translateX(-100%)}to{transform:none}}
+#resultPanel.result.menu-open h2{text-align:left!important;margin:2px 4px 8px!important;font-size:20px!important}
+#resultPanel.result.menu-open .menuGrid{display:flex!important;flex-direction:column!important;gap:4px!important;width:100%!important;margin:0!important;padding:0 0 10px!important}
+#resultPanel.result.menu-open .menuGrid .btn{width:100%!important;justify-content:flex-start!important;text-align:left!important;min-height:46px!important;padding:10px 14px!important;border-radius:12px!important;font-size:16px!important;background:transparent!important;border:0!important;box-shadow:none!important;color:#e0f2fe!important}
+#resultPanel.result.menu-open .menuGrid .btn:hover,.result.menu-open .menuGrid .btn:active{background:#38bdf826!important;transform:none!important;box-shadow:none!important}
+#resultPanel.result.menu-open .menuGrid .btn.red{color:#fca5a5!important;margin-top:8px;border-top:1px solid #ffffff1f!important;border-radius:0 0 12px 12px!important}
+#resultPanel.result.menu-open .buttons{margin-top:auto!important}
+#resultPanel.result.menu-open h2{position:relative;z-index:2;text-shadow:none!important;filter:none!important;background:none!important;color:#e0f2fe!important;-webkit-text-fill-color:#e0f2fe!important;opacity:1!important}
+#resultPanel.result.menu-open #resultBackBtn{display:none!important}
+#resultPanel.result.menu-open .menuGrid{padding-top:30px!important}
+#tw16NavScrim{position:fixed;inset:0;background:#0009;z-index:2147483646;display:none;animation:tw16ScrimIn .24s}
+#tw16NavScrim.on{display:block}
+@keyframes tw16ScrimIn{from{opacity:0}to{opacity:1}}
 </style>
 <script>(function(){
 try{
@@ -1121,6 +1137,7 @@ setInterval(function(){if(!document.hidden){lastKey="";sched()}},300);
 sched();
 }catch(e){}
 })();</script>
+<script>(function(){try{var sc=document.createElement("div");sc.id="tw16NavScrim";document.body.appendChild(sc);var p=document.getElementById("resultPanel");function sync(){sc.classList.toggle("on",p.classList.contains("menu-open")&&p.classList.contains("show"))}new MutationObserver(sync).observe(p,{attributes:true,attributeFilter:["class"]});sc.addEventListener("click",function(){var b=document.getElementById("resultCloseBtn");b&&b.click()});sync()}catch(e){}})();</script>
 </body>
 </html>
 
